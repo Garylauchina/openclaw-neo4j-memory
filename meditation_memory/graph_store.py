@@ -5,6 +5,12 @@ Neo4j 图数据库存储层
 所有 Cypher 操作封装在此模块中，上层无需关心数据库细节。
 
 v2.1 — 新增冥思（Meditation）相关的图查询与批量操作方法：
+v3.0 — Phase 3: 策略蒸馏与进化相关方法：
+  - get_causal_chains: 获取因果链（CAUSES 关系连接的事件序列）
+  - get_event_clusters: 获取高连接度的事件聚类
+  - get_strategies_for_evolution: 获取活跃策略及关联信息
+  - create_causal_chain_node: 创建因果链元节点
+  - link_strategy_to_causal_chain: 建立策略与因果链的溯源关系
   - get_nodes_needing_meditation: 获取标记需要冥思的节点
   - get_orphan_nodes / get_generic_word_nodes: 孤立节点清理查询
   - get_similar_entity_pairs / get_short_name_entities: 实体整合查询
@@ -100,6 +106,8 @@ class GraphStore:
             "CREATE INDEX rqs_path_idx IF NOT EXISTS FOR (r:RQSRecord) ON (r.path_id)",
             # Phase 2: 信念节点索引
             "CREATE INDEX belief_content_idx IF NOT EXISTS FOR (b:Belief) ON (b.content)",
+            # Phase 3: 因果链索引
+            "CREATE INDEX causal_chain_id_idx IF NOT EXISTS FOR (c:CausalChain) ON (c.chain_id)",
         ]
         with self.driver.session(database=self._config.database) as session:
             for query in queries:
@@ -1783,3 +1791,177 @@ class GraphStore:
         with self.driver.session(database=self._config.database) as session:
             result = session.run(query)
             return [dict(record) for record in result]
+
+    # ================================================================
+    # Phase 3: 策略蒸馏与进化方法
+    # ================================================================
+
+    def get_causal_chains(
+        self,
+        min_length: int = 3,
+        limit: int = 20,
+    ) -> List[Dict[str, Any]]:
+        """
+        获取图谱中的因果链（由 CAUSES 关系连接的事件序列）。
+
+        Args:
+            min_length: 最小链长度（节点数）
+            limit: 返回链数量上限
+
+        Returns:
+            因果链列表，每条链包含事件序列和关系
+        """
+        # 动态构建最小路径长度（关系数 = 节点数 - 1）
+        min_rels = max(min_length - 1, 1)
+        query = f"""
+        MATCH path = (e1:Entity)-[:RELATES_TO*{min_rels}..10]->(e2:Entity)
+        WHERE e1.entity_type IN ['event', 'concept']
+          AND e2.entity_type IN ['event', 'concept']
+          AND NOT e1:Archived AND NOT e2:Archived
+          AND ALL(r IN relationships(path) WHERE r.relation_type IN ['causes', 'leads_to', 'precedes'])
+        WITH path, length(path) AS chain_length
+        ORDER BY chain_length DESC
+        LIMIT $limit
+        RETURN [n IN nodes(path) | {{
+            name: n.name,
+            entity_type: n.entity_type,
+            properties: n.properties
+        }}] AS chain_nodes,
+        [r IN relationships(path) | {{
+            type: r.relation_type,
+            properties: r.properties
+        }}] AS chain_relations,
+        chain_length
+        """
+        try:
+            with self.driver.session(database=self._config.database) as session:
+                result = session.run(query, limit=limit)
+                return [dict(record) for record in result]
+        except Exception as e:
+            logger.error("Failed to get causal chains: %s", e)
+            return []
+
+    def get_event_clusters(
+        self,
+        min_connections: int = 3,
+    ) -> List[Dict[str, Any]]:
+        """
+        获取高连接度的事件聚类（用于策略蒸馏候选）。
+
+        Args:
+            min_connections: 最小连接数
+
+        Returns:
+            事件聚类列表
+        """
+        query = """
+        MATCH (e:Entity {entity_type: 'event'})
+        WHERE NOT e:Archived
+        WITH e, size((e)--()) AS degree
+        WHERE degree >= $min_connections
+        OPTIONAL MATCH (e)-[r]->(target:Entity)
+        RETURN e.name AS event_name,
+               e.properties AS properties,
+               degree,
+               collect({
+                   target: target.name,
+                   relation: type(r),
+                   target_type: target.entity_type
+               }) AS connections
+        ORDER BY degree DESC
+        LIMIT 50
+        """
+        try:
+            with self.driver.session(database=self._config.database) as session:
+                result = session.run(query, min_connections=min_connections)
+                return [dict(record) for record in result]
+        except Exception as e:
+            logger.error("Failed to get event clusters: %s", e)
+            return []
+
+    def get_strategies_for_evolution(self) -> List[Dict[str, Any]]:
+        """
+        获取所有活跃策略及其关联信息（用于冥思进化步骤）。
+
+        Returns:
+            策略列表，包含名称、类型、适应度、父策略等信息
+        """
+        query = """
+        MATCH (s:Strategy)
+        WHERE NOT s:Archived
+        OPTIONAL MATCH (s)-[:EVOLVED_FROM]->(parent:Strategy)
+        RETURN s.name AS name,
+               s.strategy_type AS strategy_type,
+               s.uses_real_data AS uses_real_data,
+               s.fitness_score AS fitness_score,
+               s.usage_count AS usage_count,
+               s.avg_accuracy AS avg_accuracy,
+               collect(parent.name) AS parent_names
+        ORDER BY s.fitness_score DESC
+        """
+        with self.driver.session(database=self._config.database) as session:
+            result = session.run(query)
+            return [dict(record) for record in result]
+
+    def create_causal_chain_node(self, chain_data: Dict[str, Any]) -> str:
+        """
+        创建因果链元节点。
+
+        Args:
+            chain_data: 包含 chain_id, description, length 的字典
+
+        Returns:
+            节点的 elementId
+        """
+        query = """
+        CREATE (c:CausalChain {
+            chain_id: $chain_id,
+            description: $description,
+            length: $length,
+            created_at: timestamp()
+        })
+        RETURN elementId(c) AS eid
+        """
+        try:
+            with self.driver.session(database=self._config.database) as session:
+                result = session.run(
+                    query,
+                    chain_id=chain_data["chain_id"],
+                    description=chain_data.get("description", ""),
+                    length=chain_data.get("length", 0),
+                )
+                record = result.single()
+                return record["eid"] if record else ""
+        except Exception as e:
+            logger.error("Failed to create causal chain node: %s", e)
+            return ""
+
+    def link_strategy_to_causal_chain(
+        self,
+        strategy_name: str,
+        chain_id: str,
+    ) -> None:
+        """
+        建立策略与因果链的 GENERATED_BY 关系。
+
+        Args:
+            strategy_name: 策略名称
+            chain_id: 因果链 ID
+        """
+        query = """
+        MATCH (s:Strategy {name: $strategy_name})
+        MATCH (c:CausalChain {chain_id: $chain_id})
+        MERGE (s)-[:GENERATED_BY {created_at: timestamp()}]->(c)
+        """
+        try:
+            with self.driver.session(database=self._config.database) as session:
+                session.run(
+                    query,
+                    strategy_name=strategy_name,
+                    chain_id=chain_id,
+                )
+        except Exception as e:
+            logger.error(
+                "Failed to link strategy %s to chain %s: %s",
+                strategy_name, chain_id, e,
+            )

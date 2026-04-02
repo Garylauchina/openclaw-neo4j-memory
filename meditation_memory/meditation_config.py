@@ -7,6 +7,7 @@
   - 权重模型参数
   - 安全与并发控制参数
   - 知识蒸馏参数
+  - 策略蒸馏与进化参数（Phase 3）
 
 所有配置通过环境变量读取，支持合理的默认值。
 """
@@ -270,6 +271,12 @@ class MeditationRestructuringConfig:
             "opposes",        # 反对
             "supports",       # 支持
             "derived_from",   # 源自
+            # Phase 3: 因果与目标关系类型
+            "leads_to",       # 引向
+            "precedes",       # 先于
+            "prevents",       # 阻止
+            "achieves",       # 实现
+            "aims_at",        # 目标是
         ]
     )
 
@@ -304,6 +311,67 @@ class MeditationDistillationConfig:
 
     # 元知识到底层事实的关系类型
     summarizes_relation_type: str = "SUMMARIZES"
+
+
+@dataclass
+class MeditationStrategyConfig:
+    """策略蒸馏与进化配置（Phase 3）"""
+
+    # 策略蒸馏：最小因果链长度（低于此长度的链不参与蒸馏）
+    min_causal_chain_length: int = field(
+        default_factory=lambda: int(
+            os.environ.get("MEDITATION_MIN_CHAIN_LENGTH", "3")
+        )
+    )
+
+    # 策略蒸馏：每次冥思最多生成的新策略数
+    max_strategies_per_run: int = field(
+        default_factory=lambda: int(
+            os.environ.get("MEDITATION_MAX_NEW_STRATEGIES", "3")
+        )
+    )
+
+    # 策略进化：适应度淘汰阈值（低于此值的策略被归档）
+    fitness_elimination_threshold: float = field(
+        default_factory=lambda: float(
+            os.environ.get("MEDITATION_FITNESS_ELIMINATION", "0.2")
+        )
+    )
+
+    # 策略进化：现实数据策略的保护阈值（更低，给予保护）
+    reality_protection_threshold: float = field(
+        default_factory=lambda: float(
+            os.environ.get("MEDITATION_REALITY_PROTECTION", "0.15")
+        )
+    )
+
+    # 策略进化：最小策略池大小（低于此数量不执行淘汰）
+    min_strategy_pool_size: int = field(
+        default_factory=lambda: int(
+            os.environ.get("MEDITATION_MIN_STRATEGY_POOL", "3")
+        )
+    )
+
+    # 策略进化：交叉概率
+    crossover_rate: float = field(
+        default_factory=lambda: float(
+            os.environ.get("MEDITATION_CROSSOVER_RATE", "0.3")
+        )
+    )
+
+    # 策略进化：突变概率
+    mutation_rate: float = field(
+        default_factory=lambda: float(
+            os.environ.get("MEDITATION_MUTATION_RATE", "0.1")
+        )
+    )
+
+    # 策略蒸馏使用的 LLM 提示词温度（略高于常规冥思，鼓励创造性）
+    distillation_temperature: float = field(
+        default_factory=lambda: float(
+            os.environ.get("MEDITATION_STRATEGY_TEMPERATURE", "0.3")
+        )
+    )
 
 
 @dataclass
@@ -374,6 +442,10 @@ class MeditationConfig:
         default_factory=MeditationDistillationConfig
     )
     safety: MeditationSafetyConfig = field(default_factory=MeditationSafetyConfig)
+    # Phase 3: 策略蒸馏与进化配置
+    strategy: MeditationStrategyConfig = field(
+        default_factory=MeditationStrategyConfig
+    )
 
     def to_dict(self) -> dict:
         """将配置序列化为字典（用于日志和 API 响应）"""

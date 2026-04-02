@@ -1,13 +1,15 @@
 """
 冥思引擎核心（Meditation Worker）
 
-实现设计文档中的 7 步流水线：
+实现设计文档中的 9 步流水线：
   1. 数据快照与锁定
   2. 孤立节点清理（Pruning）
   3. 实体整合与修复（Merging）
   4. 关系推理与重标注（Restructuring）
   5. 权重强化与衰减（Weighting）
   6. 知识蒸馏（Distillation）
+  6.5 策略蒸馏（Strategy Distillation）— Phase 3 新增
+  6.6 策略进化（Strategy Evolution）— Phase 3 新增
   7. 事务提交与解锁
 
 作为独立的异步 Worker 进程运行，与 memory_api_server 共享 GraphStore。
@@ -20,6 +22,7 @@ import json
 import logging
 import math
 import os
+import random
 import time
 import uuid
 from dataclasses import dataclass, field
@@ -29,6 +32,16 @@ from typing import Any, Dict, List, Optional, Tuple
 
 from .graph_store import GraphStore
 from .meditation_config import MeditationConfig
+
+# Phase 3: 策略蒸馏器
+try:
+    import sys as _sys
+    _project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    if _project_root not in _sys.path:
+        _sys.path.insert(0, _project_root)
+    from cognitive_engine.strategy_distiller import StrategyDistiller
+except ImportError:
+    StrategyDistiller = None  # type: ignore
 
 logger = logging.getLogger("meditation.worker")
 
@@ -59,6 +72,13 @@ class MeditationRunResult:
     nodes_archived_by_weight: int = 0
     meta_knowledge_created: int = 0
 
+    # Phase 3: 策略蒸馏与进化统计
+    strategies_distilled: int = 0
+    strategies_archived: int = 0
+    strategies_evolved: int = 0
+    causal_chains_found: int = 0
+    strategies_evaluated: int = 0
+
     # 错误信息
     errors: List[str] = field(default_factory=list)
 
@@ -83,6 +103,11 @@ class MeditationRunResult:
                 "weights_updated": self.weights_updated,
                 "nodes_archived_by_weight": self.nodes_archived_by_weight,
                 "meta_knowledge_created": self.meta_knowledge_created,
+                "strategies_distilled": self.strategies_distilled,
+                "strategies_archived": self.strategies_archived,
+                "strategies_evolved": self.strategies_evolved,
+                "causal_chains_found": self.causal_chains_found,
+                "strategies_evaluated": self.strategies_evaluated,
             },
             "errors": self.errors,
             "suggestions": self.suggestions if self.dry_run else [],
@@ -409,7 +434,7 @@ class MeditationEngine:
     """
     冥思引擎（Meditation Engine）
 
-    负责编排和执行 7 步冥思流水线。
+    负责编排和执行 9 步冥思流水线（Phase 3 升级版）。
     """
 
     def __init__(self, graph_store: GraphStore, config: Optional[MeditationConfig] = None):
@@ -417,6 +442,11 @@ class MeditationEngine:
         self.config = config or MeditationConfig()
         self.llm = MeditationLLMClient(self.config)
         self._is_running = False
+        # Phase 3: 策略蒸馏器
+        if StrategyDistiller is not None:
+            self.strategy_distiller = StrategyDistiller(self.config.llm)
+        else:
+            self.strategy_distiller = None
 
     async def run_meditation(
         self,
@@ -488,6 +518,20 @@ class MeditationEngine:
             except Exception as e:
                 logger.error(f"Step 6 (Distillation) failed, continuing: {e}")
                 result.errors.append(f"step_6_distillation: {e}")
+
+            # 6.5 策略蒸馏 (Strategy Distillation) — Phase 3
+            try:
+                await self._step_6_5_strategy_distillation(result)
+            except Exception as e:
+                logger.error(f"Step 6.5 (Strategy Distillation) failed, continuing: {e}")
+                result.errors.append(f"step_6_5_strategy_distillation: {e}")
+
+            # 6.6 策略进化 (Strategy Evolution) — Phase 3
+            try:
+                await self._step_6_6_strategy_evolution(result)
+            except Exception as e:
+                logger.error(f"Step 6.6 (Strategy Evolution) failed, continuing: {e}")
+                result.errors.append(f"step_6_6_strategy_evolution: {e}")
 
             # 7. 事务提交与解锁
             await self._step_7_finalize(result)
@@ -844,6 +888,188 @@ class MeditationEngine:
                         self.config.distillation.summarizes_relation_type
                     ):
                         result.meta_knowledge_created += 1
+
+    # ---------- 步骤 6.5: 策略蒸馏 (Strategy Distillation) — Phase 3 ----------
+
+    async def _step_6_5_strategy_distillation(self, result: MeditationRunResult):
+        """
+        策略蒸馏：从图谱中的因果链自动生成策略。
+
+        流程：
+        1. 查询图谱中的因果链（CAUSES 关系连接的事件序列）
+        2. 过滤长度不足的短链
+        3. 交由 LLM 分析因果模式，生成策略候选
+        4. 为每个新策略创建 :Strategy 节点
+        """
+        strategy_config = self.config.strategy
+
+        # 若 max_strategies_per_run == 0，跳过此步骤
+        if strategy_config.max_strategies_per_run <= 0:
+            logger.info("Strategy distillation disabled (max_strategies_per_run=0)")
+            return
+
+        if self.strategy_distiller is None:
+            logger.warning("StrategyDistiller not available, skipping step 6.5")
+            return
+
+        # 1. 获取因果链
+        chains = self.store.get_causal_chains(
+            min_length=strategy_config.min_causal_chain_length,
+            limit=20,
+        )
+        result.causal_chains_found = len(chains)
+
+        if not chains:
+            logger.info("No causal chains found for distillation")
+            return
+
+        # 2. LLM 蒸馏
+        new_strategies = self.strategy_distiller.distill(
+            chains,
+            max_strategies=strategy_config.max_strategies_per_run,
+        )
+
+        # 3. 写入图谱
+        for s in new_strategies:
+            strategy_name = f"distilled_{s.get('name', 'unknown')}"
+            strategy_data = {
+                "name": strategy_name,
+                "type": "distilled",
+                "uses_real_data": s.get("uses_real_data", False),
+                "fitness": s.get("expected_accuracy", 0.5),
+                "performance": {
+                    "avg_accuracy": s.get("expected_accuracy", 0.5),
+                    "avg_success": 0.0,
+                    "avg_cost": 0.0,
+                    "usage_count": 0,
+                },
+                "metadata": {
+                    "description": s.get("description", ""),
+                    "applicable_scenarios": s.get("applicable_scenarios", []),
+                    "source": "meditation_distillation",
+                    "created_at": datetime.now().isoformat(),
+                    "evolution_steps": 0,
+                },
+            }
+
+            if result.dry_run:
+                result.suggestions.append({
+                    "step": "strategy_distillation",
+                    "action": "create_strategy",
+                    "strategy": strategy_data,
+                })
+            else:
+                self.store.upsert_strategy_node(strategy_data)
+                result.strategies_distilled += 1
+
+        logger.info(
+            "Step 6.5 completed: chains_found=%d, strategies_created=%d",
+            len(chains), result.strategies_distilled,
+        )
+
+    # ---------- 步骤 6.6: 策略进化 (Strategy Evolution) — Phase 3 ----------
+
+    async def _step_6_6_strategy_evolution(self, result: MeditationRunResult):
+        """
+        策略进化：评估适应度，淘汰低效策略，强化高效策略。
+
+        流程：
+        1. 获取所有活跃策略及其 fitness_score
+        2. 淘汰低于阈值的策略（保护现实数据策略）
+        3. 对高分策略执行交叉，生成新策略
+        """
+        strategy_config = self.config.strategy
+
+        # 若淘汰阈值为 0.0，跳过此步骤
+        if (strategy_config.fitness_elimination_threshold <= 0.0
+                and strategy_config.crossover_rate <= 0.0):
+            logger.info("Strategy evolution disabled")
+            return
+
+        # 1. 获取所有策略
+        strategies = self.store.get_strategies_for_evolution()
+        result.strategies_evaluated = len(strategies)
+
+        if len(strategies) < strategy_config.min_strategy_pool_size:
+            logger.info(
+                "Strategy pool too small (%d < %d), skipping evolution",
+                len(strategies), strategy_config.min_strategy_pool_size,
+            )
+            return
+
+        # 2. 淘汰低效策略
+        for s in strategies:
+            fitness = s.get("fitness_score", 0.0) or 0.0
+            uses_real = s.get("uses_real_data", False)
+            threshold = (
+                strategy_config.reality_protection_threshold
+                if uses_real
+                else strategy_config.fitness_elimination_threshold
+            )
+
+            if fitness < threshold and (s.get("usage_count") or 0) > 5:
+                if result.dry_run:
+                    result.suggestions.append({
+                        "step": "strategy_evolution",
+                        "action": "archive_strategy",
+                        "strategy_name": s["name"],
+                        "fitness": fitness,
+                        "threshold": threshold,
+                    })
+                else:
+                    self.store.archive_strategy(s["name"])
+                    result.strategies_archived += 1
+                    logger.info(
+                        "Archived strategy %s (fitness=%.3f < %.3f)",
+                        s["name"], fitness, threshold,
+                    )
+
+        # 3. 交叉进化（从排名前列的策略中选择）
+        top_strategies = [
+            s for s in strategies
+            if (s.get("fitness_score") or 0) > 0.5
+        ]
+        if (
+            len(top_strategies) >= 2
+            and random.random() < strategy_config.crossover_rate
+        ):
+            p1, p2 = random.sample(top_strategies[:5], 2)
+            child_name = f"evolved_{p1['name']}_{p2['name']}"
+            child_data = {
+                "name": child_name,
+                "type": "evolved",
+                "uses_real_data": (
+                    p1.get("uses_real_data", False)
+                    or p2.get("uses_real_data", False)
+                ),
+                "fitness": (
+                    (p1.get("fitness_score", 0) or 0)
+                    + (p2.get("fitness_score", 0) or 0)
+                ) / 2,
+                "performance": {"usage_count": 0},
+                "metadata": {"source": "meditation_evolution"},
+            }
+
+            if result.dry_run:
+                result.suggestions.append({
+                    "step": "strategy_evolution",
+                    "action": "crossover",
+                    "child": child_data,
+                    "parents": [p1["name"], p2["name"]],
+                })
+            else:
+                self.store.upsert_strategy_node(child_data)
+                self.store.create_evolution_link(
+                    child_name, p1["name"], p2["name"]
+                )
+                result.strategies_evolved += 1
+
+        logger.info(
+            "Step 6.6 completed: evaluated=%d, archived=%d, evolved=%d",
+            result.strategies_evaluated,
+            result.strategies_archived,
+            result.strategies_evolved,
+        )
 
     # ---------- 步骤 7: 事务提交与解锁 ----------
 
