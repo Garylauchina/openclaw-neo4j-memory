@@ -1,0 +1,888 @@
+"""
+冥思引擎核心（Meditation Worker）
+
+实现设计文档中的 7 步流水线：
+  1. 数据快照与锁定
+  2. 孤立节点清理（Pruning）
+  3. 实体整合与修复（Merging）
+  4. 关系推理与重标注（Restructuring）
+  5. 权重强化与衰减（Weighting）
+  6. 知识蒸馏（Distillation）
+  7. 事务提交与解锁
+
+作为独立的异步 Worker 进程运行，与 memory_api_server 共享 GraphStore。
+"""
+
+from __future__ import annotations
+
+import asyncio
+import json
+import logging
+import math
+import os
+import time
+import uuid
+from dataclasses import dataclass, field
+from datetime import datetime
+from difflib import SequenceMatcher
+from typing import Any, Dict, List, Optional, Tuple
+
+from .graph_store import GraphStore
+from .meditation_config import MeditationConfig
+
+logger = logging.getLogger("meditation.worker")
+
+
+# ================================================================
+# 数据结构
+# ================================================================
+
+@dataclass
+class MeditationRunResult:
+    """一次冥思运行的结果"""
+
+    run_id: str = ""
+    started_at: str = ""
+    finished_at: str = ""
+    status: str = "pending"  # pending / running / completed / failed / dry_run
+    dry_run: bool = False
+
+    # 各步骤统计
+    nodes_scanned: int = 0
+    nodes_pruned: int = 0
+    entities_merged: int = 0
+    entities_repaired: int = 0
+    metadata_enriched: int = 0
+    relations_relabeled: int = 0
+    relations_inferred: int = 0
+    weights_updated: int = 0
+    nodes_archived_by_weight: int = 0
+    meta_knowledge_created: int = 0
+
+    # 错误信息
+    errors: List[str] = field(default_factory=list)
+
+    # Dry-run 模式下的建议操作
+    suggestions: List[Dict[str, Any]] = field(default_factory=list)
+
+    def to_dict(self) -> Dict[str, Any]:
+        return {
+            "run_id": self.run_id,
+            "started_at": self.started_at,
+            "finished_at": self.finished_at,
+            "status": self.status,
+            "dry_run": self.dry_run,
+            "stats": {
+                "nodes_scanned": self.nodes_scanned,
+                "nodes_pruned": self.nodes_pruned,
+                "entities_merged": self.entities_merged,
+                "entities_repaired": self.entities_repaired,
+                "metadata_enriched": self.metadata_enriched,
+                "relations_relabeled": self.relations_relabeled,
+                "relations_inferred": self.relations_inferred,
+                "weights_updated": self.weights_updated,
+                "nodes_archived_by_weight": self.nodes_archived_by_weight,
+                "meta_knowledge_created": self.meta_knowledge_created,
+            },
+            "errors": self.errors,
+            "suggestions": self.suggestions if self.dry_run else [],
+        }
+
+
+# ================================================================
+# LLM 客户端封装
+# ================================================================
+
+class MeditationLLMClient:
+    """
+    冥思专用 LLM 客户端
+
+    封装 OpenAI 兼容 API 的调用逻辑，支持同义实体判断、截断修复、
+    关系重标注、语义评分和知识蒸馏等功能。
+    """
+
+    def __init__(self, config: MeditationConfig):
+        self._config = config.llm
+        self._client = None
+
+    @property
+    def client(self):
+        if self._client is None:
+            from openai import OpenAI
+            kwargs = {}
+            if self._config.api_key:
+                kwargs["api_key"] = self._config.api_key
+            if self._config.base_url:
+                kwargs["base_url"] = self._config.base_url
+            self._client = OpenAI(**kwargs)
+        return self._client
+
+    def _call_llm(self, system_prompt: str, user_prompt: str) -> str:
+        try:
+            response = self.client.chat.completions.create(
+                model=self._config.model,
+                messages=[
+                    {"role": "system", "content": system_prompt},
+                    {"role": "user", "content": user_prompt},
+                ],
+                temperature=self._config.temperature,
+                timeout=self._config.request_timeout,
+            )
+            return response.choices[0].message.content.strip()
+        except Exception as e:
+            logger.error("LLM call failed: %s", e)
+            raise
+
+    def _parse_json_response(self, text: str) -> Any:
+        """从 LLM 响应中解析 JSON"""
+        import re
+        # 直接解析
+        try:
+            return json.loads(text)
+        except json.JSONDecodeError:
+            pass
+        # 提取 JSON 代码块
+        json_match = re.search(r'```(?:json)?\s*\n?(.*?)\n?```', text, re.DOTALL)
+        if json_match:
+            try:
+                return json.loads(json_match.group(1).strip())
+            except json.JSONDecodeError:
+                pass
+        # 找到 { } 或 [ ] 之间的内容
+        for sc, ec in [('{', '}'), ('[', ']')]:
+            start = text.find(sc)
+            end = text.rfind(ec)
+            if start != -1 and end > start:
+                try:
+                    return json.loads(text[start:end + 1])
+                except json.JSONDecodeError:
+                    pass
+        logger.warning("Failed to parse JSON from LLM response: %s", text[:200])
+        return None
+
+    def judge_synonym_entities(self, pairs: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+        """判断实体对是否为同义实体。"""
+        if not pairs:
+            return []
+        system_prompt = (
+            "你是一个实体对齐专家。请判断以下实体对是否指代同一个现实世界实体。\n"
+            "对于每一对，返回 JSON 数组，每个元素包含：\n"
+            '  - "pair_index": 对的索引（从 0 开始）\n'
+            '  - "is_same": 是否为同一实体（true/false）\n'
+            '  - "main_name": 如果是同一实体，推荐保留的标准名称\n'
+            '  - "reason": 判断理由\n'
+            "只返回 JSON，不要其他文字。"
+        )
+        pair_descs = []
+        for i, p in enumerate(pairs):
+            pair_descs.append(
+                f"对 {i}: \"{p['name_a']}\"（类型: {p.get('type_a', '未知')}, "
+                f"提及: {p.get('mentions_a', 0)}）vs "
+                f"\"{p['name_b']}\"（类型: {p.get('type_b', '未知')}, "
+                f"提及: {p.get('mentions_b', 0)}, "
+                f"共同邻居: {p.get('shared_neighbors', 0)}）"
+            )
+        user_prompt = "请判断以下实体对：\n" + "\n".join(pair_descs)
+        try:
+            resp = self._call_llm(system_prompt, user_prompt)
+            results = self._parse_json_response(resp)
+            if isinstance(results, list):
+                return results
+        except Exception as e:
+            logger.error("Failed to judge synonym entities: %s", e)
+        return []
+
+    def repair_truncated_entity(
+        self, entity_name: str, entity_type: str, neighbor_names: List[str],
+    ) -> Optional[str]:
+        """修复截断实体的名称。"""
+        system_prompt = (
+            "你是一个实体名称修复专家。给定一个可能被截断的实体名称及其上下文，"
+            "请推断出完整的实体名称。\n"
+            "只返回 JSON 格式：\n"
+            '{"repaired_name": "完整名称", "confidence": 0.0-1.0, "reason": "理由"}\n'
+            "如果无法确定，confidence 设为 0。"
+        )
+        user_prompt = (
+            f"截断名称: \"{entity_name}\"\n"
+            f"实体类型: {entity_type}\n"
+            f"相关实体: {', '.join(neighbor_names[:10])}"
+        )
+        try:
+            resp = self._call_llm(system_prompt, user_prompt)
+            result = self._parse_json_response(resp)
+            if result and isinstance(result, dict):
+                if result.get("confidence", 0) >= 0.6:
+                    repaired = result.get("repaired_name", "")
+                    if repaired and repaired != entity_name:
+                        return repaired
+        except Exception as e:
+            logger.error("Failed to repair truncated entity '%s': %s", entity_name, e)
+        return None
+
+    def infer_entity_metadata(self, entities: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+        """为缺少元数据的实体推断类型和描述。"""
+        if not entities:
+            return []
+        system_prompt = (
+            "你是一个知识图谱专家。请为以下实体推断合适的类型和简短描述。\n"
+            "可用的实体类型: person, organization, concept, event, object, place, technology\n"
+            "返回 JSON 数组，每个元素包含：\n"
+            '  - "name": 实体名称\n'
+            '  - "suggested_type": 推荐的实体类型\n'
+            '  - "description": 简短描述（一句话）\n'
+            "只返回 JSON，不要其他文字。"
+        )
+        entity_descs = []
+        for e in entities:
+            neighbors = e.get("neighbors", [])
+            nb_str = ", ".join(
+                f"{n.get('name', '?')}({n.get('rel', 'related_to')})"
+                for n in neighbors[:5] if n.get("name")
+            )
+            entity_descs.append(
+                f"- \"{e['name']}\"（当前类型: {e.get('entity_type', '未知')}, "
+                f"关联: {nb_str or '无'}）"
+            )
+        user_prompt = "请为以下实体推断元数据：\n" + "\n".join(entity_descs)
+        try:
+            resp = self._call_llm(system_prompt, user_prompt)
+            results = self._parse_json_response(resp)
+            if isinstance(results, list):
+                return results
+        except Exception as e:
+            logger.error("Failed to infer entity metadata: %s", e)
+        return []
+
+    def relabel_relations(
+        self, edges: List[Dict[str, Any]], ontology: List[str],
+    ) -> List[Dict[str, Any]]:
+        """将 related_to 关系重标注为具体的语义关系类型。"""
+        if not edges:
+            return []
+        system_prompt = (
+            "你是一个关系分类专家。请将以下通用的 'related_to' 关系重新分类为更具体的语义关系类型。\n"
+            f"可用的关系类型: {', '.join(ontology)}\n"
+            "如果无法确定更具体的类型，保持 'related_to' 不变。\n"
+            "返回 JSON 数组，每个元素包含：\n"
+            '  - "index": 关系的索引（从 0 开始）\n'
+            '  - "new_relation_type": 新的关系类型\n'
+            '  - "confidence": 置信度 0.0-1.0\n'
+            '  - "reason": 判断理由\n'
+            "只返回 JSON，不要其他文字。"
+        )
+        edge_descs = []
+        for i, e in enumerate(edges):
+            edge_descs.append(
+                f"{i}: ({e['source_name']}[{e.get('source_type', '?')}]) "
+                f"-[related_to]-> "
+                f"({e['target_name']}[{e.get('target_type', '?')}]) "
+                f"(提及: {e.get('mention_count', 0)})"
+            )
+        user_prompt = "请重新分类以下关系：\n" + "\n".join(edge_descs)
+        try:
+            resp = self._call_llm(system_prompt, user_prompt)
+            results = self._parse_json_response(resp)
+            if isinstance(results, list):
+                return results
+        except Exception as e:
+            logger.error("Failed to relabel relations: %s", e)
+        return []
+
+    def infer_implicit_relations(
+        self, subgraph_edges: List[Dict[str, Any]], entity_names: List[str],
+    ) -> List[Dict[str, Any]]:
+        """基于现有图结构推断隐含关系。"""
+        if not subgraph_edges or len(entity_names) < 2:
+            return []
+        system_prompt = (
+            "你是一个知识图谱推理专家。基于以下已知的实体关系，"
+            "请推断可能存在但尚未记录的隐含关系。\n"
+            "只推断有高置信度的关系，不要过度推断。\n"
+            "返回 JSON 数组，每个元素包含：\n"
+            '  - "source": 源实体名称\n'
+            '  - "target": 目标实体名称\n'
+            '  - "relation_type": 关系类型\n'
+            '  - "confidence": 置信度 0.0-1.0\n'
+            '  - "reason": 推理依据\n'
+            "如果没有可以推断的关系，返回空数组 []。\n"
+            "只返回 JSON，不要其他文字。"
+        )
+        edge_descs = [
+            f"({e.get('source', '?')}) -[{e.get('relation_type', 'related_to')}]-> ({e.get('target', '?')})"
+            for e in subgraph_edges
+        ]
+        user_prompt = (
+            f"已知实体: {', '.join(entity_names[:20])}\n"
+            f"已知关系:\n" + "\n".join(edge_descs[:30])
+        )
+        try:
+            resp = self._call_llm(system_prompt, user_prompt)
+            results = self._parse_json_response(resp)
+            if isinstance(results, list):
+                return [
+                    r for r in results
+                    if r.get("confidence", 0) >= 0.7
+                    and r.get("source") in entity_names
+                    and r.get("target") in entity_names
+                ]
+        except Exception as e:
+            logger.error("Failed to infer implicit relations: %s", e)
+        return []
+
+    def evaluate_semantic_importance(
+        self, entities: List[Dict[str, Any]],
+    ) -> List[Dict[str, Any]]:
+        """评估实体的语义重要性。"""
+        if not entities:
+            return []
+        system_prompt = (
+            "你是一个记忆评估专家。请评估以下实体对用户长期记忆的价值。\n"
+            "评分范围为 0.0 到 1.0：\n"
+            "  - 0.0-0.2: 无意义的口语词或临时状态\n"
+            "  - 0.3-0.5: 一般性概念，有一定参考价值\n"
+            "  - 0.6-0.8: 重要概念、工具或常用对象\n"
+            "  - 0.8-1.0: 核心偏好、重要事实或长期目标\n"
+            "返回 JSON 数组，每个元素包含：\n"
+            '  - "name": 实体名称\n'
+            '  - "semantic_score": 语义评分 0.0-1.0\n'
+            '  - "reason": 评分理由\n'
+            "只返回 JSON，不要其他文字。"
+        )
+        entity_descs = []
+        for e in entities:
+            entity_descs.append(
+                f"- \"{e['name']}\"（类型: {e.get('entity_type', '?')}, "
+                f"提及: {e.get('mention_count', 0)}, "
+                f"度数: {e.get('degree', 0)}）"
+            )
+        user_prompt = "请评估以下实体的语义重要性：\n" + "\n".join(entity_descs)
+        try:
+            resp = self._call_llm(system_prompt, user_prompt)
+            results = self._parse_json_response(resp)
+            if isinstance(results, list):
+                return results
+        except Exception as e:
+            logger.error("Failed to evaluate semantic importance: %s", e)
+        return []
+
+    def distill_knowledge(
+        self,
+        center_name: str,
+        neighbor_list: List[Dict[str, str]],
+        edges: List[Dict[str, Any]],
+    ) -> Optional[str]:
+        """从密集子图中蒸馏元知识。"""
+        system_prompt = (
+            "分析以下实体及其关系，提取出关于核心实体的高层次洞察或规律。\n"
+            "用一到两句话概括，要求信息密度高、有归纳价值。\n"
+            "只返回 JSON 格式：\n"
+            '{"summary": "归纳的元知识", "confidence": 0.0-1.0}\n'
+            "只返回 JSON，不要其他文字。"
+        )
+        edge_descs = [
+            f"({e.get('source', '?')}) -[{e.get('relation_type', '?')}]-> ({e.get('target', '?')})"
+            for e in edges
+        ]
+        nb_descs = [f"{n.get('name', '?')}({n.get('type', '?')})" for n in neighbor_list]
+        user_prompt = (
+            f"核心实体: {center_name}\n"
+            f"相关实体: {', '.join(nb_descs[:15])}\n"
+            f"关系:\n" + "\n".join(edge_descs[:20])
+        )
+        try:
+            resp = self._call_llm(system_prompt, user_prompt)
+            result = self._parse_json_response(resp)
+            if result and isinstance(result, dict):
+                if result.get("confidence", 0) >= 0.5:
+                    return result.get("summary")
+        except Exception as e:
+            logger.error("Failed to distill knowledge for %s: %s", center_name, e)
+        return None
+
+
+# ================================================================
+# 冥思引擎核心类
+# ================================================================
+
+class MeditationEngine:
+    """
+    冥思引擎（Meditation Engine）
+
+    负责编排和执行 7 步冥思流水线。
+    """
+
+    def __init__(self, graph_store: GraphStore, config: Optional[MeditationConfig] = None):
+        self.store = graph_store
+        self.config = config or MeditationConfig()
+        self.llm = MeditationLLMClient(self.config)
+        self._is_running = False
+
+    async def run_meditation(
+        self,
+        mode: str = "auto",  # auto / manual / dry_run
+        target_nodes: Optional[List[str]] = None,
+    ) -> MeditationRunResult:
+        """
+        执行一次完整的冥思流程。
+
+        Args:
+            mode: 运行模式
+            target_nodes: 指定要处理的节点列表（可选）
+
+        Returns:
+            冥思运行结果统计
+        """
+        if self._is_running:
+            raise RuntimeError("Meditation is already running.")
+
+        self._is_running = True
+        run_id = str(uuid.uuid4())
+        dry_run = (mode == "dry_run" or self.config.safety.dry_run)
+
+        result = MeditationRunResult(
+            run_id=run_id,
+            started_at=datetime.now().isoformat(),
+            status="running",
+            dry_run=dry_run,
+        )
+
+        logger.info(f"Starting meditation run {run_id} (dry_run={dry_run})")
+
+        try:
+            # 1. 数据快照与锁定
+            nodes = await self._step_1_snapshot_and_lock(result, target_nodes)
+            if not nodes:
+                result.status = "completed"
+                result.finished_at = datetime.now().isoformat()
+                logger.info("No nodes need meditation. Finishing early.")
+                return result
+
+            # 2. 孤立节点清理 (Pruning)
+            await self._step_2_pruning(result, nodes)
+
+            # 3. 实体整合与修复 (Merging)
+            try:
+                await self._step_3_merging(result, nodes)
+            except Exception as e:
+                logger.error(f"Step 3 (Merging) failed, continuing: {e}")
+                result.errors.append(f"step_3_merging: {e}")
+
+            # 4. 关系推理与重标注 (Restructuring)
+            try:
+                await self._step_4_restructuring(result, nodes)
+            except Exception as e:
+                logger.error(f"Step 4 (Restructuring) failed, continuing: {e}")
+                result.errors.append(f"step_4_restructuring: {e}")
+
+            # 5. 权重强化与衰减 (Weighting)
+            try:
+                await self._step_5_weighting(result, nodes)
+            except Exception as e:
+                logger.error(f"Step 5 (Weighting) failed, continuing: {e}")
+                result.errors.append(f"step_5_weighting: {e}")
+
+            # 6. 知识蒸馏 (Distillation)
+            try:
+                await self._step_6_distillation(result, nodes)
+            except Exception as e:
+                logger.error(f"Step 6 (Distillation) failed, continuing: {e}")
+                result.errors.append(f"step_6_distillation: {e}")
+
+            # 7. 事务提交与解锁
+            await self._step_7_finalize(result)
+
+            result.status = "completed" if not dry_run else "dry_run"
+            logger.info(f"Meditation run {run_id} completed successfully.")
+
+        except Exception as e:
+            logger.error(f"Meditation run {run_id} failed: {e}", exc_info=True)
+            result.status = "failed"
+            result.errors.append(str(e))
+            # 尝试解锁
+            try:
+                self.store.unlock_nodes_after_meditation(run_id)
+            except:
+                pass
+        finally:
+            result.finished_at = datetime.now().isoformat()
+            self._is_running = False
+
+        return result
+
+    # ---------- 步骤 1: 快照与锁定 ----------
+
+    async def _step_1_snapshot_and_lock(
+        self, result: MeditationRunResult, target_nodes: Optional[List[str]] = None
+    ) -> List[Dict[str, Any]]:
+        """获取待处理节点并加锁，可选创建快照备份。"""
+        if target_nodes:
+            # 手动模式：直接获取指定节点
+            nodes = []
+            for name in target_nodes:
+                node = self.store.find_entity(name)
+                if node:
+                    nodes.append(node)
+        else:
+            # 自动模式：获取 needs_meditation=true 的节点
+            nodes = self.store.get_nodes_needing_meditation(
+                limit=500,
+                skip_recent_seconds=self.config.safety.skip_recently_updated_seconds
+            )
+
+        if not nodes:
+            return []
+
+        result.nodes_scanned = len(nodes)
+        node_names = [n["name"] for n in nodes]
+
+        # 锁定节点
+        if not result.dry_run:
+            locked_count = self.store.lock_nodes_for_meditation(node_names, result.run_id)
+            logger.info(f"Locked {locked_count}/{len(node_names)} nodes for meditation.")
+
+        # 创建快照
+        if self.config.safety.enable_snapshot:
+            snapshot_data = self.store.create_meditation_snapshot(node_names)
+            if snapshot_data:
+                os.makedirs(self.config.safety.snapshot_dir, exist_ok=True)
+                filename = f"snapshot_{result.run_id}_{int(time.time())}.json"
+                filepath = os.path.join(self.config.safety.snapshot_dir, filename)
+                with open(filepath, "w", encoding="utf-8") as f:
+                    f.write(snapshot_data)
+                logger.info(f"Created snapshot backup: {filepath}")
+
+        return nodes
+
+    # ---------- 步骤 2: 孤立节点清理 (Pruning) ----------
+
+    async def _step_2_pruning(self, result: MeditationRunResult, nodes: List[Dict[str, Any]]):
+        """清理无边连接的孤立节点和通用词节点。"""
+        # 1. 处理孤立节点
+        orphans = self.store.get_orphan_nodes(
+            min_mentions=self.config.pruning.orphan_min_mentions,
+            skip_recent_seconds=self.config.safety.skip_recently_updated_seconds
+        )
+        orphan_names = [o["name"] for o in orphans]
+
+        # 2. 处理通用词节点
+        generics = self.store.get_generic_word_nodes(
+            generic_words=self.config.pruning.generic_words,
+            skip_recent_seconds=self.config.safety.skip_recently_updated_seconds
+        )
+        generic_names = [g["name"] for g in generics]
+
+        to_archive = list(set(orphan_names + generic_names))
+        if not to_archive:
+            return
+
+        if result.dry_run:
+            result.suggestions.append({
+                "step": "pruning",
+                "action": "archive",
+                "nodes": to_archive,
+                "reason": "orphan or generic word"
+            })
+        else:
+            archived_count = self.store.archive_nodes(to_archive, reason="meditation_pruning")
+            result.nodes_pruned = archived_count
+            logger.info(f"Pruned {archived_count} nodes.")
+
+    # ---------- 步骤 3: 实体整合与修复 (Merging) ----------
+
+    async def _step_3_merging(self, result: MeditationRunResult, nodes: List[Dict[str, Any]]):
+        """同义词合并、截断修复、元数据补充。"""
+        # 3.1 同义词合并
+        pairs = self.store.get_similar_entity_pairs(limit=15)
+        logger.info(f"Step 3.1: Found {len(pairs)} candidate synonym pairs.")
+        if pairs:
+            judgments = self.llm.judge_synonym_entities(pairs)
+            for j in judgments:
+                idx = j.get("pair_index")
+                if idx is not None and idx < len(pairs) and j.get("is_same"):
+                    pair = pairs[idx]
+                    # 自合并保护
+                    if pair["eid_a"] == pair["eid_b"]:
+                        continue
+                    main_name = j.get("main_name") or pair["name_a"]
+                    # 根据 main_name 确定哪个是主节点
+                    if main_name == pair["name_a"]:
+                        main_eid = pair["eid_a"]
+                        alias_eid = pair["eid_b"]
+                        alias_name = pair["name_b"]
+                    else:
+                        main_eid = pair["eid_b"]
+                        alias_eid = pair["eid_a"]
+                        alias_name = pair["name_a"]
+
+                    if result.dry_run:
+                        result.suggestions.append({
+                            "step": "merging",
+                            "action": "merge",
+                            "main": main_name,
+                            "alias": alias_name,
+                            "reason": j.get("reason")
+                        })
+                    else:
+                        if self.store.merge_entity_nodes(main_eid, alias_eid):
+                            result.entities_merged += 1
+
+        logger.info(f"Step 3.1 done: merged {result.entities_merged} entities.")
+
+        # 3.2 截断修复
+        short_nodes = self.store.get_short_name_entities(
+            max_name_length=self.config.merging.truncation_name_length
+        )
+        for sn in short_nodes:
+            repaired_name = self.llm.repair_truncated_entity(
+                sn["name"], sn["entity_type"], sn.get("neighbor_names", [])
+            )
+            if repaired_name:
+                if result.dry_run:
+                    result.suggestions.append({
+                        "step": "merging",
+                        "action": "repair_name",
+                        "old": sn["name"],
+                        "new": repaired_name
+                    })
+                else:
+                    if self.store.update_entity_name(sn["name"], repaired_name, sn["entity_type"]):
+                        result.entities_repaired += 1
+
+        logger.info(f"Step 3.2 done: repaired {result.entities_repaired} truncated entities.")
+
+        # 3.3 元数据补充
+        missing_meta = self.store.get_entities_missing_metadata(limit=20)
+        if missing_meta:
+            enriched = self.llm.infer_entity_metadata(missing_meta)
+            for item in enriched:
+                name = item.get("name")
+                if not name: continue
+                if result.dry_run:
+                    result.suggestions.append({
+                        "step": "merging",
+                        "action": "enrich_metadata",
+                        "name": name,
+                        "type": item.get("suggested_type"),
+                        "desc": item.get("description")
+                    })
+                else:
+                    # 查找原始类型用于匹配
+                    orig = next((m for m in missing_meta if m["name"] == name), None)
+                    orig_type = orig["entity_type"] if orig else None
+                    if self.store.update_entity_metadata(
+                        name, orig_type, item.get("description"), item.get("suggested_type")
+                    ):
+                        result.metadata_enriched += 1
+
+        logger.info(f"Step 3.3 done: enriched metadata for {result.metadata_enriched} entities.")
+
+    # ---------- 步骤 4: 关系推理与重标注 (Restructuring) ----------
+
+    async def _step_4_restructuring(self, result: MeditationRunResult, nodes: List[Dict[str, Any]]):
+        """重标注 related_to 关系，推断隐含关系。"""
+        # 4.1 重标注
+        generic_rels = self.store.get_related_to_edges(limit=self.config.restructuring.relabel_batch_size)
+        logger.info(f"Step 4.1: Found {len(generic_rels)} generic relations to relabel.")
+        if generic_rels:
+            relabels = self.llm.relabel_relations(generic_rels, self.config.restructuring.relation_ontology)
+            for r in relabels:
+                idx = r.get("index")
+                new_type = r.get("new_relation_type")
+                if idx is not None and idx < len(generic_rels) and new_type and new_type != "related_to":
+                    edge = generic_rels[idx]
+                    if result.dry_run:
+                        result.suggestions.append({
+                            "step": "restructuring",
+                            "action": "relabel",
+                            "src": edge["source_name"],
+                            "tgt": edge["target_name"],
+                            "old": "related_to",
+                            "new": new_type
+                        })
+                    else:
+                        if self.store.update_relation_type(
+                            edge["source_name"], edge["target_name"], "related_to", new_type
+                        ):
+                            result.relations_relabeled += 1
+
+        logger.info(f"Step 4.1 done: relabeled {result.relations_relabeled} relations.")
+
+        # 4.2 隐含关系推断（针对本次扫描的节点子图）
+        node_names = [n["name"] for n in nodes[:20]] # 限制规模
+        subgraph = self.store.get_subgraph_by_entities(node_names, max_depth=1)
+        edges = [{"source": e["source"], "target": e["target"], "relation_type": e["relation_type"]}
+                 for e in subgraph.get("edges", [])]
+
+        inferred = self.llm.infer_implicit_relations(edges, node_names)
+        for inf in inferred:
+            if result.dry_run:
+                result.suggestions.append({
+                    "step": "restructuring",
+                    "action": "infer",
+                    "src": inf["source"],
+                    "tgt": inf["target"],
+                    "type": inf["relation_type"],
+                    "conf": inf.get("confidence")
+                })
+            else:
+                if self.store.create_inferred_relation(
+                    inf["source"], inf["target"], inf["relation_type"], inf.get("confidence", 0.5)
+                ):
+                    result.relations_inferred += 1
+
+        logger.info(f"Step 4.2 done: inferred {result.relations_inferred} new relations.")
+
+    # ---------- 步骤 5: 权重强化与衰减 (Weighting) ----------
+
+    async def _step_5_weighting(self, result: MeditationRunResult, nodes: List[Dict[str, Any]]):
+        """计算记忆激活值：时间衰减 + 语义重要性 + 网络中心度。"""
+        # 获取所有活跃节点进行权重重算
+        active_nodes = self.store.get_all_active_nodes_for_weighting(limit=1000)
+        if not active_nodes:
+            return
+
+        # 批量获取语义评分（仅针对没有评分或需要重评的节点）
+        needs_eval = [n for n in active_nodes if n.get("semantic_score") is None][:20]
+        semantic_scores = {}
+        if needs_eval:
+            evals = self.llm.evaluate_semantic_importance(needs_eval)
+            for ev in evals:
+                semantic_scores[ev["name"]] = ev.get("semantic_score", 0.5)
+
+        updates = []
+        to_archive = []
+        now_ms = int(time.time() * 1000)
+
+        for n in active_nodes:
+            name = n["name"]
+            # 1. 语义分 (None 保护：LLM 可能返回 None，旧节点也可能缺少该属性)
+            s_score = semantic_scores.get(name, n.get("semantic_score"))
+            if s_score is None:
+                s_score = 0.5
+
+            # 2. 时间衰减 (Ebbinghaus)
+            # 距离上次更新的天数
+            last_update = n.get("updated_at") or now_ms
+            days_passed = (now_ms - last_update) / (24 * 3600 * 1000)
+
+            # 衰减率受语义分影响：核心知识衰减慢
+            decay_rate = self.config.weight.decay_factor
+            if s_score >= self.config.weight.high_semantic_threshold:
+                decay_rate = 1.0 - (1.0 - decay_rate) * self.config.weight.core_decay_reduction
+
+            # 计算基础激活值（基于频率和时间）
+            # A = mention_count * (decay_rate ^ days_passed)
+            freq_factor = math.log1p(n.get("mention_count") or 1)
+            recency_factor = math.pow(decay_rate, days_passed)
+
+            # 3. 网络中心度 (简单使用度数归一化)
+            centrality_factor = math.log1p(n.get("degree") or 0) / 10.0
+            centrality_factor = min(centrality_factor, 1.0)
+
+            # 综合计算激活值
+            activation = (
+                recency_factor * self.config.weight.recency_weight +
+                s_score * self.config.weight.semantic_weight +
+                centrality_factor * self.config.weight.centrality_weight
+            )
+            activation = max(0.0, min(1.0, activation))
+
+            updates.append({
+                "name": name,
+                "activation_level": activation,
+                "semantic_score": s_score
+            })
+
+            # 检查是否需要归档
+            if activation < self.config.weight.min_activation_threshold:
+                to_archive.append(name)
+
+        if result.dry_run:
+            result.suggestions.append({
+                "step": "weighting",
+                "action": "update_weights",
+                "count": len(updates),
+                "to_archive": to_archive
+            })
+        else:
+            updated_count = self.store.batch_update_weights(updates)
+            result.weights_updated = updated_count
+            if to_archive:
+                archived_count = self.store.archive_nodes(to_archive, reason="low_activation")
+                result.nodes_archived_by_weight = archived_count
+            logger.info(f"Updated weights for {updated_count} nodes, archived {len(to_archive)} nodes.")
+
+    # ---------- 步骤 6: 知识蒸馏 (Distillation) ----------
+
+    async def _step_6_distillation(self, result: MeditationRunResult, nodes: List[Dict[str, Any]]):
+        """从密集子图中提取元知识。"""
+        clusters = self.store.get_dense_subgraphs_for_distillation(
+            min_cluster_size=self.config.distillation.min_cluster_size,
+            limit=self.config.distillation.max_meta_nodes_per_run
+        )
+
+        for cluster in clusters:
+            center_name = cluster["center_name"]
+            neighbor_names = [n["name"] for n in cluster["neighbor_list"]]
+            edges = self.store.get_cluster_edges(center_name, neighbor_names)
+
+            summary = self.llm.distill_knowledge(center_name, cluster["neighbor_list"], edges)
+            if summary:
+                if result.dry_run:
+                    result.suggestions.append({
+                        "step": "distillation",
+                        "action": "create_meta",
+                        "summary": summary,
+                        "targets": [center_name] + neighbor_names[:5]
+                    })
+                else:
+                    if self.store.create_meta_knowledge_node(
+                        summary,
+                        [center_name] + neighbor_names,
+                        self.config.distillation.meta_knowledge_entity_type,
+                        self.config.distillation.summarizes_relation_type
+                    ):
+                        result.meta_knowledge_created += 1
+
+    # ---------- 步骤 7: 事务提交与解锁 ----------
+
+    async def _step_7_finalize(self, result: MeditationRunResult):
+        """解锁节点并记录日志。"""
+        if not result.dry_run:
+            unlocked = self.store.unlock_nodes_after_meditation(result.run_id)
+            logger.info(f"Unlocked {unlocked} nodes after meditation.")
+        else:
+            logger.info("Dry-run finished, no nodes were locked/unlocked.")
+
+
+# ================================================================
+# CLI 运行入口
+# ================================================================
+
+async def main():
+    import argparse
+    parser = argparse.ArgumentParser(description="Meditation Worker for Memory System")
+    parser.add_argument("--mode", choices=["auto", "manual", "dry_run"], default="auto")
+    parser.add_argument("--nodes", nargs="+", help="Target nodes for manual mode")
+    args = parser.parse_args()
+
+    logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s")
+
+    store = GraphStore()
+    if not store.verify_connectivity():
+        print("Error: Could not connect to Neo4j.")
+        return
+
+    engine = MeditationEngine(store)
+    print(f"Starting meditation in {args.mode} mode...")
+
+    result = await engine.run_meditation(mode=args.mode, target_nodes=args.nodes)
+
+    print("\nMeditation Result:")
+    print(json.dumps(result.to_dict(), indent=2, ensure_ascii=False))
+
+    store.close()
+
+if __name__ == "__main__":
+    asyncio.run(main())
