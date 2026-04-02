@@ -93,6 +93,13 @@ class GraphStore:
             "CREATE INDEX entity_updated_idx IF NOT EXISTS FOR (e:Entity) ON (e.updated_at)",
             "CREATE INDEX entity_activation_idx IF NOT EXISTS FOR (e:Entity) ON (e.activation_level)",
             "CREATE INDEX entity_needs_meditation_idx IF NOT EXISTS FOR (e:Entity) ON (e.needs_meditation)",
+            # Phase 2: 策略节点索引
+            "CREATE INDEX strategy_name_idx IF NOT EXISTS FOR (s:Strategy) ON (s.name)",
+            "CREATE INDEX strategy_fitness_idx IF NOT EXISTS FOR (s:Strategy) ON (s.fitness_score)",
+            # Phase 2: RQS 记录索引
+            "CREATE INDEX rqs_path_idx IF NOT EXISTS FOR (r:RQSRecord) ON (r.path_id)",
+            # Phase 2: 信念节点索引
+            "CREATE INDEX belief_content_idx IF NOT EXISTS FOR (b:Belief) ON (b.content)",
         ]
         with self.driver.session(database=self._config.database) as session:
             for query in queries:
@@ -1539,3 +1546,240 @@ class GraphStore:
                 "meta_knowledge_nodes": 0,
                 "generic_relations": 0,
             }
+
+    # ================================================================
+    # Phase 2: 策略持久化方法
+    # ================================================================
+
+    # ========== 策略节点操作 ==========
+
+    def upsert_strategy_node(self, strategy_data: Dict[str, Any]) -> str:
+        """
+        插入或更新策略节点。
+
+        Args:
+            strategy_data: 策略摘要字典，来自 RealWorldStrategy.get_summary()
+
+        Returns:
+            节点的 elementId
+        """
+        query = """
+        MERGE (s:Strategy {name: $name})
+        ON CREATE SET
+            s.strategy_type = $strategy_type,
+            s.uses_real_data = $uses_real_data,
+            s.fitness_score = $fitness_score,
+            s.real_world_bonus = $real_world_bonus,
+            s.avg_accuracy = $avg_accuracy,
+            s.avg_success = $avg_success,
+            s.avg_cost = $avg_cost,
+            s.usage_count = $usage_count,
+            s.created_at = $created_at,
+            s.updated_at = timestamp(),
+            s.evolution_steps = $evolution_steps,
+            s.needs_meditation = true
+        ON MATCH SET
+            s.fitness_score = $fitness_score,
+            s.real_world_bonus = $real_world_bonus,
+            s.avg_accuracy = $avg_accuracy,
+            s.avg_success = $avg_success,
+            s.avg_cost = $avg_cost,
+            s.usage_count = $usage_count,
+            s.updated_at = timestamp(),
+            s.evolution_steps = $evolution_steps,
+            s.needs_meditation = true
+        RETURN elementId(s) AS eid
+        """
+        perf = strategy_data.get("performance", {})
+        meta = strategy_data.get("metadata", {})
+        with self.driver.session(database=self._config.database) as session:
+            result = session.run(
+                query,
+                name=strategy_data["name"],
+                strategy_type=strategy_data.get("type", "unknown"),
+                uses_real_data=strategy_data.get("uses_real_data", False),
+                fitness_score=strategy_data.get("fitness", 0.0),
+                real_world_bonus=strategy_data.get("real_world_bonus", 0.0),
+                avg_accuracy=perf.get("avg_accuracy", 0.0),
+                avg_success=perf.get("avg_success", 0.0),
+                avg_cost=perf.get("avg_cost", 0.0),
+                usage_count=perf.get("usage_count", 0),
+                created_at=meta.get("created_at", ""),
+                evolution_steps=meta.get("evolution_steps", 0),
+            )
+            record = result.single()
+            return record["eid"] if record else ""
+
+    def create_evolution_link(
+        self, child_name: str, parent1_name: str, parent2_name: str
+    ) -> None:
+        """记录策略进化谱系（交叉产生的子策略指向两个父策略）。"""
+        query = """
+        MATCH (child:Strategy {name: $child_name})
+        MATCH (p1:Strategy {name: $parent1_name})
+        MATCH (p2:Strategy {name: $parent2_name})
+        MERGE (child)-[:EVOLVED_FROM {generation: child.evolution_steps}]->(p1)
+        MERGE (child)-[:EVOLVED_FROM {generation: child.evolution_steps}]->(p2)
+        """
+        with self.driver.session(database=self._config.database) as session:
+            session.run(
+                query,
+                child_name=child_name,
+                parent1_name=parent1_name,
+                parent2_name=parent2_name,
+            )
+
+    def get_all_strategies(self) -> List[Dict[str, Any]]:
+        """获取所有活跃策略节点（用于系统启动时恢复策略池）。"""
+        query = """
+        MATCH (s:Strategy)
+        WHERE NOT s:Archived
+        RETURN s.name AS name, s.strategy_type AS strategy_type,
+               s.uses_real_data AS uses_real_data,
+               s.fitness_score AS fitness_score,
+               s.real_world_bonus AS real_world_bonus,
+               s.avg_accuracy AS avg_accuracy,
+               s.avg_success AS avg_success,
+               s.avg_cost AS avg_cost,
+               s.usage_count AS usage_count,
+               s.evolution_steps AS evolution_steps,
+               s.created_at AS created_at
+        ORDER BY s.fitness_score DESC
+        """
+        with self.driver.session(database=self._config.database) as session:
+            result = session.run(query)
+            return [dict(record) for record in result]
+
+    def archive_strategy(self, strategy_name: str) -> None:
+        """归档（软删除）被淘汰的策略。"""
+        query = """
+        MATCH (s:Strategy {name: $name})
+        SET s:Archived, s.archived_at = timestamp()
+        """
+        with self.driver.session(database=self._config.database) as session:
+            session.run(query, name=strategy_name)
+
+    # ========== RQS 记录节点操作 ==========
+
+    def upsert_rqs_node(self, rqs_data: Dict[str, Any]) -> str:
+        """
+        插入或更新推理质量评分记录。
+
+        Args:
+            rqs_data: 来自 ReasoningStats.to_dict()
+
+        Returns:
+            节点的 elementId
+        """
+        query = """
+        MERGE (r:RQSRecord {path_id: $path_id})
+        ON CREATE SET
+            r.success_count = $success_count,
+            r.fail_count = $fail_count,
+            r.total_uses = $total_uses,
+            r.historical_success_rate = $historical_success_rate,
+            r.stability_score = $stability_score,
+            r.avg_rqs = $avg_rqs,
+            r.last_used = $last_used,
+            r.created_at = timestamp(),
+            r.updated_at = timestamp()
+        ON MATCH SET
+            r.success_count = $success_count,
+            r.fail_count = $fail_count,
+            r.total_uses = $total_uses,
+            r.historical_success_rate = $historical_success_rate,
+            r.stability_score = $stability_score,
+            r.avg_rqs = $avg_rqs,
+            r.last_used = $last_used,
+            r.updated_at = timestamp()
+        RETURN elementId(r) AS eid
+        """
+        with self.driver.session(database=self._config.database) as session:
+            result = session.run(
+                query,
+                path_id=rqs_data["path_id"],
+                success_count=rqs_data.get("success_count", 0),
+                fail_count=rqs_data.get("fail_count", 0),
+                total_uses=rqs_data.get("total_uses", 0),
+                historical_success_rate=rqs_data.get("historical_success_rate", 0.0),
+                stability_score=rqs_data.get("stability_score", 0.5),
+                avg_rqs=rqs_data.get("avg_rqs", 0.0),
+                last_used=rqs_data.get("last_used", ""),
+            )
+            record = result.single()
+            return record["eid"] if record else ""
+
+    def get_all_rqs_records(self) -> List[Dict[str, Any]]:
+        """获取所有 RQS 记录（用于系统启动时恢复）。"""
+        query = """
+        MATCH (r:RQSRecord)
+        RETURN r.path_id AS path_id,
+               r.success_count AS success_count,
+               r.fail_count AS fail_count,
+               r.total_uses AS total_uses,
+               r.historical_success_rate AS historical_success_rate,
+               r.stability_score AS stability_score,
+               r.avg_rqs AS avg_rqs,
+               r.last_used AS last_used
+        """
+        with self.driver.session(database=self._config.database) as session:
+            result = session.run(query)
+            return [dict(record) for record in result]
+
+    # ========== 信念节点操作 ==========
+
+    def upsert_belief_node(self, belief_data: Dict[str, Any]) -> str:
+        """
+        插入或更新信念节点。
+
+        Args:
+            belief_data: 信念数据字典
+
+        Returns:
+            节点的 elementId
+        """
+        query = """
+        MERGE (b:Belief {content: $content})
+        ON CREATE SET
+            b.belief_strength = $belief_strength,
+            b.confidence = $confidence,
+            b.state = $state,
+            b.evidence_count = $evidence_count,
+            b.source = $source,
+            b.created_at = timestamp(),
+            b.updated_at = timestamp()
+        ON MATCH SET
+            b.belief_strength = $belief_strength,
+            b.confidence = $confidence,
+            b.state = $state,
+            b.evidence_count = $evidence_count,
+            b.updated_at = timestamp()
+        RETURN elementId(b) AS eid
+        """
+        with self.driver.session(database=self._config.database) as session:
+            result = session.run(
+                query,
+                content=belief_data["content"],
+                belief_strength=belief_data.get("belief_strength", 0.5),
+                confidence=belief_data.get("confidence", 0.5),
+                state=belief_data.get("state", "HYPOTHESIS"),
+                evidence_count=belief_data.get("evidence_count", 0),
+                source=belief_data.get("source", "cognitive_core"),
+            )
+            record = result.single()
+            return record["eid"] if record else ""
+
+    def get_all_beliefs(self) -> List[Dict[str, Any]]:
+        """获取所有 Belief 节点。"""
+        query = """
+        MATCH (b:Belief)
+        RETURN b.content AS content,
+               b.belief_strength AS belief_strength,
+               b.confidence AS confidence,
+               b.state AS state,
+               b.evidence_count AS evidence_count,
+               b.source AS source
+        """
+        with self.driver.session(database=self._config.database) as session:
+            result = session.run(query)
+            return [dict(record) for record in result]

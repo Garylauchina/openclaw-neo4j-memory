@@ -1,5 +1,5 @@
 """
-OpenClaw Neo4j 记忆服务器 — v2.2
+OpenClaw Neo4j 记忆服务器 — v2.3
 
 提供 RESTful API 供 OpenClaw 插件调用。
 集成了冥思（Meditation）异步重整机制。
@@ -7,6 +7,7 @@ OpenClaw Neo4j 记忆服务器 — v2.2
 功能：
   - 核心：/ingest, /search, /stats
   - 冥思：/meditation/trigger, /meditation/status, /meditation/history, /meditation/dry-run
+  - 内部（Phase 2）：/internal/strategy, /internal/rqs, /internal/belief
   - 后台：MeditationScheduler 自动运行
 """
 
@@ -38,7 +39,7 @@ logging.basicConfig(
 )
 logger = logging.getLogger("memory_api_server")
 
-app = FastAPI(title="OpenClaw Neo4j Memory API v2.2")
+app = FastAPI(title="OpenClaw Neo4j Memory API v2.3")
 
 # ========== 全局单例 ==========
 
@@ -70,6 +71,45 @@ class MeditationTriggerRequest(BaseModel):
     mode: str = "auto"  # auto / manual / dry_run
     target_nodes: Optional[List[str]] = None
 
+
+# ========== Phase 2: 内部 API 数据模型 ==========
+
+class StrategyUpsertRequest(BaseModel):
+    name: str
+    type: str = "unknown"
+    uses_real_data: bool = False
+    fitness: float = 0.0
+    real_world_bonus: float = 0.0
+    performance: Dict[str, Any] = {}
+    metadata: Dict[str, Any] = {}
+
+class RQSUpsertRequest(BaseModel):
+    path_id: str
+    success_count: int = 0
+    fail_count: int = 0
+    total_uses: int = 0
+    historical_success_rate: float = 0.0
+    stability_score: float = 0.5
+    avg_rqs: float = 0.0
+    last_used: str = ""
+
+class BeliefUpsertRequest(BaseModel):
+    content: str
+    belief_strength: float = 0.5
+    confidence: float = 0.5
+    state: str = "HYPOTHESIS"
+    evidence_count: int = 0
+    source: str = "cognitive_core"
+
+class EvolutionLinkRequest(BaseModel):
+    child: str
+    parent1: str
+    parent2: str
+
+class ArchiveStrategyRequest(BaseModel):
+    name: str
+
+
 # ========== API 端点 ==========
 
 @app.on_event("startup")
@@ -99,7 +139,7 @@ async def health_check():
     return {
         "status": "ok" if connected else "degraded",
         "neo4j_connected": connected,
-        "version": "2.2"
+        "version": "2.3"
     }
 
 @app.post("/ingest")
@@ -174,6 +214,90 @@ async def preview_meditation(request: MeditationTriggerRequest):
     """预览模式"""
     result = await meditation_engine.run_meditation(mode="dry_run", target_nodes=request.target_nodes)
     return result.to_dict()
+
+
+# ========== Phase 2: 内部结构化写入端点 ==========
+
+@app.post("/internal/strategy")
+async def upsert_strategy(request: StrategyUpsertRequest):
+    """写入或更新策略节点"""
+    try:
+        eid = store.upsert_strategy_node(request.dict())
+        return {"status": "success", "element_id": eid}
+    except Exception as e:
+        logger.error(f"Strategy upsert failed: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/internal/strategy/evolution")
+async def create_evolution_link(request: EvolutionLinkRequest):
+    """记录策略进化谱系"""
+    try:
+        store.create_evolution_link(request.child, request.parent1, request.parent2)
+        return {"status": "success"}
+    except Exception as e:
+        logger.error(f"Evolution link creation failed: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/internal/strategy/archive")
+async def archive_strategy(request: ArchiveStrategyRequest):
+    """归档被淘汰的策略"""
+    try:
+        store.archive_strategy(request.name)
+        return {"status": "success"}
+    except Exception as e:
+        logger.error(f"Strategy archive failed: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/internal/strategy/list")
+async def list_strategies():
+    """获取所有活跃策略"""
+    try:
+        strategies = store.get_all_strategies()
+        return {"status": "success", "strategies": strategies}
+    except Exception as e:
+        logger.error(f"Strategy list failed: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/internal/rqs")
+async def upsert_rqs(request: RQSUpsertRequest):
+    """写入或更新 RQS 记录"""
+    try:
+        eid = store.upsert_rqs_node(request.dict())
+        return {"status": "success", "element_id": eid}
+    except Exception as e:
+        logger.error(f"RQS upsert failed: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/internal/rqs/list")
+async def list_rqs_records():
+    """获取所有 RQS 记录"""
+    try:
+        records = store.get_all_rqs_records()
+        return {"status": "success", "records": records}
+    except Exception as e:
+        logger.error(f"RQS list failed: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/internal/belief")
+async def upsert_belief(request: BeliefUpsertRequest):
+    """写入或更新信念节点"""
+    try:
+        eid = store.upsert_belief_node(request.dict())
+        return {"status": "success", "element_id": eid}
+    except Exception as e:
+        logger.error(f"Belief upsert failed: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/internal/belief/list")
+async def list_beliefs():
+    """获取所有信念节点"""
+    try:
+        beliefs = store.get_all_beliefs()
+        return {"status": "success", "beliefs": beliefs}
+    except Exception as e:
+        logger.error(f"Belief list failed: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
 
 # ========== 内部任务 ==========
 

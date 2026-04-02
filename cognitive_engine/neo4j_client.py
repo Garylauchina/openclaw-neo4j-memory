@@ -12,11 +12,21 @@ API 端点对照：
   ingest(text, ...)        → POST /ingest
   get_stats()              → GET  /stats
   trigger_meditation(mode) → POST /meditation/trigger
+
+Phase 2 新增端点：
+  upsert_strategy(data)    → POST /internal/strategy
+  create_evolution_link(c,p1,p2) → POST /internal/strategy/evolution
+  archive_strategy(name)   → POST /internal/strategy/archive
+  get_all_strategies()     → GET  /internal/strategy/list
+  upsert_rqs(data)         → POST /internal/rqs
+  get_all_rqs_records()    → GET  /internal/rqs/list
+  upsert_belief(data)      → POST /internal/belief
+  get_all_beliefs()        → GET  /internal/belief/list
 """
 
 import logging
 import time
-from typing import Any, Dict, Optional
+from typing import Any, Dict, List, Optional
 
 logger = logging.getLogger("cognitive_engine.neo4j_client")
 
@@ -72,7 +82,7 @@ class Neo4jMemoryClient:
         )
 
     # ------------------------------------------------------------------
-    # 公开 API
+    # 公开 API（Phase 1）
     # ------------------------------------------------------------------
 
     def health_check(self) -> bool:
@@ -175,6 +185,113 @@ class Neo4jMemoryClient:
             API 返回的 JSON 字典，失败时返回 None
         """
         return self._post("/meditation/trigger", {"mode": mode})
+
+    # ------------------------------------------------------------------
+    # Phase 2: 策略持久化 API
+    # ------------------------------------------------------------------
+
+    def upsert_strategy(self, strategy_data: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+        """
+        写入或更新策略节点。
+
+        Args:
+            strategy_data: 策略摘要字典，来自 RealWorldStrategy.get_summary()
+
+        Returns:
+            API 返回的 JSON 字典，失败时返回 None
+        """
+        return self._post("/internal/strategy", strategy_data)
+
+    def create_evolution_link(
+        self, child: str, parent1: str, parent2: str
+    ) -> Optional[Dict[str, Any]]:
+        """
+        记录策略进化谱系。
+
+        Args:
+            child: 子策略名称
+            parent1: 父策略 1 名称
+            parent2: 父策略 2 名称
+
+        Returns:
+            API 返回的 JSON 字典，失败时返回 None
+        """
+        return self._post(
+            "/internal/strategy/evolution",
+            {"child": child, "parent1": parent1, "parent2": parent2},
+        )
+
+    def archive_strategy(self, name: str) -> Optional[Dict[str, Any]]:
+        """
+        归档被淘汰的策略。
+
+        Args:
+            name: 策略名称
+
+        Returns:
+            API 返回的 JSON 字典，失败时返回 None
+        """
+        return self._post("/internal/strategy/archive", {"name": name})
+
+    def get_all_strategies(self) -> Optional[List[Dict[str, Any]]]:
+        """
+        获取所有活跃策略节点。
+
+        Returns:
+            策略列表，失败时返回 None
+        """
+        data = self._get("/internal/strategy/list")
+        if data and data.get("status") == "success":
+            return data.get("strategies", [])
+        return None
+
+    def upsert_rqs(self, rqs_data: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+        """
+        写入或更新 RQS 记录。
+
+        Args:
+            rqs_data: RQS 记录字典，来自 ReasoningStats.to_dict()
+
+        Returns:
+            API 返回的 JSON 字典，失败时返回 None
+        """
+        return self._post("/internal/rqs", rqs_data)
+
+    def get_all_rqs_records(self) -> Optional[List[Dict[str, Any]]]:
+        """
+        获取所有 RQS 记录。
+
+        Returns:
+            RQS 记录列表，失败时返回 None
+        """
+        data = self._get("/internal/rqs/list")
+        if data and data.get("status") == "success":
+            return data.get("records", [])
+        return None
+
+    def upsert_belief(self, belief_data: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+        """
+        写入或更新信念节点。
+
+        Args:
+            belief_data: 信念数据字典
+
+        Returns:
+            API 返回的 JSON 字典，失败时返回 None
+        """
+        return self._post("/internal/belief", belief_data)
+
+    def get_all_beliefs(self) -> Optional[List[Dict[str, Any]]]:
+        """
+        获取所有信念节点。
+
+        Returns:
+            信念列表，失败时返回 None
+        """
+        data = self._get("/internal/belief/list")
+        if data and data.get("status") == "success":
+            return data.get("beliefs", [])
+        return None
 
     # ------------------------------------------------------------------
     # 内部 HTTP 方法

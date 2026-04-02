@@ -8,6 +8,10 @@ Cognitive Core — 认知内核
   - _init_subsystems() 中创建 Neo4jMemoryClient 并传入 memory_provider 和 reality_writer
   - 保留原有12步处理管道不变
   - Neo4j 不可用时自动降级到 Mock 模式
+
+Phase 2 改造：
+  - _init_subsystems() 将 self._neo4j_client 传递给 RealWorldStrategyEngine 和 RQSSystem
+  - 启动时从图谱加载已有策略和 RQS 数据（在子系统内部完成）
 """
 
 import json
@@ -38,6 +42,11 @@ try:
 except ImportError:
     WorldModelEnvironment = None
     EnvironmentAction = None
+
+try:
+    from .rqs_system import RQSSystem
+except ImportError:
+    RQSSystem = None
 
 logger = logging.getLogger("cognitive_engine.cognitive_core")
 
@@ -115,8 +124,8 @@ class CognitiveCore:
         """加载配置。"""
         default_config = {
             "enabled": True,
-            "version": "2.0.0-phase1",
-            "description": "Reality-Learned Cognitive System (Neo4j Integrated)",
+            "version": "2.0.0-phase2",
+            "description": "Reality-Learned Cognitive System (Neo4j Integrated, Strategy Persistence)",
             "neo4j_api_base": os.environ.get(
                 "NEO4J_API_BASE", "http://127.0.0.1:18900"
             ),
@@ -126,6 +135,7 @@ class CognitiveCore:
                 "RealWorldStrategyEngine",
                 "WorldModelEnvironment",
                 "CognitiveMemoryProvider",
+                "RQSSystem",
             ],
             "settings": {
                 "cache_enabled": True,
@@ -177,12 +187,15 @@ class CognitiveCore:
             self.validator = _MockValidator()
         logger.info("  StrongValidator initialized")
 
-        # 4. 策略引擎
+        # 4. 策略引擎 — Phase 2: 注入 neo4j_client
         if RealWorldStrategyEngine:
-            self.strategy_engine = RealWorldStrategyEngine()
+            self.strategy_engine = RealWorldStrategyEngine(
+                neo4j_client=self._neo4j_client
+            )
         else:
             self.strategy_engine = _MockStrategyEngine()
-        logger.info("  RealWorldStrategyEngine initialized")
+        logger.info("  RealWorldStrategyEngine initialized (neo4j=%s)",
+                     "injected" if RealWorldStrategyEngine else "mock")
 
         # 5. 世界模型
         if WorldModelEnvironment:
@@ -191,7 +204,15 @@ class CognitiveCore:
             self.environment = _MockEnvironment()
         logger.info("  WorldModelEnvironment initialized")
 
-        # 6-8. 简化版生成器
+        # 6. RQS 系统 — Phase 2: 注入 neo4j_client
+        if RQSSystem:
+            self.rqs_system = RQSSystem(neo4j_client=self._neo4j_client)
+        else:
+            self.rqs_system = _MockRQSSystem()
+        logger.info("  RQSSystem initialized (neo4j=%s)",
+                     "injected" if RQSSystem else "mock")
+
+        # 7-9. 简化版生成器
         self.goal_generator = self._create_goal_generator()
         self.plan_generator = self._create_plan_generator()
         self.action_generator = self._create_action_generator()
@@ -649,3 +670,26 @@ class _MockAction:
     def __init__(self, action_type: str, params: dict):
         self.type = action_type
         self.params = params
+
+
+class _MockRQSSystem:
+    """降级用的 RQS 系统 Mock。"""
+
+    def __init__(self):
+        self.reasoning_stats: Dict[str, Any] = {}
+        self.system_stats = {
+            "total_reasonings": 0,
+            "paths_tracked": 0,
+            "avg_rqs": 0.0,
+            "rqs_history": [],
+            "stability_improvement": 0.0,
+        }
+
+    def calculate_rqs(self, *args, **kwargs):
+        return None
+
+    def update_reasoning_stats(self, *args, **kwargs):
+        pass
+
+    def get_system_report(self):
+        return {"system_stats": self.system_stats}

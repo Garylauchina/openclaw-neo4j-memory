@@ -3,25 +3,28 @@
 RQS（推理质量评分）系统
 目标：从"反应式纠错"升级到"统计性认知"，实现长期稳定性
 核心：RQS = 长期可靠性评分，解决"局部最优陷阱"
+
+Phase 2 改造：
+  - 构造函数新增 neo4j_client 参数
+  - 新增 _sync_rqs_to_graph() 将 reasoning_stats 同步到图谱
+  - 新增 _load_from_graph() 启动时恢复历史统计
+  - 在 calculate_rqs / _update_system_stats 后触发同步
+  - Neo4j 不可用时静默降级
 """
 
-import sys
-sys.path.append('.')
-
-print("🧠 RQS（推理质量评分）系统")
-print("="*60)
-print("目标：从'反应式纠错'升级到'统计性认知'，实现长期稳定性")
-print("核心：解决'局部最优陷阱'，实现'统计性认知'")
-print("="*60)
-
-from dataclasses import dataclass, field
-from typing import Dict, Any, List, Optional, Tuple
-from enum import Enum
-import random
+import logging
 import math
+import random
+import sys
 import time
-from datetime import datetime, timedelta
 from collections import defaultdict
+from dataclasses import dataclass, field
+from datetime import datetime, timedelta
+from enum import Enum
+from typing import Any, Dict, List, Optional, Tuple
+
+logger = logging.getLogger("cognitive_engine.rqs_system")
+
 
 class ReasoningSignal(Enum):
     """推理信号枚举"""
@@ -31,6 +34,7 @@ class ReasoningSignal(Enum):
     
     def __str__(self):
         return self.value
+
 
 @dataclass
 class ReasoningEdge:
@@ -54,6 +58,7 @@ class ReasoningEdge:
             "weight": self.weight,
             "is_conflict": self.is_conflict
         }
+
 
 @dataclass
 class ReasoningTrace:
@@ -79,6 +84,7 @@ class ReasoningTrace:
             "conflict_detected": self.conflict_detected,
             "supporting_evidence": self.supporting_evidence
         }
+
 
 @dataclass
 class ReasoningStats:
@@ -171,6 +177,7 @@ class ReasoningStats:
             "avg_rqs": sum(self.rqs_history) / len(self.rqs_history) if self.rqs_history else 0.0
         }
 
+
 @dataclass
 class RQSResult:
     """RQS计算结果"""
@@ -190,6 +197,7 @@ class RQSResult:
             "path_id": self.path_id
         }
 
+
 class RQSSystem:
     """
     RQS（推理质量评分）系统
@@ -205,7 +213,10 @@ class RQSSystem:
           0.1 * counterfactual_score
     """
     
-    def __init__(self):
+    def __init__(self, neo4j_client=None):
+        # Phase 2: Neo4j 客户端
+        self._neo4j_client = neo4j_client
+
         # 推理统计存储
         self.reasoning_stats: Dict[str, ReasoningStats] = {}
         
@@ -226,10 +237,12 @@ class RQSSystem:
             "rqs_history": [],
             "stability_improvement": 0.0
         }
-        
-        print(f"   ✅ RQS系统初始化完成")
-        print(f"      目标：从'反应式纠错' → '统计性认知'")
-        print(f"      解决：局部最优陷阱（Local optimum trap）")
+
+        # Phase 2: 尝试从图谱恢复历史统计
+        self._load_from_graph()
+
+        logger.info("RQS system initialized (neo4j=%s)",
+                     "connected" if self._neo4j_client else "unavailable")
     
     def _generate_path_id(self, trace: ReasoningTrace) -> str:
         """
@@ -336,6 +349,7 @@ class RQSSystem:
         self._update_system_stats(rqs, path_id)
         
         return result
+   
     
     def _update_system_stats(self, rqs: float, path_id: str):
         """更新系统统计"""
@@ -349,6 +363,10 @@ class RQSSystem:
         # 计算平均RQS
         if self.system_stats["rqs_history"]:
             self.system_stats["avg_rqs"] = sum(self.system_stats["rqs_history"]) / len(self.system_stats["rqs_history"])
+
+        # Phase 2: 同步到图谱
+        if path_id in self.reasoning_stats:
+            self._sync_rqs_to_graph(path_id)
     
     def update_reasoning_stats(self, trace: ReasoningTrace, signal: ReasoningSignal, rqs: float):
         """更新推理统计"""
@@ -368,6 +386,9 @@ class RQSSystem:
         
         # 记录路径映射
         self.path_mapping[trace.trace_id] = path_id
+
+        # Phase 2: 同步到图谱
+        self._sync_rqs_to_graph(path_id)
     
     def get_path_stability(self, path_id: str) -> float:
         """获取路径稳定性"""
@@ -492,7 +513,82 @@ class RQSSystem:
         new_lr = max(0.1, min(0.9, new_lr))
         
         return new_lr
-    
+
+    # ------------------------------------------------------------------
+    # Phase 2: 图谱同步方法
+    # ------------------------------------------------------------------
+
+    def _sync_rqs_to_graph(self, path_id: str):
+        """将单条 RQS 记录同步到图谱，Neo4j 不可用时静默降级。"""
+        if not self._neo4j_client:
+            return
+        if path_id not in self.reasoning_stats:
+            return
+        try:
+            stats = self.reasoning_stats[path_id]
+            self._neo4j_client.upsert_rqs(stats.to_dict())
+            logger.debug("RQS record synced to graph: %s", path_id)
+        except Exception as exc:
+            logger.warning("Failed to sync RQS %s to graph: %s", path_id, exc)
+
+    def _sync_all_rqs_to_graph(self):
+        """将所有 RQS 记录同步到图谱。"""
+        if not self._neo4j_client:
+            return
+        for path_id in self.reasoning_stats:
+            self._sync_rqs_to_graph(path_id)
+
+    def _load_from_graph(self) -> bool:
+        """
+        启动时从图谱恢复历史 RQS 统计。
+
+        Returns:
+            True 表示成功恢复了至少一条记录，False 表示无法恢复。
+        """
+        if not self._neo4j_client:
+            return False
+        try:
+            records = self._neo4j_client.get_all_rqs_records()
+            if not records:
+                return False
+
+            for record in records:
+                path_id = record.get("path_id")
+                if not path_id:
+                    continue
+                stats = ReasoningStats(
+                    path_id=path_id,
+                    success_count=int(record.get("success_count", 0)),
+                    fail_count=int(record.get("fail_count", 0)),
+                    total_uses=int(record.get("total_uses", 0)),
+                    historical_success_rate=float(record.get("historical_success_rate", 0.0)),
+                    stability_score=float(record.get("stability_score", 0.5)),
+                )
+                # 恢复 avg_rqs 作为单个代表性样本
+                avg_rqs = float(record.get("avg_rqs", 0.0))
+                if avg_rqs > 0:
+                    stats.rqs_history = [avg_rqs]
+                # 恢复 last_used
+                last_used_str = record.get("last_used", "")
+                if last_used_str:
+                    try:
+                        stats.last_used = datetime.fromisoformat(last_used_str)
+                    except (ValueError, TypeError):
+                        pass
+
+                self.reasoning_stats[path_id] = stats
+                self.system_stats["paths_tracked"] += 1
+
+            logger.info("Restored %d RQS records from graph", len(records))
+            return len(records) > 0
+        except Exception as exc:
+            logger.warning("Failed to load RQS records from graph: %s", exc)
+            return False
+
+    # ------------------------------------------------------------------
+    # 报告
+    # ------------------------------------------------------------------
+
     def get_system_report(self) -> Dict[str, Any]:
         """获取系统报告"""
         # 计算路径统计
@@ -635,7 +731,7 @@ class RQSSystem:
         print(f"      良好 (RQS>0.6): {rqs_dist['good']}")
         print(f"      一般 (RQS>0.4): {rqs_dist['fair']}")
         print(f"      较差 (RQS>0.2): {rqs_dist['poor']}")
-        print(f"      很差 (RQS≤0.2): {rqs_dist['very_poor']}")
+        print(f"      很差 (RQS<=0.2): {rqs_dist['very_poor']}")
         
         print(f"\n   🏆 Top路径:")
         for i, path in enumerate(top_paths, 1):
@@ -645,209 +741,3 @@ class RQSSystem:
                   f"稳定性{path['stability']:.3f}")
         
         print(f"\n   🚀 系统状态: {report['system_status']}")
-
-# 测试RQS系统
-print("\n1. 创建RQS系统...")
-rqs_system = RQSSystem()
-
-print("\n2. 创建测试推理轨迹...")
-
-# 创建不同类型的推理轨迹
-test_traces = []
-
-# 稳定好推理轨迹（高信念强度，无冲突，稳定模式）
-for i in range(3):
-    trace = ReasoningTrace(
-        trace_id=f"stable_good_trace_{i}",
-        conclusion="日本房产是好的投资选择",
-        supporting_evidence=3
-    )
-    
-    for j in range(4):
-        edge = ReasoningEdge(
-            edge_id=f"stable_good_edge_{i}_{j}",
-            source=f"source_{j}",
-            target=f"target_{j}",
-            relation="supports",
-            belief_strength=0.8 + j * 0.05,  # 高信念强度
-            weight=0.7,
-            is_conflict=False
-        )
-        trace.edges.append(edge)
-    
-    test_traces.append(("稳定好推理", trace, 0.85, 0.95, 0.9))
-
-# 不稳定推理轨迹（中等信念强度，有冲突，不稳定模式）
-for i in range(3):
-    trace = ReasoningTrace(
-        trace_id=f"unstable_trace_{i}",
-        conclusion="科技股可能有风险",
-        supporting_evidence=2
-    )
-    
-    for j in range(3):
-        edge = ReasoningEdge(
-            edge_id=f"unstable_edge_{i}_{j}",
-            source=f"source_{j}",
-            target=f"target_{j}",
-            relation="related_to",
-            belief_strength=0.5 + j * 0.1,  # 中等信念强度
-            weight=0.5,
-            is_conflict=(j == 1)  # 第2条边有冲突
-        )
-        trace.edges.append(edge)
-    
-    test_traces.append(("不稳定推理", trace, 0.6, 0.7, 0.5))
-
-# 坏推理轨迹（低信念强度，多冲突，坏模式）
-for i in range(3):
-    trace = ReasoningTrace(
-        trace_id=f"bad_trace_{i}",
-        conclusion="所有投资都稳赚不赔",
-        supporting_evidence=1
-    )
-    
-    for j in range(5):
-        edge = ReasoningEdge(
-            edge_id=f"bad_edge_{i}_{j}",
-            source=f"source_{j}",
-            target=f"target_{j}",
-            relation="implies",
-            belief_strength=0.3 + j * 0.05,  # 低信念强度
-            weight=0.4,
-            is_conflict=(j % 2 == 0)  # 一半边有冲突
-        )
-        trace.edges.append(edge)
-    
-    test_traces.append(("坏推理", trace, 0.4, 0.5, 0.3))
-
-print(f"   创建了{len(test_traces)}个测试推理轨迹")
-print(f"   轨迹类型: 稳定好推理(3), 不稳定推理(3), 坏推理(3)")
-
-print("\n3. 测试RQS计算（多轮模拟，测试长期统计）...")
-
-# 模拟多轮使用，测试长期统计效果
-simulation_results = []
-
-for round_num in range(1, 6):  # 5轮模拟
-    print(f"\n   🔄 第{round_num}轮模拟:")
-    
-    for trace_name, trace, belief_conf, consistency, counterfactual in test_traces:
-        # 计算RQS
-        rqs_result = rqs_system.calculate_rqs(
-            trace, belief_conf, consistency, counterfactual
-        )
-        
-        # 模拟信号（基于RQS）
-        signal = rqs_result.signal
-        
-        # 更新推理统计
-        rqs_system.update_reasoning_stats(trace, signal, rqs_result.rqs)
-        
-        # 记录反事实测试
-        rqs_system.record_counterfactual_test(trace.path_id, counterfactual)
-        
-        # 记录结果
-        if round_num == 5:  # 只记录最后一轮
-            simulation_results.append({
-                "trace_name": trace_name,
-                "path_id": trace.path_id,
-                "rqs": rqs_result.rqs,
-                "signal": signal.value,
-                "components": rqs_result.components
-            })
-
-print("\n4. 分析RQS计算结果...")
-
-for result in simulation_results:
-    print(f"\n   📝 {result['trace_name']}:")
-    print(f"      路径ID: {result['path_id']}")
-    print(f"      RQS: {result['rqs']:.3f}")
-    print(f"      信号: {result['signal']}")
-    
-    components = result['components']
-    print(f"      组件分数:")
-    print(f"        信念置信度: {components['belief_confidence']:.3f}")
-    print(f"        一致性: {components['consistency']:.3f}")
-    print(f"        路径稳定性: {components['path_stability']:.3f}")
-    print(f"        历史成功率: {components['historical_success']:.3f}")
-    print(f"        反事实分数: {components['counterfactual_score']:.3f}")
-
-print("\n5. 测试基于RQS的信念修正...")
-
-# 选择一个轨迹测试信念修正
-test_trace = test_traces[0][1]  # 第一个轨迹
-rqs_result = rqs_system.calculate_rqs(test_trace, 0.85, 0.95, 0.9)
-
-print(f"   测试轨迹: {test_trace.trace_id}")
-print(f"   原始信念强度: {[e.belief_strength for e in test_trace.edges]}")
-
-# 应用基于RQS的信念修正
-belief_changes = rqs_system.apply_belief_correction_with_rqs(test_trace, rqs_result)
-
-print(f"   信念变化: {belief_changes}")
-print(f"   新信念强度: {[e.belief_strength for e in test_trace.edges]}")
-print(f"   平均变化: {sum(belief_changes)/len(belief_changes):+.4f}")
-
-print("\n6. 测试基于RQS的learning_rate更新...")
-
-print("   测试learning_rate更新（基于RQS和误差）:")
-test_cases = [
-    (0.7, 0.9, 0.1, "高RQS，低误差"),
-    (0.7, 0.5, 0.3, "中RQS，中误差"),
-    (0.7, 0.2, 0.8, "低RQS，高误差")
-]
-
-for old_lr, rqs, error, desc in test_cases:
-    new_lr = rqs_system.update_learning_rate_with_rqs(old_lr, rqs, error)
-    print(f"     {desc}:")
-    print(f"       RQS: {rqs:.2f}, 误差: {error:.2f}")
-    print(f"       learning_rate: {old_lr:.3f} → {new_lr:.3f} "
-          f"(Δ={new_lr-old_lr:+.3f})")
-
-print("\n7. 测试系统升级效果...")
-
-print("   对比旧系统 vs 新系统:")
-
-# 模拟旧系统（短期评估）
-old_system_results = []
-for trace_name, trace, belief_conf, consistency, _ in test_traces[:3]:
-    # 旧系统：error = 1 - (confidence * consistency)
-    error = 1.0 - (belief_conf * consistency)
-    
-    if error < 0.2:
-        signal = "good"
-    elif error < 0.5:
-        signal = "uncertain"
-    else:
-        signal = "bad"
-    
-    old_system_results.append((trace_name, error, signal))
-
-# 新系统（RQS长期统计）
-new_system_results = []
-for result in simulation_results[:3]:
-    new_system_results.append((result['trace_name'], result['rqs'], result['signal']))
-
-print(f"\n   📊 旧系统（短期评估）:")
-for trace_name, error, signal in old_system_results:
-    print(f"      {trace_name}: 误差={error:.3f}, 信号={signal}")
-
-print(f"\n   📊 新系统（RQS长期统计）:")
-for trace_name, rqs, signal in new_system_results:
-    print(f"      {trace_name}: RQS={rqs:.3f}, 信号={signal}")
-
-print(f"\n   🔄 系统升级效果:")
-print(f"      从: 反应式纠错（看一次推理）")
-print(f"      到: 统计性认知（看长期表现）")
-print(f"      变化: 更稳定、更平滑、抗噪声、抗误导")
-
-print("\n" + "="*60)
-print("✅ RQS（推理质量评分）系统实现完成")
-print("="*60)
-
-print(f"\n🎯 核心特性:")
-print("   1. ✅ 实现ReasoningStats（推理记忆结构）")
-print("   2. ✅ 实现RQS公式（长期可靠性评分）")
-print("   3. ✅ 替换error计算（从短期评估到长期统计）")
-print("   4. ✅ 实现路径稳定性（抗噪声、抗误导能力）")

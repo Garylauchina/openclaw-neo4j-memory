@@ -2,11 +2,21 @@
 """
 Real World Strategy - 现实世界驱动的策略进化
 核心：fitness必须包含real_world_accuracy，并奖励依赖现实的策略
+
+Phase 2 改造：
+  - 构造函数新增 neo4j_client 参数
+  - update_strategy / evolve / _elimination 后自动同步图谱
+  - 新增 _load_from_graph() 启动时恢复历史策略
+  - Neo4j 不可用时静默降级
 """
 
-from typing import Dict, List, Any, Optional
-from datetime import datetime
+import logging
 import random
+from datetime import datetime
+from typing import Any, Dict, List, Optional
+
+logger = logging.getLogger("cognitive_engine.real_world_strategy")
+
 
 class RealWorldStrategy:
     """现实世界策略"""
@@ -17,11 +27,11 @@ class RealWorldStrategy:
                  uses_real_data: bool = False):
         self.name = name
         self.strategy_type = strategy_type
-        self.uses_real_data = uses_real_data  # ❗ 关键：是否依赖现实数据
+        self.uses_real_data = uses_real_data  # 关键：是否依赖现实数据
         
         # 性能指标
         self.metrics = {
-            "real_world_accuracy": [],  # ❗ 现实世界准确率
+            "real_world_accuracy": [],  # 现实世界准确率
             "success_rate": [],         # 成功率
             "cost": [],                 # 成本
             "stability": [],            # 稳定性
@@ -77,7 +87,7 @@ class RealWorldStrategy:
         avg_cost = self._safe_average(self.metrics["cost"])
         avg_stability = self._safe_average(self.metrics["stability"])
         
-        # ❗ 新适应度公式（用户提供）
+        # 新适应度公式（用户提供）
         base_fitness = (
             0.5 * avg_accuracy +      # 现实世界准确率权重50%
             0.2 * avg_success +       # 成功率权重20%
@@ -85,7 +95,7 @@ class RealWorldStrategy:
             0.1 * avg_stability       # 稳定性权重10%
         )
         
-        # ❗ 关键：奖励依赖现实数据的策略
+        # 关键：奖励依赖现实数据的策略
         self.real_world_bonus = 0.1 if self.uses_real_data else 0.0
         
         # 最终适应度
@@ -118,11 +128,13 @@ class RealWorldStrategy:
             }
         }
 
+
 class RealWorldStrategyEngine:
     """现实世界策略引擎"""
     
-    def __init__(self):
+    def __init__(self, neo4j_client=None):
         self.strategies: Dict[str, RealWorldStrategy] = {}
+        self._neo4j_client = neo4j_client
         
         # 策略模板
         self.strategy_templates = {
@@ -164,8 +176,10 @@ class RealWorldStrategyEngine:
             "avg_real_world_accuracy": 0.0
         }
         
-        # 初始化策略
-        self._initialize_strategies()
+        # Phase 2: 尝试从图谱恢复，否则初始化默认策略
+        restored = self._load_from_graph()
+        if not restored:
+            self._initialize_strategies()
     
     def _initialize_strategies(self):
         """初始化策略"""
@@ -199,6 +213,9 @@ class RealWorldStrategyEngine:
         # 检查现实数据策略是否领先
         if strategy.uses_real_data and strategy.fitness_score > 0.7:
             self.stats["reality_based_wins"] += 1
+        
+        # Phase 2: 同步到图谱
+        self._sync_strategy_to_graph(strategy)
         
         return True
     
@@ -265,7 +282,7 @@ class RealWorldStrategyEngine:
         strategies = list(self.strategies.values())
         strategies.sort(key=lambda s: s.fitness_score, reverse=True)
         
-        # ❗ 关键：现实数据策略有选择优势
+        # 关键：现实数据策略有选择优势
         reality_based = [s for s in strategies if s.uses_real_data]
         if reality_based:
             # 现实数据策略额外获得20%的选择优势
@@ -295,7 +312,7 @@ class RealWorldStrategyEngine:
         # 创建新策略
         child_name = f"evolved_{parent1.name}_{parent2.name}"
         
-        # ❗ 关键：新策略是否使用现实数据（从父代继承）
+        # 关键：新策略是否使用现实数据（从父代继承）
         uses_real_data = parent1.uses_real_data or parent2.uses_real_data
         
         child = RealWorldStrategy(
@@ -305,16 +322,21 @@ class RealWorldStrategyEngine:
         )
         
         # 添加到策略池
-        self.strategies[child.name] = child
+        self.strategies[child_name] = child
         self.stats["total_strategies"] += 1
         self.stats["strategies_created"] += 1
+
+        # Phase 2: 同步子策略到图谱并记录进化谱系
+        self._sync_strategy_to_graph(child)
+        self._sync_evolution_link(child_name, parent1.name, parent2.name)
     
     def _mutate(self, strategy: RealWorldStrategy):
         """突变策略"""
-        # ❗ 关键突变：可能改变现实数据依赖
+        # 关键突变：可能改变现实数据依赖
         if random.random() < 0.3:
             strategy.uses_real_data = not strategy.uses_real_data
-            print(f"     🧬 策略突变: {strategy.name} 现实数据依赖 → {strategy.uses_real_data}")
+            logger.info("Strategy mutated: %s real_data_dependency -> %s",
+                        strategy.name, strategy.uses_real_data)
     
     def _elimination(self):
         """淘汰策略"""
@@ -324,7 +346,7 @@ class RealWorldStrategyEngine:
         strategies = list(self.strategies.values())
         strategies.sort(key=lambda s: s.fitness_score)  # 按适应度升序
         
-        # ❗ 关键：保护现实数据策略（即使适应度较低）
+        # 关键：保护现实数据策略（即使适应度较低）
         to_remove = []
         for strategy in strategies:
             if strategy.uses_real_data:
@@ -342,7 +364,10 @@ class RealWorldStrategyEngine:
                 del self.strategies[strategy.name]
                 self.stats["total_strategies"] -= 1
                 self.stats["strategies_removed"] += 1
-                print(f"     🗑️  淘汰策略: {strategy.name} (适应度: {strategy.fitness_score:.3f})")
+                logger.info("Strategy eliminated: %s (fitness: %.3f)",
+                            strategy.name, strategy.fitness_score)
+                # Phase 2: 归档到图谱
+                self._sync_archive_strategy(strategy.name)
     
     def _update_stats(self):
         """更新统计信息"""
@@ -365,7 +390,102 @@ class RealWorldStrategyEngine:
             self.stats["avg_real_world_accuracy"] = sum(all_accuracies) / len(all_accuracies)
         else:
             self.stats["avg_real_world_accuracy"] = 0.0
-    
+
+    # ------------------------------------------------------------------
+    # Phase 2: 图谱同步方法
+    # ------------------------------------------------------------------
+
+    def _sync_strategy_to_graph(self, strategy: RealWorldStrategy):
+        """将单个策略同步到图谱，Neo4j 不可用时静默降级。"""
+        if not self._neo4j_client:
+            return
+        try:
+            self._neo4j_client.upsert_strategy(strategy.get_summary())
+            logger.debug("Strategy synced to graph: %s", strategy.name)
+        except Exception as exc:
+            logger.warning("Failed to sync strategy %s to graph: %s",
+                           strategy.name, exc)
+
+    def _sync_all_strategies_to_graph(self):
+        """将所有策略同步到图谱。"""
+        if not self._neo4j_client:
+            return
+        for strategy in self.strategies.values():
+            self._sync_strategy_to_graph(strategy)
+
+    def _sync_evolution_link(self, child_name: str, parent1_name: str, parent2_name: str):
+        """将进化谱系同步到图谱。"""
+        if not self._neo4j_client:
+            return
+        try:
+            self._neo4j_client.create_evolution_link(child_name, parent1_name, parent2_name)
+            logger.debug("Evolution link synced: %s <- (%s, %s)",
+                         child_name, parent1_name, parent2_name)
+        except Exception as exc:
+            logger.warning("Failed to sync evolution link: %s", exc)
+
+    def _sync_archive_strategy(self, strategy_name: str):
+        """归档策略到图谱。"""
+        if not self._neo4j_client:
+            return
+        try:
+            self._neo4j_client.archive_strategy(strategy_name)
+            logger.debug("Strategy archived in graph: %s", strategy_name)
+        except Exception as exc:
+            logger.warning("Failed to archive strategy %s in graph: %s",
+                           strategy_name, exc)
+
+    def _load_from_graph(self) -> bool:
+        """
+        启动时从图谱恢复历史策略。
+
+        Returns:
+            True 表示成功恢复了至少一个策略，False 表示无法恢复。
+        """
+        if not self._neo4j_client:
+            return False
+        try:
+            records = self._neo4j_client.get_all_strategies()
+            if not records:
+                return False
+
+            for record in records:
+                name = record.get("name")
+                if not name:
+                    continue
+                strategy = RealWorldStrategy(
+                    name=name,
+                    strategy_type=record.get("strategy_type", "unknown"),
+                    uses_real_data=bool(record.get("uses_real_data", False)),
+                )
+                strategy.fitness_score = float(record.get("fitness_score", 0.0))
+                strategy.real_world_bonus = float(record.get("real_world_bonus", 0.0))
+                # 恢复 usage_count 以便 _update_fitness 不归零
+                strategy.metrics["usage_count"] = int(record.get("usage_count", 0))
+                # 用图谱中的平均值填充一个代表性样本
+                avg_accuracy = float(record.get("avg_accuracy", 0.0))
+                avg_success = float(record.get("avg_success", 0.0))
+                avg_cost = float(record.get("avg_cost", 0.0))
+                if strategy.metrics["usage_count"] > 0:
+                    strategy.metrics["real_world_accuracy"] = [avg_accuracy]
+                    strategy.metrics["success_rate"] = [avg_success]
+                    strategy.metrics["cost"] = [avg_cost]
+                    strategy.metrics["stability"] = [0.5]
+
+                self.strategies[name] = strategy
+                self.stats["total_strategies"] += 1
+                self.stats["strategies_created"] += 1
+
+            logger.info("Restored %d strategies from graph", len(records))
+            return len(records) > 0
+        except Exception as exc:
+            logger.warning("Failed to load strategies from graph: %s", exc)
+            return False
+
+    # ------------------------------------------------------------------
+    # 报告
+    # ------------------------------------------------------------------
+
     def get_report(self) -> Dict[str, Any]:
         """获取报告"""
         # 策略排名
@@ -444,6 +564,7 @@ class RealWorldStrategyEngine:
                       f"(适应度: {strategy['fitness']:.3f}, "
                       f"现实奖励: {strategy['real_world_bonus']:.2f}, "
                       f"使用次数: {strategy['performance']['usage_count']})")
+
 
 def test_real_world_strategy():
     """测试现实世界策略引擎"""
