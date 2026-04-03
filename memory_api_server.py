@@ -226,8 +226,20 @@ async def search_memory(request: SearchRequest):
             except Exception as e:
                 logger.warning(f"Strategy recommendation failed: {e}")
 
+        # 3. 提取 context_text 到顶层，供插件 auto-recall 直接读取
+        context_text = ""
+        entity_count = 0
+        edge_count = 0
+        if isinstance(context_dict, dict):
+            context_text = context_dict.get("context_text", "") or ""
+            entity_count = context_dict.get("entity_count", 0) or 0
+            edge_count = context_dict.get("edge_count", 0) or 0
+
         return {
             "status": "success",
+            "context_text": context_text,
+            "entity_count": entity_count,
+            "edge_count": edge_count,
             "context": context_dict,
             "recommended_strategies": strategies
         }
