@@ -1,54 +1,34 @@
-# OpenClaw Neo4j Graph Memory 插件自部署指南
+# openclaw-neo4j-memory
 
-本文档专为 OpenClaw Agent 编写。通过读取本指南，你可以实现自我部署，在一台全新的 macOS 机器上完整安装、配置并运行基于 Neo4j 的长期记忆系统插件。
+> 本文档面向 OpenClaw Agent 自主阅读和执行。你可以通过读取本指南完成自我部署、自我修复和自我升级。
 
-## 1. 系统架构概述
+## 0. 你是谁、这是什么
 
-这是一个 OpenClaw 插件，提供基于 Neo4j 知识图谱的长期记忆系统。包含两个主要组件：
+你是 OpenClaw Agent。这个仓库是你的**长期记忆系统 + 认知引擎**，部署在宿主机（macOS）上，通过 HTTP API（端口 18900）与你通信。
 
-1. **OpenClaw 插件前端**（`openclaw-neo4j-memory/`）：TypeScript 编写的 OpenClaw 插件，提供核心工具（`neo4j_memory_store`, `neo4j_memory_search`, `neo4j_memory_stats`）和 hooks（自动 ingest/search）。
-2. **Python 后端 API 服务**（`merged-cognitive-system/`）：FastAPI 服务，运行在 `127.0.0.1:18900`，处理实体抽取、图谱存储、搜索以及异步图谱重整（冥思）机制。
+系统由两大模块组成：
 
----
+| 模块 | 目录 | 职责 |
+|------|------|------|
+| 记忆系统（冥思） | `meditation_memory/` | Neo4j 图谱存储、实体抽取、子图检索、冥思 9 步重整 |
+| 认知引擎 | `cognitive_engine/` | 12 步认知管道、策略蒸馏/进化、RQS、信念系统、反馈闭环 |
 
-## 2. 依赖与环境准备
-
-在开始部署之前，你需要确保环境满足以下依赖：
-
-### 2.1 系统与基础环境
-- 操作系统：macOS
-- Python 版本：Python 3.9+
-- 容器引擎：Docker（用于运行 Neo4j）
-
-### 2.2 环境变量要求
-部署时需要配置以下环境变量。你可以将它们设置在 `launchd` 的 plist 文件中，或在终端会话中导出：
-
-| 变量名 | 说明 | 默认值/推荐值 |
-|--------|------|---------------|
-| `NEO4J_URI` | Neo4j 数据库连接地址 | `bolt://localhost:7687` |
-| `NEO4J_USER` | Neo4j 用户名 | `neo4j` |
-| `NEO4J_PASSWORD` | Neo4j 密码 | `reflection123` |
-| `NEO4J_DATABASE` | Neo4j 数据库名称 | `neo4j` |
-| `OPENAI_API_KEY` | OpenAI 兼容的 API Key | （需提供） |
-| `OPENAI_BASE_URL` | LLM API 地址 | （可选，如 `https://api.openai.com/v1`） |
-| `MEDITATION_LLM_MODEL` | 冥思使用的 LLM 模型 | `deepseek/deepseek-chat` |
-| `MEDITATION_BATCH_SIZE` | 冥思批处理大小 | `50` |
-| `MEDITATION_RELABEL_BATCH`| 关系重构批处理大小 | `100` |
+它们通过 `memory_api_server.py`（FastAPI v2.4）统一对外提供 HTTP API。你通过 `index.ts` 注册的工具和钩子与之交互。
 
 ---
 
-## 3. 详细部署步骤
+## 1. 前置依赖
 
-请严格按照以下步骤在终端中执行命令，以完成完整的部署流程。
+在部署前，确认以下组件已就绪：
 
-### 第一步：安装并启动 Neo4j 容器
-
-我们需要启动一个配置了特定内存限制和插件的 Neo4j Docker 容器。
-
-**执行命令：**
 ```bash
-docker run -d \
-  --name reflection-neo4j \
+# 检查 Docker
+docker --version
+
+# 检查 Neo4j 容器
+docker ps | grep neo4j
+# 如果没有运行：
+docker run -d --name reflection-neo4j \
   -p 7474:7474 -p 7687:7687 \
   -e NEO4J_AUTH=neo4j/reflection123 \
   -e NEO4J_PLUGINS='["apoc", "graph-data-science"]' \
@@ -58,139 +38,389 @@ docker run -d \
   -e NEO4J_dbms_memory_transaction_total_max=4g \
   -e NEO4J_db_memory_transaction_max=2g \
   neo4j:5.22-community
-```
 
-**验证步骤：**
-等待约 30 秒让数据库初始化，然后执行：
-```bash
+# 等待 30 秒后验证
 curl -I http://localhost:7474
-```
-如果返回 `HTTP/1.1 200 OK`，则说明 Neo4j 启动成功。
+# 期望: HTTP/1.1 200 OK
 
-### 第二步：安装 Python 依赖
-
-安装后端 API 服务所需的所有 Python 库。
-
-**执行命令：**
-```bash
-pip3 install fastapi uvicorn "neo4j>=5.28" jieba openai pydantic httpx
+# 检查 Python 依赖
+python3 -c "import neo4j, fastapi, uvicorn, jieba, openai, requests; print('OK')"
+# 如果缺少：
+pip3 install neo4j fastapi uvicorn jieba openai requests pydantic httpx
 ```
 
-**验证步骤：**
-执行以下命令，如果没有报错则说明依赖安装成功：
+---
+
+## 2. 环境变量
+
+以下环境变量必须设置。写入 `~/.zshrc` 确保持久化：
+
 ```bash
-python3 -c "import fastapi, uvicorn, neo4j, jieba, openai, pydantic, httpx; print('All dependencies installed successfully.')"
+# Neo4j 连接
+export NEO4J_URI="bolt://localhost:7687"
+export NEO4J_USER="neo4j"
+export NEO4J_PASSWORD="reflection123"
+export NEO4J_DATABASE="neo4j"
+
+# LLM API（用于实体抽取、策略蒸馏、冥思关系重构）
+export OPENAI_API_KEY="你的API密钥"
+export OPENAI_BASE_URL="https://openrouter.ai/api/v1"
+
+# 冥思 LLM 模型（可选，默认 gpt-4.1-mini）
+export MEDITATION_LLM_MODEL="qwen/qwen3-235b-a22b:free"
+
+# 冥思批处理参数（可选）
+export MEDITATION_BATCH_SIZE="50"
+export MEDITATION_RELABEL_BATCH="100"
+
+# 认知闭环开关（可选，默认 true）
+export COGNITIVE_STRATEGY_ENABLED="true"
+export COGNITIVE_FEEDBACK_ENABLED="true"
+
+# Python 路径
+export PYTHONPATH="/Users/liugang/.openclaw/workspace/plugins/neo4j-memory"
 ```
 
-### 第三步：部署代码文件到 OpenClaw 插件目录
+---
 
-将仓库中的前后端代码复制到 OpenClaw 的插件工作目录 `~/.openclaw/workspace/plugins/neo4j-memory/`。
+## 3. 部署步骤
 
-假设你当前在克隆的仓库根目录下，**执行命令：**
 ```bash
-# 1. 创建目标目录
-mkdir -p ~/.openclaw/workspace/plugins/neo4j-memory/
+# 1. 进入插件目录
+cd /Users/liugang/.openclaw/workspace/plugins/neo4j-memory
 
-# 2. 复制 Python 后端代码（包含 API 服务和冥思模块）
-cp -R merged-cognitive-system/* ~/.openclaw/workspace/plugins/neo4j-memory/
+# 2. 拉取最新代码
+git remote add github https://github.com/Garylauchina/openclaw-neo4j-memory.git 2>/dev/null || true
+git fetch github
+git checkout main
+git pull github main
 
-# 3. 复制 TypeScript 前端插件代码（覆盖或合并必要文件）
-cp -R openclaw-neo4j-memory/* ~/.openclaw/workspace/plugins/neo4j-memory/
+# 3. 杀掉旧进程并启动 API 服务
+pkill -f memory_api_server || true
+sleep 2
+nohup python3 memory_api_server.py > /tmp/memory_api.log 2>&1 &
+sleep 5
+
+# 4. 验证
+curl http://127.0.0.1:18900/health
+# 期望返回: {"status":"ok","neo4j_connected":true,"version":"2.4"}
 ```
 
-**验证步骤：**
-检查目标目录中是否包含核心文件：
+### 开机自启（launchd）
+
 ```bash
-ls -l ~/.openclaw/workspace/plugins/neo4j-memory/memory_api_server.py
-ls -l ~/.openclaw/workspace/plugins/neo4j-memory/openclaw.plugin.json
+cp deploy/com.openclaw.neo4j-memory.plist ~/Library/LaunchAgents/
+# 如需修改环境变量，编辑 plist 文件中的 EnvironmentVariables 部分
+launchctl load ~/Library/LaunchAgents/com.openclaw.neo4j-memory.plist
+
+# 验证
+launchctl list | grep com.openclaw.neo4j-memory
+curl http://127.0.0.1:18900/health
 ```
 
-### 第四步：配置 launchd 并启动后台服务
+---
 
-使用 macOS 的 `launchd` 来管理 Python API 服务，确保它能自动启动和崩溃重启。
+## 4. 目录结构
 
-**执行命令：**
+```
+openclaw-neo4j-memory/
+├── memory_api_server.py          # FastAPI 服务入口（端口 18900，v2.4）
+├── index.ts                      # OpenClaw 插件注册（工具 + 钩子 + 命令）
+├── openclaw.plugin.json          # 插件元数据和配置项
+├── package.json                  # npm 包配置
+├── cognitive_hook.py             # 认知接管钩子（查询→推荐→反馈）
+├── TOOLS.md                      # 工具和 API 详细使用说明
+│
+├── meditation_memory/            # 记忆系统核心
+│   ├── config.py                 # Neo4j/LLM/子图配置（读环境变量）
+│   ├── entity_extractor.py       # 实体和关系抽取（规则 + LLM，25 种关系类型）
+│   ├── graph_store.py            # Neo4j 图操作（CRUD + 冥思 + 策略/RQS/信念）
+│   ├── memory_system.py          # 记忆系统门面（ingest/retrieve/session）
+│   ├── subgraph_context.py       # 动态子图构建
+│   ├── meditation_worker.py      # 冥思 9 步流水线引擎
+│   ├── meditation_scheduler.py   # 冥思调度器（cron + 条件触发）
+│   └── meditation_config.py      # 冥思配置 + 策略蒸馏配置
+│
+├── cognitive_engine/             # 认知引擎
+│   ├── cognitive_core.py         # 12 步认知管道主控
+│   ├── neo4j_client.py           # Neo4j HTTP 客户端（带重试和降级）
+│   ├── strategy_distiller.py     # 策略蒸馏器（因果链→策略，需要 LLM）
+│   ├── rqs_system.py             # 推理质量评分系统
+│   ├── adaptive_learning_system.py  # 自适应学习
+│   ├── meta_learning_system.py      # 元学习
+│   ├── self_correcting_reasoner.py  # 自校正推理
+│   ├── learning_guard.py            # 学习守卫
+│   ├── simple_semantic_parser.py    # 语义解析
+│   └── adapters/                 # 适配器层
+│       ├── memory_provider.py    # 记忆检索适配器（对接 /search）
+│       ├── reality_writer.py     # 现实数据写入适配器（对接 /ingest）
+│       ├── real_world_strategy.py   # 真实世界策略
+│       ├── strong_validator.py      # 强验证器
+│       ├── world_model_interface.py # 世界模型接口
+│       ├── query_processor.py       # 查询处理器
+│       ├── formatter.py            # 格式化器
+│       └── fx_api.py               # 外汇 API 连接器
+│
+├── tests/                        # 认知引擎集成测试（共 211 个）
+│   ├── test_phase1_integration.py  # 49 个 — 存储层对接
+│   ├── test_phase2_strategy.py     # 44 个 — 策略持久化
+│   ├── test_phase3_meditation.py   # 49 个 — 冥思升级
+│   └── test_phase4_feedback.py     # 69 个 — 认知闭环
+│
+├── meditation_memory/tests/      # 记忆系统单元测试
+│   ├── test_entity_extractor.py
+│   ├── test_graph_store.py
+│   ├── test_memory_system.py
+│   ├── test_subgraph_context.py
+│   └── test_integration.py
+│
+└── deploy/
+    └── com.openclaw.neo4j-memory.plist  # macOS LaunchAgent 配置
+```
+
+---
+
+## 5. HTTP API 速查
+
+Base URL: `http://127.0.0.1:18900`
+
+### 核心 API
+
+| 方法 | 路径 | 用途 | 参数 |
+|------|------|------|------|
+| GET | `/health` | 健康检查 | — |
+| POST | `/ingest` | 写入记忆 | `{"text": "...", "use_llm": true, "async_mode": false}` |
+| POST | `/search` | 搜索记忆 + 策略推荐 | `{"query": "...", "include_strategies": true}` |
+| GET | `/stats` | 图谱统计 | — |
+| POST | `/feedback` | 提交执行反馈 | `{"query": "...", "applied_strategy_name": "...", "success": true, "confidence": 0.9, "validation_status": "accurate"}` |
+
+### 冥思 API
+
+| 方法 | 路径 | 用途 |
+|------|------|------|
+| GET | `/meditation/config` | 查看冥思调度配置 |
+| POST | `/meditation/schedule` | 修改冥思调度配置（立即生效） |
+| POST | `/meditation/trigger` | 手动触发冥思。参数：`{"mode": "manual"}` |
+| GET | `/meditation/status` | 查看冥思运行状态 |
+| GET | `/meditation/history` | 查看冥思历史记录 |
+| POST | `/meditation/dry-run` | 预览冥思（不修改数据） |
+
+### 内部结构化写入 API
+
+| 方法 | 路径 | 用途 |
+|------|------|------|
+| POST | `/internal/strategy` | 写入/更新策略节点 |
+| POST | `/internal/strategy/evolution` | 记录策略进化谱系 |
+| POST | `/internal/strategy/archive` | 归档淘汰策略 |
+| GET | `/internal/strategy/list` | 获取所有活跃策略 |
+| POST | `/internal/rqs` | 写入/更新 RQS 记录 |
+| GET | `/internal/rqs/list` | 获取所有 RQS 记录 |
+| POST | `/internal/belief` | 写入/更新信念节点 |
+| GET | `/internal/belief/list` | 获取所有信念 |
+
+---
+
+## 6. OpenClaw 工具和钩子
+
+### 注册工具（通过 index.ts）
+
+| 工具名 | 何时使用 |
+|--------|----------|
+| `neo4j_memory_store` | 对话中遇到重要信息时，主动保存到图谱 |
+| `neo4j_memory_search` | 回答问题前，检索相关背景记忆 |
+| `neo4j_memory_stats` | 用户询问记忆系统状态时 |
+| `neo4j_cognitive_recommend` | 搜索记忆的同时获取策略推荐 |
+| `neo4j_cognitive_feedback` | 查询处理完成后，提交执行结果反馈 |
+
+### 自动钩子（无需手动调用）
+
+| 钩子 | 触发时机 | 行为 |
+|------|----------|------|
+| `before_agent` | 每轮对话开始前 | 自动检索记忆上下文，注入系统提示词 |
+| `agent_end` | 每轮对话结束后 | 自动将对话内容写入图谱 |
+| `before_compaction` | 上下文压缩前 | 将完整会话归档到图谱 |
+
+### /memory 命令
+
+在对话中输入 `/memory` 可查看记忆系统状态。
+
+---
+
+## 7. 认知闭环工作流
+
+这是你处理每个查询时应遵循的完整闭环流程：
+
+```
+用户提问
+  ↓
+[before_agent 钩子] 自动检索记忆上下文
+  ↓
+[neo4j_cognitive_recommend] 获取策略推荐，选择 fitness_score 最高的策略
+  ↓
+按策略处理查询，生成回答
+  ↓
+[neo4j_cognitive_feedback] 提交反馈：
+  - success: true/false
+  - confidence: 0-1
+  - validation_status: accurate / acceptable / wrong
+  ↓
+系统自动更新（EMA 权重 0.1，防止单次反馈剧烈波动）：
+  - 策略适应度 fitness_score
+  - RQS 推理质量评分
+  - 信念强度 belief_strength
+  ↓
+[冥思] 定期运行 9 步流水线：
+  1. 快照 → 2. 剪枝 → 3. 实体合并 → 4. 关系重构
+  → 5. 权重调整 → 6. 知识蒸馏 → 6.5 策略蒸馏（因果链→新策略）
+  → 6.6 策略进化（交叉+变异+淘汰） → 7. 提交
+  ↓
+下次查询时，推荐的策略已经进化过了
+```
+
+---
+
+## 8. 冥思机制详解
+
+冥思是后台运行的图谱优化流水线，类似大脑睡眠时的记忆整理。
+
+### 9 步流水线
+
+| 步骤 | 名称 | 作用 |
+|------|------|------|
+| 1 | 快照 | 记录运行前的图谱状态基线 |
+| 2 | 剪枝 | 归档低质量、孤立、过期的节点 |
+| 3 | 实体合并 | 通过 LLM 判断并合并同义实体 |
+| 4 | 关系重构 | 将 `related_to` 重标注为语义化类型（causes, uses, part_of 等） |
+| 5 | 权重调整 | 基于语义评分、提及次数、连接度计算节点激活值 |
+| 6 | 知识蒸馏 | 为高连接度实体生成元知识摘要节点 |
+| 6.5 | 策略蒸馏 | 从因果链自动生成策略候选（需要 LLM） |
+| 6.6 | 策略进化 | 交叉、变异、淘汰，优胜劣汰 |
+| 7 | 提交 | 记录运行结果，清除冥思标记 |
+
+### 触发方式
+
+1. **定时触发**：默认每天凌晨 3:00（cron 表达式可配置）
+2. **条件触发**：新增节点/关系超过阈值时自动触发
+3. **手动触发**：`POST /meditation/trigger`
+
+### 调度配置示例
+
 ```bash
-# 1. 创建日志目录
-mkdir -p ~/.openclaw/logs/
+# 修改为每天凌晨 4 点执行
+curl -X POST http://127.0.0.1:18900/meditation/schedule \
+  -H 'Content-Type: application/json' \
+  -d '{"cron_schedule": "0 4 * * *"}'
 
-# 2. 将 plist 文件复制到用户的 LaunchAgents 目录
-cp ~/.openclaw/workspace/plugins/neo4j-memory/deploy/com.openclaw.neo4j-memory.plist ~/Library/LaunchAgents/
+# 降低触发阈值（让冥思更频繁）
+curl -X POST http://127.0.0.1:18900/meditation/schedule \
+  -H 'Content-Type: application/json' \
+  -d '{"trigger_node_threshold": 50, "trigger_edge_threshold": 150}'
 
-# 3. （可选）如果你需要修改 API Key 等环境变量，请使用文本编辑器修改 plist 文件：
-# nano ~/Library/LaunchAgents/com.openclaw.neo4j-memory.plist
+# 临时禁用冥思
+curl -X POST http://127.0.0.1:18900/meditation/schedule \
+  -H 'Content-Type: application/json' \
+  -d '{"enabled": false}'
+```
 
-# 4. 加载并启动服务
+---
+
+## 9. 策略蒸馏配置
+
+策略蒸馏器通过 LLM 从因果链自动生成策略。配置参数：
+
+| 参数 | 环境变量 | 默认值 | 说明 |
+|------|----------|--------|------|
+| min_causal_chain_length | — | 3 | 因果链最小长度（低于此值不蒸馏） |
+| max_strategies_per_run | `MEDITATION_MAX_NEW_STRATEGIES` | 3 | 每次冥思最多生成的新策略数 |
+| fitness_elimination_threshold | `MEDITATION_FITNESS_ELIMINATION` | 0.2 | 适应度低于此值的策略被淘汰 |
+| crossover_rate | `MEDITATION_CROSSOVER_RATE` | 0.3 | 策略交叉概率 |
+
+---
+
+## 10. 故障排查
+
+```bash
+# === API 服务不响应 ===
+curl http://127.0.0.1:18900/health
+# 如果无响应：
+ps aux | grep memory_api_server
+pkill -f memory_api_server && sleep 2
+cd /Users/liugang/.openclaw/workspace/plugins/neo4j-memory
+nohup python3 memory_api_server.py > /tmp/memory_api.log 2>&1 &
+sleep 5
+curl http://127.0.0.1:18900/health
+
+# === Neo4j 连接失败 ===
+docker ps | grep neo4j
+# 如果容器没运行：
+docker start reflection-neo4j
+# 等待 15 秒后重试
+
+# === Neo4j 认证限制（短时间内尝试太多次） ===
+docker restart reflection-neo4j
+# 等待 15 秒
+
+# === 端口被占用 ===
+lsof -i :18900
+kill -9 <PID>
+
+# === 查看错误日志 ===
+tail -50 /tmp/memory_api.log
+tail -50 /Users/liugang/.openclaw/logs/neo4j-memory-stderr.log
+
+# === 冥思 LLM 调用失败 ===
+# 检查环境变量
+echo $OPENAI_API_KEY
+echo $OPENAI_BASE_URL
+# 确认 API 可用：
+python3 -c "
+from openai import OpenAI
+import os
+client = OpenAI(api_key=os.environ['OPENAI_API_KEY'], base_url=os.environ['OPENAI_BASE_URL'])
+r = client.chat.completions.create(model='qwen/qwen3-235b-a22b:free', messages=[{'role':'user','content':'OK'}], max_tokens=5)
+print(r.choices[0].message.content)
+"
+
+# === 运行测试验证系统完整性 ===
+cd /Users/liugang/.openclaw/workspace/plugins/neo4j-memory
+python3 -m pytest tests/ -v --tb=short
+```
+
+---
+
+## 11. 升级流程
+
+当仓库有新版本时：
+
+```bash
+cd /Users/liugang/.openclaw/workspace/plugins/neo4j-memory
+git fetch github
+git pull github main
+pkill -f memory_api_server && sleep 2
+nohup python3 memory_api_server.py > /tmp/memory_api.log 2>&1 &
+sleep 5
+curl http://127.0.0.1:18900/health
+```
+
+如果使用 launchd：
+
+```bash
+launchctl unload ~/Library/LaunchAgents/com.openclaw.neo4j-memory.plist
+cd /Users/liugang/.openclaw/workspace/plugins/neo4j-memory
+git pull github main
+cp deploy/com.openclaw.neo4j-memory.plist ~/Library/LaunchAgents/
 launchctl load ~/Library/LaunchAgents/com.openclaw.neo4j-memory.plist
 ```
 
-**验证步骤：**
-1. 检查服务是否正在运行：
-```bash
-launchctl list | grep com.openclaw.neo4j-memory
-```
-2. 检查 API 服务的健康检查端点：
-```bash
-curl http://127.0.0.1:18900/health
-```
-如果返回 `{"status": "ok", ...}`，则说明 API 服务启动成功。
-
 ---
 
-## 4. 冥思（Meditation）机制详解
+## 12. 关键约束（必读）
 
-冥思是一个后台运行的图谱优化流水线，类似大脑睡眠时的记忆整理过程。它包含 7 步流水线：
-1. **快照**：记录运行前的图谱状态基线
-2. **剪枝**：归档低质量、孤立、过期的节点
-3. **实体合并**：通过 LLM 判断并合并同义实体
-4. **关系重构**：将泛化的 `related_to` 关系重标注为语义化类型（如 causes, uses, part_of）
-5. **权重调整**：基于语义评分、提及次数、连接度计算节点激活值
-6. **知识蒸馏**：为高连接度实体生成元知识摘要节点
-7. **提交**：记录运行结果，清除已处理节点的冥思标记
-
-### 4.1 触发与调度配置
-
-- **默认调度**：每天凌晨 3 点自动运行。
-- **配置修改**：你可以通过 API 动态修改调度配置，修改后立即生效。
-  ```bash
-  curl -X POST http://127.0.0.1:18900/meditation/schedule \
-    -H 'Content-Type: application/json' \
-    -d '{"cron_schedule": "0 4 * * *", "trigger_node_threshold": 100}'
-  ```
-
-### 4.2 冥思 API 端点
-
-你可以通过以下 HTTP API（Base URL: `http://127.0.0.1:18900`）管理冥思机制：
-
-- `GET /meditation/config` - 查看当前冥思配置
-- `POST /meditation/trigger` - 手动触发冥思（支持 `auto`, `manual`, `dry_run` 模式）
-- `GET /meditation/status` - 查看冥思运行状态（`idle` 或 `running`）
-- `GET /meditation/history` - 查看冥思运行历史记录
-- `POST /meditation/dry-run` - 预览冥思效果，不实际修改数据
-
----
-
-## 5. 故障排查指南
-
-如果你在部署或运行中遇到问题，请参考以下指南：
-
-### 5.1 服务未启动或连接拒绝
-- **现象**：`curl http://127.0.0.1:18900/health` 报错。
-- **排查**：
-  1. 查看标准输出日志：`cat ~/.openclaw/logs/neo4j-memory-stdout.log`
-  2. 查看错误日志：`cat ~/.openclaw/logs/neo4j-memory-stderr.log`
-  3. 确认 Python 路径在 plist 中是否正确配置，且所需的依赖包均已安装。
-
-### 5.2 Neo4j 数据库连接失败
-- **现象**：健康检查返回 Neo4j 相关的错误。
-- **排查**：
-  1. 检查 Docker 容器状态：`docker ps -a | grep reflection-neo4j`
-  2. 如果容器已退出，查看日志：`docker logs reflection-neo4j`
-  3. 确认 plist 文件中的 `NEO4J_URI`, `NEO4J_USER`, `NEO4J_PASSWORD` 与 Docker 启动参数一致。
-
-### 5.3 冥思机制 LLM 调用失败
-- **现象**：冥思状态一直处于 `idle`，或日志中提示超时/认证错误。
-- **排查**：
-  1. 检查 `~/Library/LaunchAgents/com.openclaw.neo4j-memory.plist` 中的 `OPENAI_API_KEY` 和 `OPENAI_BASE_URL` 是否正确。
-  2. 确认配置的模型（`MEDITATION_LLM_MODEL`）在目标 API 平台上可用。
-  3. 修改配置后，记得执行 `launchctl unload` 和 `launchctl load` 重启服务。
+- `memory_api_server.py` **必须**在端口 **18900** 运行，`index.ts` 硬编码了这个地址
+- Neo4j 密码是 **reflection123**，容器名是 **reflection-neo4j**
+- 所有认知引擎功能在 Neo4j 不可用时**自动降级**，不会抛异常，不会影响你的正常对话
+- 策略蒸馏需要 LLM API，没有配置 `OPENAI_API_KEY` 时蒸馏步骤会静默跳过
+- 冥思的实体合并和关系重构也需要 LLM API
+- 反馈更新使用 **EMA（指数移动平均）**，权重 0.1，单次反馈不会造成策略适应度剧烈波动
+- `tests/` 目录共 **211 个测试**，可随时运行 `python3 -m pytest tests/ -v` 验证系统完整性
+- 插件配置项在 `openclaw.plugin.json` 中定义，包括 `auto_ingest`、`auto_search`、`archive_on_compaction`、`use_llm_ingest`、`use_llm_search`
