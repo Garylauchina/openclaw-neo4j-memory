@@ -229,14 +229,58 @@ curl http://127.0.0.1:18900/health
 
 ### 开机自启（launchd）
 
+对于生产部署，推荐使用 macOS 原生的 launchd 机制实现开机自启和崩溃重启，而不是使用 nohup。这种方式可以保证后台服务的高可用性。
+
+首先，将提供的 plist 模板文件复制到用户的 LaunchAgents 目录：
+
 ```bash
 cp deploy/com.openclaw.neo4j-memory.plist ~/Library/LaunchAgents/
-# 如需修改环境变量，编辑 plist 文件中的 EnvironmentVariables 部分
-launchctl load ~/Library/LaunchAgents/com.openclaw.neo4j-memory.plist
+```
 
-# 验证
+复制完成后，**必须**编辑 `~/Library/LaunchAgents/com.openclaw.neo4j-memory.plist` 文件，修改其中的关键环境变量配置以匹配你的实际环境：
+
+- **OPENAI_API_KEY**：必须替换为你自己的 API 密钥。
+- **OPENAI_BASE_URL**：根据你使用的 LLM 提供商修改（默认为 `https://openrouter.ai/api/v1`）。
+- **MEDITATION_LLM_MODEL**：设置冥思使用的模型（如 `qwen/qwen3-235b-a22b:free`）。
+- **Python 路径**：在 `ProgramArguments` 数组中，默认使用 `/usr/bin/python3`。如果你使用的是 Xcode Python，请将其修改为完整路径：`/Applications/Xcode.app/Contents/Developer/Library/Frameworks/Python3.framework/Versions/3.9/Resources/Python.app/Contents/MacOS/Python`。
+
+该 plist 文件已配置了两个重要属性：
+- `KeepAlive: true`：当进程崩溃或意外退出时，系统会自动将其重启。
+- `RunAtLoad: true`：当用户登录系统时，服务会自动启动。
+
+配置修改完成后，使用以下命令加载并启动服务：
+
+```bash
+launchctl load ~/Library/LaunchAgents/com.openclaw.neo4j-memory.plist
+```
+
+验证服务是否成功运行：
+
+```bash
+# 检查 launchd 任务列表
 launchctl list | grep com.openclaw.neo4j-memory
+
+# 检查 API 健康状态
 curl http://127.0.0.1:18900/health
+```
+
+如需进行服务管理，可使用以下常用命令：
+
+```bash
+# 启动服务
+launchctl start com.openclaw.neo4j-memory
+
+# 停止服务
+launchctl stop com.openclaw.neo4j-memory
+
+# 卸载服务（不再开机自启）
+launchctl unload ~/Library/LaunchAgents/com.openclaw.neo4j-memory.plist
+
+# 查看标准输出日志
+tail -f ~/.openclaw/logs/neo4j-memory-stdout.log
+
+# 查看错误日志
+tail -f ~/.openclaw/logs/neo4j-memory-stderr.log
 ```
 
 ---
