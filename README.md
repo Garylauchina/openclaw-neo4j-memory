@@ -237,12 +237,32 @@ curl http://127.0.0.1:18900/health
 cp deploy/com.openclaw.neo4j-memory.plist ~/Library/LaunchAgents/
 ```
 
-复制完成后，**必须**编辑 `~/Library/LaunchAgents/com.openclaw.neo4j-memory.plist` 文件，修改其中的关键环境变量配置以匹配你的实际环境：
+复制完成后，**必须**编辑 `~/Library/LaunchAgents/com.openclaw.neo4j-memory.plist` 文件，替换其中的占位符并修改关键配置以匹配你的实际环境：
 
-- **OPENAI_API_KEY**：必须替换为你自己的 API 密钥。
+**路径占位符替换（必须）：**
+
+| 占位符 | 替换为 | 示例 |
+|--------|--------|------|
+| `REPLACE_WITH_YOUR_PLUGIN_DIR` | 插件实际安装目录 | `/Users/yourname/.openclaw/workspace/plugins/neo4j-memory` |
+| `REPLACE_WITH_YOUR_HOME` | 你的用户主目录 | `/Users/yourname` |
+
+**环境变量配置（按需修改）：**
+
+- **OPENAI_API_KEY**：必须替换 `YOUR_API_KEY_HERE` 为你自己的 API 密钥。
 - **OPENAI_BASE_URL**：根据你使用的 LLM 提供商修改（默认为 `https://openrouter.ai/api/v1`）。
-- **MEDITATION_LLM_MODEL**：设置冥思使用的模型（如 `qwen/qwen3-235b-a22b:free`）。
-- **Python 路径**：在 `ProgramArguments` 数组中，默认使用 `/usr/bin/python3`。如果你使用的是 Xcode Python，请将其修改为完整路径：`/Applications/Xcode.app/Contents/Developer/Library/Frameworks/Python3.framework/Versions/3.9/Resources/Python.app/Contents/MacOS/Python`。
+- **MEDITATION_LLM_MODEL**：冥思使用的模型（如 `qwen/qwen3-235b-a22b:free`）。
+- **Python 路径**：在 `ProgramArguments` 数组中，默认使用 `/usr/bin/python3`。如果你使用的是 Xcode 自带的 Python，需要改为完整路径：`/Applications/Xcode.app/Contents/Developer/Library/Frameworks/Python3.framework/Versions/3.9/Resources/Python.app/Contents/MacOS/Python`。
+
+你也可以用 `sed` 一次性替换所有占位符：
+
+```bash
+PLUGIN_DIR="$HOME/.openclaw/workspace/plugins/neo4j-memory"
+sed -i '' \
+  -e "s|REPLACE_WITH_YOUR_PLUGIN_DIR|$PLUGIN_DIR|g" \
+  -e "s|REPLACE_WITH_YOUR_HOME|$HOME|g" \
+  -e "s|YOUR_API_KEY_HERE|你的实际API密钥|g" \
+  ~/Library/LaunchAgents/com.openclaw.neo4j-memory.plist
+```
 
 该 plist 文件已配置了两个重要属性：
 - `KeepAlive: true`：当进程崩溃或意外退出时，系统会自动将其重启。

@@ -4,30 +4,30 @@
 <dict>
 	<key>EnvironmentVariables</key>
 	<dict>
+		<key>NEO4J_URI</key>
+		<string>bolt://localhost:7687</string>
+		<key>NEO4J_USER</key>
+		<string>neo4j</string>
+		<key>NEO4J_PASSWORD</key>
+		<string>reflection123</string>
+		<key>NEO4J_DATABASE</key>
+		<string>neo4j</string>
+		<key>OPENAI_API_KEY</key>
+		<string>YOUR_API_KEY_HERE</string>
+		<key>OPENAI_BASE_URL</key>
+		<string>https://openrouter.ai/api/v1</string>
 		<key>MEDITATION_LLM_MODEL</key>
 		<string>deepseek/deepseek-chat</string>
 		<key>MEDITATION_BATCH_SIZE</key>
 		<string>50</string>
 		<key>MEDITATION_RELABEL_BATCH</key>
 		<string>100</string>
-		<key>NEO4J_DATABASE</key>
-		<string>neo4j</string>
-		<key>NEO4J_PASSWORD</key>
-		<string>reflection123</string>
-		<key>NEO4J_URI</key>
-		<string>bolt://localhost:7687</string>
-		<key>NEO4J_USER</key>
-		<string>neo4j</string>
-			<key>OPENAI_API_KEY</key>
-			<string>YOUR_API_KEY_HERE</string>
-			<key>OPENAI_BASE_URL</key>
-			<string>https://openrouter.ai/api/v1</string>
-			<key>COGNITIVE_STRATEGY_ENABLED</key>
-			<string>true</string>
-			<key>COGNITIVE_FEEDBACK_ENABLED</key>
-			<string>true</string>
-			<key>PYTHONPATH</key>
-			<string>/Users/liugang/.openclaw/workspace/plugins/neo4j-memory</string>
+		<key>COGNITIVE_STRATEGY_ENABLED</key>
+		<string>true</string>
+		<key>COGNITIVE_FEEDBACK_ENABLED</key>
+		<string>true</string>
+		<key>PYTHONPATH</key>
+		<string>REPLACE_WITH_YOUR_PLUGIN_DIR</string>
 	</dict>
 	<key>KeepAlive</key>
 	<true/>
@@ -36,7 +36,7 @@
 	<key>ProgramArguments</key>
 	<array>
 		<string>/usr/bin/python3</string>
-		<string>/Users/liugang/.openclaw/workspace/plugins/neo4j-memory/memory_api_server.py</string>
+		<string>REPLACE_WITH_YOUR_PLUGIN_DIR/memory_api_server.py</string>
 		<string>--port</string>
 		<string>18900</string>
 		<string>--host</string>
@@ -45,10 +45,10 @@
 	<key>RunAtLoad</key>
 	<true/>
 	<key>StandardErrorPath</key>
-	<string>/Users/liugang/.openclaw/logs/neo4j-memory-stderr.log</string>
+	<string>REPLACE_WITH_YOUR_HOME/.openclaw/logs/neo4j-memory-stderr.log</string>
 	<key>StandardOutPath</key>
-	<string>/Users/liugang/.openclaw/logs/neo4j-memory-stdout.log</string>
+	<string>REPLACE_WITH_YOUR_HOME/.openclaw/logs/neo4j-memory-stdout.log</string>
 	<key>WorkingDirectory</key>
-	<string>/Users/liugang/.openclaw/workspace/plugins/neo4j-memory</string>
+	<string>REPLACE_WITH_YOUR_PLUGIN_DIR</string>
 </dict>
 </plist>
