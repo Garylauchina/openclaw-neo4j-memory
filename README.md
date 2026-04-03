@@ -78,7 +78,7 @@ export COGNITIVE_STRATEGY_ENABLED="true"
 export COGNITIVE_FEEDBACK_ENABLED="true"
 
 # Python 路径
-export PYTHONPATH="/Users/liugang/.openclaw/workspace/plugins/neo4j-memory"
+export PYTHONPATH="$HOME/.openclaw/workspace/plugins/neo4j-memory"
 ```
 
 ---
@@ -87,7 +87,7 @@ export PYTHONPATH="/Users/liugang/.openclaw/workspace/plugins/neo4j-memory"
 
 ```bash
 # 1. 进入插件目录
-cd /Users/liugang/.openclaw/workspace/plugins/neo4j-memory
+cd ~/.openclaw/workspace/plugins/neo4j-memory
 
 # 2. 拉取最新代码
 git remote add github https://github.com/Garylauchina/openclaw-neo4j-memory.git 2>/dev/null || true
@@ -345,7 +345,7 @@ curl http://127.0.0.1:18900/health
 # 如果无响应：
 ps aux | grep memory_api_server
 pkill -f memory_api_server && sleep 2
-cd /Users/liugang/.openclaw/workspace/plugins/neo4j-memory
+cd ~/.openclaw/workspace/plugins/neo4j-memory
 nohup python3 memory_api_server.py > /tmp/memory_api.log 2>&1 &
 sleep 5
 curl http://127.0.0.1:18900/health
@@ -366,7 +366,7 @@ kill -9 <PID>
 
 # === 查看错误日志 ===
 tail -50 /tmp/memory_api.log
-tail -50 /Users/liugang/.openclaw/logs/neo4j-memory-stderr.log
+tail -50 ~/.openclaw/logs/neo4j-memory-stderr.log
 
 # === 冥思 LLM 调用失败 ===
 # 检查环境变量
@@ -382,7 +382,7 @@ print(r.choices[0].message.content)
 "
 
 # === 运行测试验证系统完整性 ===
-cd /Users/liugang/.openclaw/workspace/plugins/neo4j-memory
+cd ~/.openclaw/workspace/plugins/neo4j-memory
 python3 -m pytest tests/ -v --tb=short
 ```
 
@@ -393,7 +393,7 @@ python3 -m pytest tests/ -v --tb=short
 当仓库有新版本时：
 
 ```bash
-cd /Users/liugang/.openclaw/workspace/plugins/neo4j-memory
+cd ~/.openclaw/workspace/plugins/neo4j-memory
 git fetch github
 git pull github main
 pkill -f memory_api_server && sleep 2
@@ -406,7 +406,7 @@ curl http://127.0.0.1:18900/health
 
 ```bash
 launchctl unload ~/Library/LaunchAgents/com.openclaw.neo4j-memory.plist
-cd /Users/liugang/.openclaw/workspace/plugins/neo4j-memory
+cd ~/.openclaw/workspace/plugins/neo4j-memory
 git pull github main
 cp deploy/com.openclaw.neo4j-memory.plist ~/Library/LaunchAgents/
 launchctl load ~/Library/LaunchAgents/com.openclaw.neo4j-memory.plist
