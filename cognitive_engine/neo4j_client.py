@@ -22,6 +22,10 @@ Phase 2 新增端点：
   get_all_rqs_records()    → GET  /internal/rqs/list
   upsert_belief(data)      → POST /internal/belief
   get_all_beliefs()        → GET  /internal/belief/list
+
+Phase 4 新增端点：
+  get_recommended_strategies(query, limit) → POST /search (include_strategies=true)
+  submit_feedback(feedback_data)           → POST /feedback
 """
 
 import logging
@@ -107,6 +111,7 @@ class Neo4jMemoryClient:
         query: str,
         limit: int = 10,
         use_llm: bool = True,
+        include_strategies: bool = False,
     ) -> Optional[Dict[str, Any]]:
         """
         调用 POST /search 搜索记忆。
@@ -115,6 +120,7 @@ class Neo4jMemoryClient:
             query: 搜索文本
             limit: 返回结果数量上限
             use_llm: 实体抽取是否使用 LLM
+            include_strategies: 是否同时返回策略推荐（Phase 4 新增）
 
         Returns:
             API 返回的 JSON 字典，失败时返回 None。
@@ -128,10 +134,17 @@ class Neo4jMemoryClient:
                         "matched_entities": [...],
                         "entity_count": 5,
                         "edge_count": 3
-                    }
+                    },
+                    "recommended_strategies": [...]  // Phase 4
                 }
         """
-        payload = {"query": query, "limit": limit, "use_llm": use_llm}
+        payload: Dict[str, Any] = {
+            "query": query,
+            "limit": limit,
+            "use_llm": use_llm,
+        }
+        if include_strategies:
+            payload["include_strategies"] = True
         return self._post("/search", payload)
 
     def ingest(
@@ -292,6 +305,61 @@ class Neo4jMemoryClient:
         if data and data.get("status") == "success":
             return data.get("beliefs", [])
         return None
+
+    # ------------------------------------------------------------------
+    # Phase 4: 策略推荐与反馈 API
+    # ------------------------------------------------------------------
+
+    def get_recommended_strategies(
+        self,
+        query: str,
+        limit: int = 3,
+    ) -> Optional[List[Dict[str, Any]]]:
+        """
+        获取针对当前查询的策略推荐。
+
+        通过 POST /search 并设置 include_strategies=true 来获取推荐策略。
+
+        Args:
+            query: 查询文本
+            limit: 返回策略数量上限
+
+        Returns:
+            策略推荐列表，失败时返回 None
+        """
+        data = self.search(query, limit=limit, include_strategies=True)
+        if data and data.get("status") == "success":
+            return data.get("recommended_strategies", [])
+        return None
+
+    def submit_feedback(
+        self,
+        feedback_data: Dict[str, Any],
+    ) -> Optional[Dict[str, Any]]:
+        """
+        提交执行结果反馈到 /feedback API。
+
+        Args:
+            feedback_data: 反馈数据字典，包含：
+                - query: 原始查询文本
+                - applied_strategy_name: 使用的策略名称
+                - success: 是否成功
+                - confidence: 结果置信度 (0-1)
+                - validation_status: 验证状态 (accurate/acceptable/wrong)
+
+        Returns:
+            API 返回的 JSON 字典，失败时返回 None。
+            成功示例::
+
+                {
+                    "status": "success",
+                    "strategy_updated": true,
+                    "rqs_updated": false,
+                    "belief_updated": true,
+                    "details": {...}
+                }
+        """
+        return self._post("/feedback", feedback_data)
 
     # ------------------------------------------------------------------
     # 内部 HTTP 方法

@@ -362,6 +362,109 @@ export default definePluginEntry({
       { name: "neo4j_memory_stats" },
     );
 
+    // Tool 4: neo4j_cognitive_recommend — search with strategy recommendations (Phase 4)
+    api.registerTool(
+      {
+        name: "neo4j_cognitive_recommend",
+        label: "Neo4j Cognitive Recommend",
+        description:
+          "Search the Neo4j knowledge graph and get strategy recommendations. " +
+          "Returns memory context plus the highest-fitness strategies for the query. " +
+          "Use when you need both context and strategy guidance for complex queries.",
+        parameters: Type.Object({
+          query: Type.String({ description: "Search query text" }),
+          limit: Type.Optional(
+            Type.Number({
+              description: "Maximum number of strategies to return (default: 3)",
+            }),
+          ),
+        }),
+        async execute(_toolCallId: string, params: unknown) {
+          const { query, limit = 3 } = params as { query: string; limit?: number };
+          try {
+            const result = await client.request("/search", "POST", {
+              query,
+              include_strategies: true,
+              limit,
+            });
+            return {
+              content: [{ type: "text" as const, text: JSON.stringify(result, null, 2) }],
+              details: result,
+            };
+          } catch (e: unknown) {
+            const msg = e instanceof Error ? e.message : String(e);
+            return {
+              content: [{ type: "text" as const, text: `Error: ${msg}` }],
+              isError: true,
+            };
+          }
+        },
+      },
+      { name: "neo4j_cognitive_recommend" },
+    );
+
+    // Tool 5: neo4j_cognitive_feedback — submit execution feedback (Phase 4)
+    api.registerTool(
+      {
+        name: "neo4j_cognitive_feedback",
+        label: "Neo4j Cognitive Feedback",
+        description:
+          "Submit execution result feedback to drive strategy evolution. " +
+          "Updates strategy fitness, RQS scores, and belief system based on results. " +
+          "Use after query processing to report success/failure and improve future recommendations.",
+        parameters: Type.Object({
+          query: Type.String({ description: "Original query text" }),
+          applied_strategy_name: Type.Optional(
+            Type.String({ description: "Name of the strategy that was applied" }),
+          ),
+          success: Type.Boolean({ description: "Whether the execution was successful" }),
+          confidence: Type.Optional(
+            Type.Number({ description: "Result confidence (0-1), default 0.5" }),
+          ),
+          validation_status: Type.Optional(
+            Type.String({
+              description: "Validation status: accurate / acceptable / wrong",
+            }),
+          ),
+        }),
+        async execute(_toolCallId: string, params: unknown) {
+          const {
+            query,
+            applied_strategy_name,
+            success,
+            confidence = 0.5,
+            validation_status,
+          } = params as {
+            query: string;
+            applied_strategy_name?: string;
+            success: boolean;
+            confidence?: number;
+            validation_status?: string;
+          };
+          try {
+            const result = await client.request("/feedback", "POST", {
+              query,
+              applied_strategy_name,
+              success,
+              confidence,
+              validation_status,
+            });
+            return {
+              content: [{ type: "text" as const, text: JSON.stringify(result, null, 2) }],
+              details: result,
+            };
+          } catch (e: unknown) {
+            const msg = e instanceof Error ? e.message : String(e);
+            return {
+              content: [{ type: "text" as const, text: `Error: ${msg}` }],
+              isError: true,
+            };
+          }
+        },
+      },
+      { name: "neo4j_cognitive_feedback" },
+    );
+
     // ====================================================================
     // Lifecycle Hooks
     // ====================================================================

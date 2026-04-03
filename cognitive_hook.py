@@ -8,13 +8,19 @@ OpenClaw Cognitive Hook — 认知接管钩子
   - 初始化时自动创建 Neo4jMemoryClient 并注入 CognitiveCore
   - 保留原有的 process_query_hook / _should_use_cognitive_core / _fallback_processing 逻辑
   - 认知内核不可用时降级到默认行为
+
+Phase 4 升级：
+  - process_query_hook 返回记忆上下文 + 策略推荐
+  - 新增 post_execution_hook 提交反馈到 /feedback API（非阻塞）
+  - 新增 _select_strategy 从推荐列表中选择最优策略
 """
 
 import logging
 import os
+import threading
 import time
 from datetime import datetime
-from typing import Any, Dict, Optional
+from typing import Any, Dict, List, Optional
 
 logger = logging.getLogger("cognitive_hook")
 
@@ -32,10 +38,14 @@ except ImportError as exc:
 
 class OpenClawCognitiveHook:
     """
-    OpenClaw 认知接管钩子
+    OpenClaw 认知接管钩子（升级版）
 
     替换 OpenClaw 默认的记忆/推理管道，将查询路由到 CognitiveCore。
     当认知内核不可用时，自动降级到默认处理。
+
+    Phase 4 新增能力：
+      - process_query_hook 同时返回记忆上下文和策略推荐
+      - post_execution_hook 提交执行结果反馈（非阻塞）
     """
 
     def __init__(self, config_path: Optional[str] = None):
@@ -47,7 +57,7 @@ class OpenClawCognitiveHook:
         """
         logger.info("Initializing OpenClawCognitiveHook...")
 
-        self.hook_version = "2.0.0-phase1"
+        self.hook_version = "3.0.0-phase4"
         self.integrated_at = datetime.now().isoformat()
 
         # 状态跟踪
@@ -58,10 +68,13 @@ class OpenClawCognitiveHook:
             "api_calls": 0,
             "graph_writes": 0,
             "errors": 0,
+            "feedback_submitted": 0,
+            "feedback_errors": 0,
         }
 
         # 初始化认知内核
         self.cognitive_core: Optional[Any] = None
+        self.neo4j_client: Optional[Any] = None
         self._init_cognitive_core(config_path)
 
         # 配置
@@ -88,12 +101,12 @@ class OpenClawCognitiveHook:
         try:
             # 创建 Neo4j 客户端
             neo4j_base = os.environ.get("NEO4J_API_BASE", "http://127.0.0.1:18900")
-            neo4j_client = Neo4jMemoryClient(base_url=neo4j_base)
+            self.neo4j_client = Neo4jMemoryClient(base_url=neo4j_base)
 
             # 创建认知内核
             self.cognitive_core = CognitiveCore(
                 config_path=config_path,
-                neo4j_client=neo4j_client,
+                neo4j_client=self.neo4j_client,
             )
             logger.info("CognitiveCore loaded successfully")
         except Exception as exc:
@@ -106,15 +119,44 @@ class OpenClawCognitiveHook:
         """
         查询处理钩子 — 替换 OpenClaw 默认处理。
 
+        Phase 4 升级：同时返回记忆上下文和策略推荐。
+
+        流程：
+        1. 搜索记忆上下文 + 策略推荐（通过 /search?include_strategies=true）
+        2. 选择最优策略
+        3. 路由到认知内核或降级处理
+        4. 返回增强后的上下文
+
         Args:
             query: 用户查询
             context: OpenClaw 上下文
 
         Returns:
-            增强的响应字典
+            增强的响应字典，包含 memory_context、recommended_strategies、selected_strategy
         """
         self.stats["hook_calls"] += 1
         logger.info("Hook processing query: %s", query[:80])
+
+        # Phase 4: 获取策略推荐
+        recommended_strategies: List[Dict[str, Any]] = []
+        memory_context: Dict[str, Any] = {}
+        selected_strategy: Optional[Dict[str, Any]] = None
+
+        if getattr(self, 'neo4j_client', None):
+            try:
+                search_result = self.neo4j_client.search(
+                    query, include_strategies=True
+                )
+                if search_result:
+                    memory_context = search_result.get("context", {})
+                    recommended_strategies = search_result.get(
+                        "recommended_strategies", []
+                    )
+                    selected_strategy = self._select_strategy(
+                        recommended_strategies, context
+                    )
+            except Exception as exc:
+                logger.warning("Strategy recommendation failed: %s", exc)
 
         should_use_cognitive = self._should_use_cognitive_core(query, context)
 
@@ -134,16 +176,97 @@ class OpenClawCognitiveHook:
                     result.get("metadata", {}).get("confidence", 0.0),
                 )
 
-                return self._format_for_openclaw(result, query, context)
+                formatted = self._format_for_openclaw(result, query, context)
+
+                # Phase 4: 附加策略推荐信息
+                formatted["memory_context"] = memory_context
+                formatted["recommended_strategies"] = recommended_strategies
+                formatted["selected_strategy"] = selected_strategy
+
+                return formatted
 
             except Exception as exc:
                 self.stats["errors"] += 1
                 logger.warning("Cognitive core failed: %s", exc)
-                return self._fallback_processing(query, context)
+                fallback = self._fallback_processing(query, context)
+                fallback["memory_context"] = memory_context
+                fallback["recommended_strategies"] = recommended_strategies
+                fallback["selected_strategy"] = selected_strategy
+                return fallback
         else:
             self.stats["fallback_calls"] += 1
             logger.info("Using fallback processing")
-            return self._fallback_processing(query, context)
+            fallback = self._fallback_processing(query, context)
+            fallback["memory_context"] = memory_context
+            fallback["recommended_strategies"] = recommended_strategies
+            fallback["selected_strategy"] = selected_strategy
+            return fallback
+
+    def post_execution_hook(
+        self,
+        query: str,
+        strategy_name: Optional[str] = None,
+        success: bool = True,
+        confidence: float = 0.5,
+        validation_status: Optional[str] = None,
+    ) -> None:
+        """
+        执行后钩子 — 在 OpenClaw 完成查询处理后调用。
+
+        提交反馈到认知系统的 /feedback API，驱动策略进化。
+        设计为非阻塞调用（fire-and-forget），即使反馈接口不可用也不影响主流程。
+
+        Args:
+            query: 原始查询文本
+            strategy_name: 使用的策略名称
+            success: 是否成功
+            confidence: 结果置信度 (0-1)
+            validation_status: 验证状态 (accurate/acceptable/wrong)
+        """
+        if not getattr(self, 'neo4j_client', None):
+            logger.debug("No neo4j_client available, skipping feedback")
+            return
+
+        def _submit_feedback():
+            try:
+                feedback_data = {
+                    "query": query,
+                    "applied_strategy_name": strategy_name or "default",
+                    "success": success,
+                    "confidence": confidence,
+                    "validation_status": validation_status,
+                }
+                self.neo4j_client.submit_feedback(feedback_data)
+                self.stats["feedback_submitted"] += 1
+                logger.info("Feedback submitted for query: %s", query[:50])
+            except Exception as exc:
+                self.stats["feedback_errors"] += 1
+                logger.warning("Feedback hook failed (non-blocking): %s", exc)
+
+        # 非阻塞：在后台线程中提交反馈
+        thread = threading.Thread(target=_submit_feedback, daemon=True)
+        thread.start()
+
+    def _select_strategy(
+        self,
+        strategies: List[Dict[str, Any]],
+        context: Optional[Dict[str, Any]],
+    ) -> Optional[Dict[str, Any]]:
+        """从推荐列表中选择最优策略。"""
+        if not strategies:
+            return None
+
+        # 如果上下文要求实时数据，优先选择 uses_real_data 的策略
+        requires_real = (context or {}).get("requires_real_data", False)
+        if requires_real:
+            real_strategies = [
+                s for s in strategies if s.get("uses_real_data")
+            ]
+            if real_strategies:
+                return real_strategies[0]
+
+        # 否则返回适应度最高的（列表已按 fitness_score 降序排列）
+        return strategies[0]
 
     def _should_use_cognitive_core(
         self, query: str, context: Optional[Dict[str, Any]]

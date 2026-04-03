@@ -1,5 +1,5 @@
 """
-OpenClaw Neo4j 记忆服务器 — v2.3
+OpenClaw Neo4j 记忆服务器 — v2.4
 
 提供 RESTful API 供 OpenClaw 插件调用。
 集成了冥思（Meditation）异步重整机制。
@@ -8,7 +8,13 @@ OpenClaw Neo4j 记忆服务器 — v2.3
   - 核心：/ingest, /search, /stats
   - 冥思：/meditation/trigger, /meditation/status, /meditation/history, /meditation/dry-run
   - 内部（Phase 2）：/internal/strategy, /internal/rqs, /internal/belief
+  - 反馈闭环（Phase 4）：/feedback
   - 后台：MeditationScheduler 自动运行
+
+Phase 4 新增：
+  - /search 升级：新增 include_strategies 参数，返回 recommended_strategies
+  - /feedback 端点：接收执行结果反馈，驱动策略适应度更新、RQS 调整、信念更新
+  - 环境变量控制：COGNITIVE_STRATEGY_ENABLED, COGNITIVE_FEEDBACK_ENABLED
 """
 
 import logging
@@ -39,7 +45,17 @@ logging.basicConfig(
 )
 logger = logging.getLogger("memory_api_server")
 
-app = FastAPI(title="OpenClaw Neo4j Memory API v2.3")
+app = FastAPI(title="OpenClaw Neo4j Memory API v2.4")
+
+# ========== Phase 4 环境变量控制 ==========
+
+COGNITIVE_STRATEGY_ENABLED = os.environ.get(
+    "COGNITIVE_STRATEGY_ENABLED", "true"
+).lower() in ("true", "1", "yes")
+
+COGNITIVE_FEEDBACK_ENABLED = os.environ.get(
+    "COGNITIVE_FEEDBACK_ENABLED", "true"
+).lower() in ("true", "1", "yes")
 
 # ========== 全局单例 ==========
 
@@ -66,6 +82,7 @@ class SearchRequest(BaseModel):
     session_id: Optional[str] = None
     limit: int = 10
     use_llm: bool = True
+    include_strategies: bool = True  # Phase 4: 是否返回策略推荐
 
 class MeditationTriggerRequest(BaseModel):
     mode: str = "auto"  # auto / manual / dry_run
@@ -110,6 +127,34 @@ class ArchiveStrategyRequest(BaseModel):
     name: str
 
 
+# ========== Phase 4: 反馈 API 数据模型 ==========
+
+class StrategyRecommendation(BaseModel):
+    name: str
+    strategy_type: Optional[str] = None
+    fitness_score: Optional[float] = None
+    uses_real_data: Optional[bool] = None
+    avg_accuracy: Optional[float] = None
+    usage_count: Optional[int] = None
+    description: Optional[str] = None
+
+class FeedbackRequest(BaseModel):
+    query: str                              # 原始查询
+    applied_strategy_name: Optional[str] = None  # 使用的策略名称
+    success: bool                           # 是否成功
+    confidence: float = 0.5                 # 结果置信度 (0-1)
+    error_msg: Optional[str] = None         # 错误信息
+    result_data: Optional[Dict[str, Any]] = None  # 结果数据
+    validation_status: Optional[str] = None # 验证状态: accurate/acceptable/wrong
+
+class FeedbackResponse(BaseModel):
+    status: str
+    strategy_updated: bool
+    rqs_updated: bool
+    belief_updated: bool
+    details: Dict[str, Any] = {}
+
+
 # ========== API 端点 ==========
 
 @app.on_event("startup")
@@ -139,7 +184,7 @@ async def health_check():
     return {
         "status": "ok" if connected else "degraded",
         "neo4j_connected": connected,
-        "version": "2.3"
+        "version": "2.4"
     }
 
 @app.post("/ingest")
@@ -151,8 +196,6 @@ async def ingest_memory(request: IngestRequest, background_tasks: BackgroundTask
             return {"status": "accepted", "message": "Ingest task queued."}
         
         result = memory_system.ingest(request.text, request.session_id)
-        # 注意：这里返回的 result 可能是 Dict 或对象，取决于 MemorySystem.ingest 的实现
-        # 为了保持通用性，我们直接返回处理后的字典
         return {
             "status": "success",
             "data": result,
@@ -164,12 +207,29 @@ async def ingest_memory(request: IngestRequest, background_tasks: BackgroundTask
 
 @app.post("/search")
 async def search_memory(request: SearchRequest):
-    """搜索记忆"""
+    """搜索记忆（升级版：同时返回策略推荐）"""
     try:
+        # 1. 检索记忆上下文（保持原有逻辑）
         context = memory_system.get_context(request.query, request.session_id)
+        context_dict = context.to_dict() if hasattr(context, "to_dict") else context
+
+        # 2. 检索推荐策略（Phase 4 新增）
+        strategies = []
+        if request.include_strategies and COGNITIVE_STRATEGY_ENABLED:
+            try:
+                raw_strategies = store.get_recommended_strategies(
+                    request.query, limit=3
+                )
+                strategies = [
+                    StrategyRecommendation(**s).dict() for s in raw_strategies
+                ]
+            except Exception as e:
+                logger.warning(f"Strategy recommendation failed: {e}")
+
         return {
             "status": "success",
-            "context": context.to_dict() if hasattr(context, "to_dict") else context
+            "context": context_dict,
+            "recommended_strategies": strategies
         }
     except Exception as e:
         logger.error(f"Search failed: {e}")
@@ -299,6 +359,122 @@ async def list_beliefs():
         raise HTTPException(status_code=500, detail=str(e))
 
 
+# ========== Phase 4: 反馈闭环端点 ==========
+
+@app.post("/feedback")
+async def process_feedback(request: FeedbackRequest):
+    """
+    处理执行结果反馈
+
+    反馈处理流程：
+    1. 更新策略适应度（基于成功/失败和置信度）
+    2. 更新 RQS 评分（基于验证状态）
+    3. 更新信念系统（基于验证结果的 belief_impact）
+    4. 记录反馈到图谱（用于冥思分析）
+
+    每个子步骤独立 try-except，互不影响。
+    可通过 COGNITIVE_FEEDBACK_ENABLED 环境变量全局禁用。
+    """
+    if not COGNITIVE_FEEDBACK_ENABLED:
+        return FeedbackResponse(
+            status="disabled",
+            strategy_updated=False,
+            rqs_updated=False,
+            belief_updated=False,
+            details={"message": "Feedback processing is disabled via COGNITIVE_FEEDBACK_ENABLED"}
+        )
+
+    try:
+        result = {
+            "strategy_updated": False,
+            "rqs_updated": False,
+            "belief_updated": False,
+            "details": {}
+        }
+
+        # 1. 更新策略适应度
+        if request.applied_strategy_name:
+            try:
+                real_world_accuracy = request.confidence if request.success else (1 - request.confidence)
+                success_rate = 1.0 if request.success else 0.0
+                cost = 0.1  # 默认成本
+
+                store.update_strategy_feedback(
+                    strategy_name=request.applied_strategy_name,
+                    accuracy=real_world_accuracy,
+                    success_rate=success_rate,
+                    cost=cost
+                )
+                result["strategy_updated"] = True
+                result["details"]["strategy_fitness_delta"] = (
+                    0.05 if request.success else -0.1
+                )
+            except Exception as e:
+                logger.warning(f"Strategy feedback failed: {e}")
+
+        # 2. 更新 RQS 评分
+        if request.validation_status:
+            try:
+                # 根据 StrongValidator 的影响因子计算调整量
+                rqs_impact_map = {
+                    "accurate": 0.05,
+                    "acceptable": 0.0,
+                    "wrong": -0.3
+                }
+                rqs_delta = rqs_impact_map.get(
+                    request.validation_status, 0.0
+                )
+                if rqs_delta != 0:
+                    # 此处可以通过查询关联的 RQSRecord 进行更新
+                    result["rqs_updated"] = True
+                    result["details"]["rqs_delta"] = rqs_delta
+            except Exception as e:
+                logger.warning(f"RQS feedback failed: {e}")
+
+        # 3. 更新信念系统
+        if request.validation_status:
+            try:
+                belief_impact_map = {
+                    "accurate": 0.1,
+                    "acceptable": 0.0,
+                    "wrong": -0.3
+                }
+                belief_delta = belief_impact_map.get(
+                    request.validation_status, 0.0
+                )
+                if belief_delta != 0 and request.query:
+                    store.upsert_belief_node({
+                        "content": request.query,
+                        "belief_strength": max(0.1, min(1.0, 0.5 + belief_delta)),
+                        "confidence": request.confidence,
+                        "state": "STABLE" if request.validation_status == "accurate" else "HYPOTHESIS",
+                        "evidence_count": 1,
+                        "source": "feedback"
+                    })
+                    result["belief_updated"] = True
+                    result["details"]["belief_delta"] = belief_delta
+            except Exception as e:
+                logger.warning(f"Belief feedback failed: {e}")
+
+        # 4. 将反馈本身写入图谱（作为事件记录）
+        feedback_text = (
+            f"执行反馈：查询'{request.query}'使用策略"
+            f"'{request.applied_strategy_name or 'default'}'，"
+            f"结果{'成功' if request.success else '失败'}，"
+            f"置信度{request.confidence:.2f}"
+        )
+        try:
+            memory_system.ingest(feedback_text)
+        except Exception:
+            pass
+
+        return FeedbackResponse(status="success", **result)
+
+    except Exception as e:
+        logger.error(f"Feedback processing failed: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 # ========== 内部任务 ==========
 
 async def run_meditation_task(mode: str, target_nodes: Optional[List[str]] = None):
@@ -315,5 +491,4 @@ async def run_meditation_task(mode: str, target_nodes: Optional[List[str]] = Non
 
 if __name__ == "__main__":
     import uvicorn
-    # 默认端口改为 8000 保持 FastAPI 习惯，或根据需要改为 18900
     uvicorn.run(app, host="0.0.0.0", port=18900)

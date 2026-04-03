@@ -193,7 +193,76 @@ curl -X POST http://127.0.0.1:18900/meditation/dry-run \
 
 ---
 
-## 四、使用建议
+## 四、认知闭环工具（Phase 4）
+
+### neo4j_cognitive_recommend
+
+搜索记忆并获取策略推荐。在普通记忆搜索的基础上，额外返回适应度最高的策略推荐，帮助选择最优处理方案。
+
+**何时使用：**
+- 需要在搜索记忆的同时获取策略建议
+- 处理复杂查询时，希望系统推荐最佳处理策略
+- 需要了解当前可用策略及其适应度评分
+
+**参数：**
+- `query`：搜索查询文本
+- `limit`（可选）：返回策略数量上限，默认 3
+
+**返回示例：**
+```json
+{
+  "status": "success",
+  "context": {
+    "context_text": "...",
+    "entity_count": 5,
+    "edge_count": 3
+  },
+  "recommended_strategies": [
+    {
+      "name": "reality_greedy_v3",
+      "strategy_type": "reality_greedy",
+      "fitness_score": 0.85,
+      "uses_real_data": true,
+      "avg_accuracy": 0.9,
+      "usage_count": 42
+    }
+  ]
+}
+```
+
+### neo4j_cognitive_feedback
+
+提交执行结果反馈，驱动策略进化。反馈会更新策略适应度、RQS 评分和信念系统。
+
+**何时使用：**
+- 查询处理完成后，向系统反馈执行结果
+- 策略执行成功或失败时，记录结果以优化未来推荐
+- 需要调整策略适应度评分时
+
+**参数：**
+- `query`：原始查询文本
+- `applied_strategy_name`（可选）：使用的策略名称
+- `success`：是否成功（boolean）
+- `confidence`（可选）：结果置信度 (0-1)，默认 0.5
+- `validation_status`（可选）：验证状态，accurate / acceptable / wrong
+
+**返回示例：**
+```json
+{
+  "status": "success",
+  "strategy_updated": true,
+  "rqs_updated": false,
+  "belief_updated": true,
+  "details": {
+    "strategy_fitness_delta": 0.05,
+    "belief_delta": 0.1
+  }
+}
+```
+
+---
+
+## 五、使用建议
 
 ### 记忆读写
 1. **主动记忆**：在对话中遇到重要信息时，主动使用 `neo4j_memory_store` 保存

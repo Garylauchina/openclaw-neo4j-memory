@@ -1667,6 +1667,107 @@ class GraphStore:
         with self.driver.session(database=self._config.database) as session:
             session.run(query, name=strategy_name)
 
+    # ========== Phase 4: 策略推荐与反馈更新 ==========
+
+    def get_recommended_strategies(self, query: str,
+                                    limit: int = 3) -> List[Dict[str, Any]]:
+        """
+        根据查询意图推荐策略。
+
+        策略推荐逻辑：
+        1. 优先推荐 fitness_score 最高的策略
+        2. 如果查询涉及实时数据需求，优先推荐 uses_real_data=true 的策略
+        3. 排除已归档的策略
+
+        Args:
+            query: 查询文本（当前用于日志，未来可用于语义匹配）
+            limit: 返回策略数量上限
+
+        Returns:
+            策略推荐列表
+        """
+        query_cypher = """
+        MATCH (s:Strategy)
+        WHERE NOT s:Archived
+        RETURN s.name AS name,
+               s.strategy_type AS strategy_type,
+               s.fitness_score AS fitness_score,
+               s.uses_real_data AS uses_real_data,
+               s.avg_accuracy AS avg_accuracy,
+               s.usage_count AS usage_count
+        ORDER BY s.fitness_score DESC
+        LIMIT $limit
+        """
+        try:
+            with self.driver.session(database=self._config.database) as session:
+                result = session.run(query_cypher, limit=limit)
+                return [dict(record) for record in result]
+        except Exception as e:
+            logger.error("Failed to get recommended strategies: %s", e)
+            return []
+
+    def update_strategy_feedback(self, strategy_name: str,
+                                  accuracy: float,
+                                  success_rate: float,
+                                  cost: float) -> None:
+        """
+        根据反馈更新策略的性能指标和适应度。
+
+        适应度更新采用指数移动平均（EMA），避免单次反馈造成剧烈波动。
+        新数据权重为 0.1。
+
+        Args:
+            strategy_name: 策略名称
+            accuracy: 本次反馈的准确度 (0-1)
+            success_rate: 本次反馈的成功率 (0 或 1)
+            cost: 本次反馈的成本 (0-1)
+        """
+        query = """
+        MATCH (s:Strategy {name: $name})
+        WHERE NOT s:Archived
+        SET s.usage_count = coalesce(s.usage_count, 0) + 1,
+            s.avg_accuracy = CASE
+                WHEN s.usage_count > 0
+                THEN s.avg_accuracy * 0.9 + $accuracy * 0.1
+                ELSE $accuracy
+            END,
+            s.avg_success = CASE
+                WHEN s.usage_count > 0
+                THEN coalesce(s.avg_success, 0.5) * 0.9 + $success_rate * 0.1
+                ELSE $success_rate
+            END,
+            s.avg_cost = CASE
+                WHEN s.usage_count > 0
+                THEN coalesce(s.avg_cost, 0.1) * 0.9 + $cost * 0.1
+                ELSE $cost
+            END,
+            s.fitness_score = CASE
+                WHEN s.usage_count > 0
+                THEN s.fitness_score * 0.9 + (
+                    0.5 * $accuracy +
+                    0.2 * $success_rate +
+                    0.2 * (1.0 - $cost * 2) +
+                    0.1 * 0.5 +
+                    CASE WHEN s.uses_real_data THEN 0.1 ELSE 0.0 END
+                ) * 0.1
+                ELSE 0.5 * $accuracy + 0.2 * $success_rate +
+                     0.2 * (1.0 - $cost * 2) + 0.1 * 0.5 +
+                     CASE WHEN s.uses_real_data THEN 0.1 ELSE 0.0 END
+            END,
+            s.updated_at = timestamp(),
+            s.needs_meditation = true
+        """
+        try:
+            with self.driver.session(database=self._config.database) as session:
+                session.run(query, name=strategy_name, accuracy=accuracy,
+                            success_rate=success_rate, cost=cost)
+        except Exception as e:
+            logger.error(
+                "Failed to update strategy feedback for %s: %s",
+                strategy_name, e,
+            )
+            raise
+
     # ========== RQS 记录节点操作 ==========
 
     def upsert_rqs_node(self, rqs_data: Dict[str, Any]) -> str:
