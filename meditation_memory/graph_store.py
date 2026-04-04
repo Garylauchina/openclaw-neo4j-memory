@@ -38,6 +38,20 @@ from .entity_extractor import Entity, Relation
 logger = logging.getLogger("meditation.graph_store")
 
 
+# Lazy import belief integration (avoids circular dependency when
+# belief_integration imports graph_store types in the future).
+_belief_mod = None
+def _get_belief_mod():
+    global _belief_mod
+    if _belief_mod is None:
+        try:
+            from cognitive_engine import belief_integration
+            _belief_mod = belief_integration
+        except ImportError:
+            pass  # belief layer not available — no-op
+    return _belief_mod
+
+
 # ================================================================
 # 注意力分数计算（轻量级，基于实体属性）
 # ================================================================
@@ -201,10 +215,21 @@ class GraphStore:
 
         # 自动计算注意力分数
         attention = compute_attention_score(
-            entity.name, entity.entity_type, 
+            entity.name, entity.entity_type,
             getattr(entity, 'mention_count', 0),
             getattr(entity, 'properties', {})
         )
+
+        # 自动分类信念类型
+        belief_mod = _get_belief_mod()
+        belief_type = "unknown"
+        belief_strength = 0.5
+        if belief_mod:
+            ctx = entity.properties.get("source_context", entity.name)
+            belief_type_val, belief_strength = belief_mod.classify_belief(
+                ctx, entity.name, entity.entity_type
+            )
+            belief_type = getattr(belief_type_val, 'value', str(belief_type_val))
 
         query = """
         MERGE (e:Entity {name: $name})
@@ -215,6 +240,8 @@ class GraphStore:
             e.updated_at = timestamp(),
             e.mention_count = 1,
             e.attention_score = $attention,
+            e.belief_type = $belief_type,
+            e.belief_strength = $belief_strength,
             e.needs_meditation = true
         ON MATCH SET
             e.entity_type = $entity_type,
@@ -222,6 +249,8 @@ class GraphStore:
             e.updated_at = timestamp(),
             e.mention_count = coalesce(e.mention_count, 0) + 1,
             e.attention_score = $attention,
+            e.belief_type = $belief_type,
+            e.belief_strength = $belief_strength,
             e.needs_meditation = true
         RETURN elementId(e) AS eid
         """
@@ -232,15 +261,20 @@ class GraphStore:
                 entity_type=entity.entity_type,
                 properties=json.dumps(entity.properties, ensure_ascii=False),
                 attention=attention,
+                belief_type=belief_type,
+                belief_strength=belief_strength,
             )
             record = result.single()
             return record["eid"] if record else ""
 
     def upsert_entities(self, entities: List[Entity]) -> int:
-        """批量插入或更新实体，返回处理数量（自动质量过滤 + 注意力分数）"""
+        """批量插入或更新实体，返回处理数量（自动质量过滤 + 注意力分数 + 信念分类）"""
         valid = [e for e in entities if self._is_valid_entity_name(e.name)]
         if not valid:
             return 0
+
+        belief_mod = _get_belief_mod()
+
         query = """
         UNWIND $batch AS item
         MERGE (e:Entity {name: item.name})
@@ -251,6 +285,8 @@ class GraphStore:
             e.updated_at = timestamp(),
             e.mention_count = item.mention_count,
             e.attention_score = item.attention,
+            e.belief_type = item.belief_type,
+            e.belief_strength = item.belief_strength,
             e.needs_meditation = true
         ON MATCH SET
             e.entity_type = item.entity_type,
@@ -258,20 +294,30 @@ class GraphStore:
             e.updated_at = timestamp(),
             e.mention_count = coalesce(e.mention_count, 0) + item.mention_count,
             e.attention_score = item.attention,
+            e.belief_type = item.belief_type,
+            e.belief_strength = item.belief_strength,
             e.needs_meditation = true
         RETURN count(e) AS updated
         """
-        batch = [
-            {
+
+        batch = []
+        for e in valid:
+            attention = compute_attention_score(e.name, e.entity_type, 1, e.properties)
+            belief_type = "unknown"
+            belief_strength = 0.5
+            if belief_mod:
+                ctx = e.properties.get("source_context", e.name)
+                bt_val, bs = belief_mod.classify_belief(ctx, e.name, e.entity_type)
+                belief_type = getattr(bt_val, 'value', str(bt_val))
+                belief_strength = bs
+            batch.append({
                 "name": e.name,
                 "entity_type": e.entity_type,
                 "properties": json.dumps(e.properties, ensure_ascii=False),
-                "attention": compute_attention_score(
-                    e.name, e.entity_type, 1, e.properties
-                ),
-            }
-            for e in valid
-        ]
+                "attention": attention,
+                "belief_type": belief_type,
+                "belief_strength": belief_strength,
+            })
         with self.driver.session(database=self._config.database) as session:
             result = session.run(query, batch=batch)
             record = result.single()
