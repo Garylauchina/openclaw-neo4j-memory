@@ -41,10 +41,12 @@ class MeditationScheduler:
         self._task: Optional[asyncio.Task] = None
 
     async def start(self):
-        """启动调度器循环"""
+        """启动调度器循环（含启动时补跑检查）"""
         if self._is_running:
             return
         self._is_running = True
+        # 启动时检查：如果今天还没运行过定时任务，且当前时间已过调度窗口，立即补跑
+        await self._catch_up_on_startup()
         self._task = asyncio.create_task(self._scheduler_loop())
         logger.info("Meditation scheduler started.")
 
@@ -58,6 +60,17 @@ class MeditationScheduler:
             except asyncio.CancelledError:
                 pass
         logger.info("Meditation scheduler stopped.")
+
+    async def _catch_up_on_startup(self):
+        """启动时补跑检查：如果今天没跑过且当前时间已过调度窗口，立即补跑一次。"""
+        now = datetime.now()
+        cron_parts = self.config.trigger.cron_schedule.split()
+        if len(cron_parts) >= 2:
+            target_hour = int(cron_parts[1])
+            # 如果当前时间已过今天的调度小时，且超过 180 分钟内没跑过
+            if now.hour >= target_hour and (time.time() - self._last_run_time) > 180:
+                logger.info(f"Startup catch-up: scheduled time was {target_hour}:00, now {now.hour}:{now.minute:02d}. Running now.")
+                await self._trigger_run("startup_catchup")
 
     async def _scheduler_loop(self):
         """主调度循环"""
@@ -80,15 +93,16 @@ class MeditationScheduler:
         if now - self._last_run_time < self.config.trigger.min_interval_seconds:
             return
 
-        # 1. 检查定时触发 (简单实现：检查小时和分钟)
-        # 默认 "0 3 * * *" -> 凌晨 3 点
+        dt_now = datetime.now()
+        # 定时触发：使用 ±1 分钟窗口，避免服务重启错过精确时刻
         cron_parts = self.config.trigger.cron_schedule.split()
         if len(cron_parts) >= 2:
             target_min = int(cron_parts[0])
             target_hour = int(cron_parts[1])
-            dt_now = datetime.now()
-            if dt_now.hour == target_hour and dt_now.minute == target_min:
-                logger.info("Cron schedule triggered meditation.")
+            if (dt_now.hour == target_hour and
+                abs(dt_now.minute - target_min) <= 1 and
+                (now - self._last_run_time) > 120):
+                logger.info(f"Cron schedule triggered meditation ({target_hour}:{target_min:02d}).")
                 await self._trigger_run("scheduled")
                 return
 
