@@ -17,6 +17,7 @@ Phase 4 新增：
   - 环境变量控制：COGNITIVE_STRATEGY_ENABLED, COGNITIVE_FEEDBACK_ENABLED
 """
 
+import json
 import logging
 import os
 import sys
@@ -60,9 +61,8 @@ COGNITIVE_FEEDBACK_ENABLED = os.environ.get(
 # ========== 全局单例 ==========
 
 from meditation_memory.config import MemoryConfig
-
-store = GraphStore()
 memory_config = MemoryConfig()
+store = GraphStore(memory_config.neo4j)
 memory_system = MemorySystem(memory_config)
 meditation_config = MeditationConfig()
 meditation_engine = MeditationEngine(store, meditation_config)
@@ -149,6 +149,11 @@ class FeedbackRequest(BaseModel):
     error_msg: Optional[str] = None         # 错误信息
     result_data: Optional[Dict[str, Any]] = None  # 结果数据
     validation_status: Optional[str] = None # 验证状态: accurate/acceptable/wrong
+    # Phase 4.1: 冥思进化扩展字段
+    result_count: Optional[int] = None      # 返回结果的数量
+    returned_entities: Optional[List[str]] = None  # 返回的实体列表
+    useful_entities: Optional[List[str]] = None    # 真正有用的实体
+    noise_entities: Optional[List[str]] = None     # 噪音实体
 
 class FeedbackResponse(BaseModel):
     status: str
@@ -195,13 +200,17 @@ async def ingest_memory(request: IngestRequest, background_tasks: BackgroundTask
     """写入记忆"""
     try:
         if request.async_mode:
-            background_tasks.add_task(memory_system.ingest, request.text, request.session_id)
+            background_tasks.add_task(
+                memory_system.ingest, request.text, request.use_llm
+            )
             return {"status": "accepted", "message": "Ingest task queued."}
         
-        result = memory_system.ingest(request.text, request.session_id)
+        result = memory_system.ingest(request.text, use_llm=request.use_llm)
+        result_dict = result.to_dict()
+        result_dict["extraction_mode"] = result.extraction.extraction_mode
         return {
             "status": "success",
-            "data": result,
+            "data": result_dict,
             "session_id": request.session_id
         }
     except Exception as e:
@@ -213,7 +222,7 @@ async def search_memory(request: SearchRequest):
     """搜索记忆（升级版：同时返回策略推荐）"""
     try:
         # 1. 检索记忆上下文（保持原有逻辑）
-        context = memory_system.retrieve_context(request.query, request.session_id)
+        context = memory_system.get_context(request.query, request.session_id)
         context_dict = context.to_dict() if hasattr(context, "to_dict") else context
 
         # 2. 检索推荐策略（Phase 4 新增）
@@ -482,6 +491,40 @@ async def process_feedback(request: FeedbackRequest):
             memory_system.ingest(feedback_text)
         except Exception:
             pass
+        
+        # 5. 保存增强反馈数据用于冥思进化分析（Phase 4.1）
+        try:
+            # 创建Feedback节点，包含所有增强字段
+            feedback_data = {
+                "query": request.query,
+                "success": request.success,
+                "confidence": request.confidence,
+                "applied_strategy_name": request.applied_strategy_name,
+                "validation_status": request.validation_status,
+                "result_count": request.result_count if request.result_count is not None else 0,
+                "returned_entities": request.returned_entities or [],
+                "useful_entities": request.useful_entities or [],
+                "noise_entities": request.noise_entities or [],
+                "error_msg": request.error_msg,
+                "timestamp": time.time(),
+                "type": "Feedback"
+            }
+            
+            # 使用现有的upsert_entity方法保存反馈
+            # 首先，需要导入Entity类或使用store的原始查询方法
+            # 简化：将反馈作为文本存储到图谱中，包含metadata
+            feedback_text = f"FEEDBACK: {request.query}|success:{request.success}|confidence:{request.confidence}|result_count:{request.result_count}"
+            feedback_metadata = json.dumps(feedback_data, ensure_ascii=False)
+            
+            # 使用memory_system.ingest存储，但需要扩展以处理metadata
+            # 暂时先记录日志
+            logger.info(f"Enhanced feedback data (not yet stored): {feedback_data}")
+            
+            # TODO: 实现反馈节点存储
+            # store.upsert_entity(Entity(name=feedback_text, type="Feedback", metadata=feedback_metadata))
+            
+        except Exception as e:
+            logger.warning(f"Failed to save enhanced feedback: {e}")
 
         return FeedbackResponse(status="success", **result)
 
@@ -505,10 +548,5 @@ async def run_meditation_task(mode: str, target_nodes: Optional[List[str]] = Non
         current_run = None
 
 if __name__ == "__main__":
-    import argparse
-    parser = argparse.ArgumentParser()
-    parser.add_argument("--port", type=int, default=18900, help="Port to run the server on")
-    parser.add_argument("--host", type=str, default="0.0.0.0", help="Host to bind to")
-    args = parser.parse_args()
     import uvicorn
-    uvicorn.run(app, host=args.host, port=args.port)
+    uvicorn.run(app, host="0.0.0.0", port=18900)

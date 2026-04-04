@@ -82,6 +82,15 @@ class MeditationRunResult:
     causal_chains_found: int = 0
     strategies_evaluated: int = 0
 
+    # Phase 5 Cognitive Integration
+    belief_conflicts_detected: int = 0
+    attention_high_priority: int = 0
+    attention_quality_flagged: int = 0
+
+    # Self-evolution pipeline (非序列化字段)
+    evolution_feedback: Dict[str, Any] = field(default_factory=dict)
+    evolution_suggestions: List[Dict[str, Any]] = field(default_factory=list)
+
     # 错误信息
     errors: List[str] = field(default_factory=list)
 
@@ -111,6 +120,10 @@ class MeditationRunResult:
                 "strategies_evolved": self.strategies_evolved,
                 "causal_chains_found": self.causal_chains_found,
                 "strategies_evaluated": self.strategies_evaluated,
+                # Phase 5
+                "belief_conflicts_detected": self.belief_conflicts_detected,
+                "attention_high_priority": self.attention_high_priority,
+                "attention_quality_flagged": self.attention_quality_flagged,
             },
             "errors": self.errors,
             "suggestions": self.suggestions if self.dry_run else [],
@@ -445,6 +458,7 @@ class MeditationEngine:
         self.config = config or MeditationConfig()
         self.llm = MeditationLLMClient(self.config)
         self._is_running = False
+        self._last_result: Optional[Dict[str, Any]] = None  # 上一次冥思结果，供元学习对比
         # Phase 3: 策略蒸馏器
         if StrategyDistiller is not None:
             self.strategy_distiller = StrategyDistiller(self.config.llm)
@@ -579,6 +593,40 @@ class MeditationEngine:
 
         return result
 
+    # ---------- 辅助方法：信念冲突检测 ----------
+
+    def _detect_belief_conflicts(self, nodes: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+        """
+        Phase 5 Cognitive Integration: 检测图谱中的信念冲突。
+        同名实体信念类型不一致 = 矛盾信息。
+        """
+        conflicts: List[Dict[str, Any]] = []
+
+        # 检查同名实体的信念冲突
+        by_name: Dict[str, List[Dict[str, Any]]] = {}
+        for n in nodes:
+            name = n.get("name")
+            if name:
+                by_name.setdefault(name, []).append(n)
+
+        for name, instances in by_name.items():
+            if len(instances) < 2:
+                continue
+            belief_types = set(i.get("belief_type") for i in instances if i.get("belief_type"))
+            if len(belief_types) > 1:
+                avg_strength = sum(
+                    i.get("belief_strength", 0.5) for i in instances
+                ) / len(instances)
+                conflicts.append({
+                    "name": name,
+                    "belief_types": list(belief_types),
+                    "instance_count": len(instances),
+                    "avg_belief_strength": round(avg_strength, 3),
+                    "action": "review_and_merge",
+                })
+
+        return conflicts[:50]
+
     # ---------- 步骤 1: 快照与锁定 ----------
 
     async def _step_1_snapshot_and_lock(
@@ -593,16 +641,64 @@ class MeditationEngine:
                 if node:
                     nodes.append(node)
         else:
-            # 自动模式：获取 needs_meditation=true 的节点
-            nodes = self.store.get_nodes_needing_meditation(
-                limit=500,
-                skip_recent_seconds=self.config.safety.skip_recently_updated_seconds
-            )
+            # 自动模式：按注意力分数降序获取高优先级节点
+            # Phase 5 Cognitive Integration: 使用注意力分数排序
+            if hasattr(self.store, 'get_top_entities_by_attention'):
+                top = self.store.get_top_entities_by_attention(
+                    limit=500,
+                    min_score=0.1
+                )
+                nodes = [{"name": t["name"], "entity_type": t["entity_type"],
+                          "attention_score": t["attention_score"],
+                          "mention_count": t["mention_count"]} for t in top]
+                # 补充：也获取一些低注意力但高提及的实体（质量问题检测）
+                if hasattr(self.store, 'get_low_attention_entities_batch'):
+                    low = self.store.get_low_attention_entities_batch(
+                        limit=100, min_mention_count=3
+                    )
+                    seen_names = {n["name"] for n in nodes}
+                    for item in low:
+                        if item["name"] not in seen_names:
+                            nodes.append({
+                                "name": item["name"],
+                                "entity_type": item["entity_type"],
+                                "attention_score": item.get("attention_score", 0),
+                                "mention_count": item.get("mention_count", 0),
+                                "quality_flag": True
+                            })
+                    seen_names = {n["name"] for n in nodes}
+                # 记录优先级统计
+                high_count = sum(1 for n in nodes if n.get("attention_score", 0) >= 0.5)
+                flagged = sum(1 for n in nodes if n.get("quality_flag"))
+                logger.info(f"Priority-ordered nodes: {len(nodes)} total, "
+                           f"{high_count} high-attention, {flagged} quality-flagged")
+            else:
+                # Fallback: 旧版本行为
+                nodes = self.store.get_nodes_needing_meditation(
+                    limit=500,
+                    skip_recent_seconds=self.config.safety.skip_recently_updated_seconds
+                )
+                # 按注意力分数排序（如 Neo4j 已有该属性）
+                if nodes and "attention_score" in (nodes[0] or {}):
+                    nodes = sorted(nodes, key=lambda n: n.get("attention_score", 0), reverse=True)
 
         if not nodes:
             return []
 
         result.nodes_scanned = len(nodes)
+
+        # Phase 5: 记录注意力优先级统计
+        high = sum(1 for n in nodes if n.get("attention_score", 0) >= 0.5)
+        flagged = sum(1 for n in nodes if n.get("quality_flag"))
+        result.attention_high_priority = high
+        result.attention_quality_flagged = flagged
+
+        # Phase 5: 检测信念冲突
+        conflicts = self._detect_belief_conflicts(nodes)
+        result.belief_conflicts_detected = len(conflicts)
+        if conflicts:
+            logger.info(f"Step 0: Detected {len(conflicts)} belief conflicts in scanned nodes")
+
         node_names = [n["name"] for n in nodes]
 
         # 锁定节点
@@ -626,15 +722,29 @@ class MeditationEngine:
     # ---------- 步骤 2: 孤立节点清理 (Pruning) ----------
 
     async def _step_2_pruning(self, result: MeditationRunResult, nodes: List[Dict[str, Any]]):
-        """清理无边连接的孤立节点和通用词节点。"""
-        # 1. 处理孤立节点
+        """清理无边连接的孤立节点、通用词节点、以及信念冲突节点。"""
+        # 2.0 信念冲突检测（Phase 5 Cognitive Integration）
+        belief_conflicts = self._detect_belief_conflicts(nodes)
+        if belief_conflicts:
+            if result.dry_run:
+                result.suggestions.append({
+                    "step": "belief_conflict_detection",
+                    "action": "flag_conflicts",
+                    "conflicts": belief_conflicts[:10],  # 限制报告数量
+                    "reason": "contradictory beliefs detected"
+                })
+            else:
+                result.belief_conflicts_detected = len(belief_conflicts)
+            logger.info(f"Step 2.0: Detected {len(belief_conflicts)} belief conflicts.")
+
+        # 2.1 处理孤立节点
         orphans = self.store.get_orphan_nodes(
             min_mentions=self.config.pruning.orphan_min_mentions,
             skip_recent_seconds=self.config.safety.skip_recently_updated_seconds
         )
         orphan_names = [o["name"] for o in orphans]
 
-        # 2. 处理通用词节点
+        # 2.2 处理通用词节点
         generics = self.store.get_generic_word_nodes(
             generic_words=self.config.pruning.generic_words,
             skip_recent_seconds=self.config.safety.skip_recently_updated_seconds
@@ -1099,12 +1209,48 @@ class MeditationEngine:
     # ---------- 步骤 7: 事务提交与解锁 ----------
 
     async def _step_7_finalize(self, result: MeditationRunResult):
-        """解锁节点并记录日志。"""
+        """解锁节点、记录日志、运行自我进化管道。"""
         if not result.dry_run:
             unlocked = self.store.unlock_nodes_after_meditation(result.run_id)
             logger.info(f"Unlocked {unlocked} nodes after meditation.")
+
+            # Phase 5.5: 自我进化管道（冥思结果 → 自适应 → 元学习反馈）
+            try:
+                from cognitive_engine.self_evolution_pipeline import run_evolution_pipeline
+                meditation_dict = result.to_dict()
+                try:
+                    graph_stats = self.store.get_stats()
+                except Exception:
+                    graph_stats = None
+
+                pipeline_result = run_evolution_pipeline(
+                    meditation_dict,
+                    graph_stats=graph_stats,
+                    previous_result=self._last_result,
+                )
+                result.evolution_feedback = pipeline_result.feedback
+                result.evolution_suggestions = pipeline_result.config_suggestions
+
+                if pipeline_result.feedback.get("success"):
+                    logger.info(
+                        "Self-evolution: quality_delta=%.3f velocity=%d",
+                        pipeline_result.feedback["quality_delta"],
+                        pipeline_result.feedback["velocity"],
+                    )
+                else:
+                    logger.warning(
+                        "Self-evolution: run not optimal — %d suggestions",
+                        len(pipeline_result.config_suggestions),
+                    )
+            except ImportError:
+                logger.debug("self_evolution_pipeline not available, skipping")
+            except Exception as e:
+                logger.warning(f"Self-evolution pipeline error (non-fatal): {e}")
         else:
             logger.info("Dry-run finished, no nodes were locked/unlocked.")
+
+        # 保存本轮结果供下一轮参考
+        self._last_result = result.to_dict()
 
 
 # ================================================================
