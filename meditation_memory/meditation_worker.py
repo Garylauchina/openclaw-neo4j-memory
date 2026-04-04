@@ -87,6 +87,10 @@ class MeditationRunResult:
     attention_high_priority: int = 0
     attention_quality_flagged: int = 0
 
+    # Self-evolution pipeline (非序列化字段)
+    evolution_feedback: Dict[str, Any] = field(default_factory=dict)
+    evolution_suggestions: List[Dict[str, Any]] = field(default_factory=list)
+
     # 错误信息
     errors: List[str] = field(default_factory=list)
 
@@ -454,6 +458,7 @@ class MeditationEngine:
         self.config = config or MeditationConfig()
         self.llm = MeditationLLMClient(self.config)
         self._is_running = False
+        self._last_result: Optional[Dict[str, Any]] = None  # 上一次冥思结果，供元学习对比
         # Phase 3: 策略蒸馏器
         if StrategyDistiller is not None:
             self.strategy_distiller = StrategyDistiller(self.config.llm)
@@ -1204,12 +1209,48 @@ class MeditationEngine:
     # ---------- 步骤 7: 事务提交与解锁 ----------
 
     async def _step_7_finalize(self, result: MeditationRunResult):
-        """解锁节点并记录日志。"""
+        """解锁节点、记录日志、运行自我进化管道。"""
         if not result.dry_run:
             unlocked = self.store.unlock_nodes_after_meditation(result.run_id)
             logger.info(f"Unlocked {unlocked} nodes after meditation.")
+
+            # Phase 5.5: 自我进化管道（冥思结果 → 自适应 → 元学习反馈）
+            try:
+                from cognitive_engine.self_evolution_pipeline import run_evolution_pipeline
+                meditation_dict = result.to_dict()
+                try:
+                    graph_stats = self.store.get_stats()
+                except Exception:
+                    graph_stats = None
+
+                pipeline_result = run_evolution_pipeline(
+                    meditation_dict,
+                    graph_stats=graph_stats,
+                    previous_result=self._last_result,
+                )
+                result.evolution_feedback = pipeline_result.feedback
+                result.evolution_suggestions = pipeline_result.config_suggestions
+
+                if pipeline_result.feedback.get("success"):
+                    logger.info(
+                        "Self-evolution: quality_delta=%.3f velocity=%d",
+                        pipeline_result.feedback["quality_delta"],
+                        pipeline_result.feedback["velocity"],
+                    )
+                else:
+                    logger.warning(
+                        "Self-evolution: run not optimal — %d suggestions",
+                        len(pipeline_result.config_suggestions),
+                    )
+            except ImportError:
+                logger.debug("self_evolution_pipeline not available, skipping")
+            except Exception as e:
+                logger.warning(f"Self-evolution pipeline error (non-fatal): {e}")
         else:
             logger.info("Dry-run finished, no nodes were locked/unlocked.")
+
+        # 保存本轮结果供下一轮参考
+        self._last_result = result.to_dict()
 
 
 # ================================================================
