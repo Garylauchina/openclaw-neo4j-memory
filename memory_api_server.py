@@ -60,8 +60,10 @@ COGNITIVE_FEEDBACK_ENABLED = os.environ.get(
 
 # ========== 全局单例 ==========
 
-store = GraphStore()
-memory_system = MemorySystem(store)
+from meditation_memory.config import MemoryConfig
+memory_config = MemoryConfig()
+store = GraphStore(memory_config.neo4j)
+memory_system = MemorySystem(memory_config)
 meditation_config = MeditationConfig()
 meditation_engine = MeditationEngine(store, meditation_config)
 meditation_scheduler = MeditationScheduler(meditation_engine, store, meditation_config)
