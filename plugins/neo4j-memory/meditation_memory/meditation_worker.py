@@ -667,8 +667,8 @@ class MeditationEngine:
                                 "quality_flag": True
                             })
                     seen_names = {n["name"] for n in nodes}
-                # 记录优先级统计
-                high_count = sum(1 for n in nodes if n.get("attention_score", 0) >= 0.5)
+                # 记录优先级统计（None 安全）
+                high_count = sum(1 for n in nodes if (n.get("attention_score") or 0) >= 0.5)
                 flagged = sum(1 for n in nodes if n.get("quality_flag"))
                 logger.info(f"Priority-ordered nodes: {len(nodes)} total, "
                            f"{high_count} high-attention, {flagged} quality-flagged")
@@ -680,7 +680,7 @@ class MeditationEngine:
                 )
                 # 按注意力分数排序（如 Neo4j 已有该属性）
                 if nodes and "attention_score" in (nodes[0] or {}):
-                    nodes = sorted(nodes, key=lambda n: n.get("attention_score", 0), reverse=True)
+                    nodes = sorted(nodes, key=lambda n: (n.get("attention_score") or 0), reverse=True)
 
         if not nodes:
             return []
@@ -688,7 +688,7 @@ class MeditationEngine:
         result.nodes_scanned = len(nodes)
 
         # Phase 5: 记录注意力优先级统计
-        high = sum(1 for n in nodes if n.get("attention_score", 0) >= 0.5)
+        high = sum(1 for n in nodes if (n.get("attention_score") or 0) >= 0.5)
         flagged = sum(1 for n in nodes if n.get("quality_flag"))
         result.attention_high_priority = high
         result.attention_quality_flagged = flagged
