@@ -232,12 +232,12 @@ curl -X POST http://127.0.0.1:18900/meditation/dry-run \
 
 ### neo4j_cognitive_feedback
 
-提交执行结果反馈，驱动策略进化。反馈会更新策略适应度、RQS 评分和信念系统。
+提交执行结果反馈，驱动策略和冥思参数的双重进化。反馈会更新策略适应度、RQS 评分和冥思调整策略。
 
 **何时使用：**
 - 查询处理完成后，向系统反馈执行结果
 - 策略执行成功或失败时，记录结果以优化未来推荐
-- 需要调整策略适应度评分时
+- 需要调整策略适应度和冥思参数时
 
 **参数：**
 - `query`：原始查询文本
@@ -245,6 +245,10 @@ curl -X POST http://127.0.0.1:18900/meditation/dry-run \
 - `success`：是否成功（boolean）
 - `confidence`（可选）：结果置信度 (0-1)，默认 0.5
 - `validation_status`（可选）：验证状态，accurate / acceptable / wrong
+- `result_count`（可选）：返回结果的数量
+- `returned_entities`（可选）：返回的实体列表
+- `useful_entities`（可选）：真正有用的实体列表
+- `noise_entities`（可选）：噪音实体列表
 
 **返回示例：**
 ```json
