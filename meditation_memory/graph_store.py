@@ -26,6 +26,7 @@ from __future__ import annotations
 
 import json
 import logging
+import math
 import time
 from typing import Any, Dict, List, Optional, Tuple
 
@@ -35,6 +36,72 @@ from .config import Neo4jConfig
 from .entity_extractor import Entity, Relation
 
 logger = logging.getLogger("meditation.graph_store")
+
+
+# ================================================================
+# 注意力分数计算（轻量级，基于实体属性）
+# ================================================================
+
+_ATTENTION_ENTITY_TYPE_WEIGHTS = {
+    # 高重要性实体类型
+    "person": 1.0,
+    "organization": 0.95,
+    "technology": 0.90,
+    "concept": 0.80,
+    "event": 0.85,
+    "product": 0.75,
+    "location": 0.70,
+    "project": 0.85,
+    # 默认
+    "other": 0.50,
+}
+
+
+def compute_attention_score(
+    entity_name: str,
+    entity_type: str = "other",
+    mention_count: int = 0,
+    properties: Optional[Dict[str, Any]] = None,
+) -> float:
+    """
+    计算实体注意力分数（轻量级，无需外部依赖）。
+
+    综合考量：
+    - 提及次数（log 归一化）
+    - 实体类型重要性
+    - 名称质量（长度、独特性）
+
+    Returns:
+        0.0 ~ 1.0 之间的注意力分数
+    """
+    if not entity_name:
+        return 0.0
+
+    # 1. 提及次数分数 (0 ~ 0.5)
+    mention_score = min(0.5, 0.15 * math.log1p(mention_count))
+
+    # 2. 实体类型权重 (0.3 ~ 1.0 -> 映射到 0 ~ 0.3)
+    type_weight = _ATTENTION_ENTITY_TYPE_WEIGHTS.get(entity_type.lower(), 0.50)
+    type_score = 0.3 * (type_weight - 0.3) / 0.7
+
+    # 3. 名称质量分数 (0 ~ 0.2)
+    name_len = len(entity_name)
+    # 中文实体通常 2-6 字最佳，英文 3-20 字符
+    if "\u4e00" <= entity_name[0] <= "\u9fff":
+        name_score = 0.2 * min(1.0, name_len / 6.0)
+    else:
+        name_score = 0.2 * min(1.0, name_len / 15.0)
+
+    # 4. 特殊标记加分 (0 ~ 0.1)
+    bonus = 0.0
+    props = properties or {}
+    if props.get("is_key_entity"):
+        bonus += 0.1
+    if props.get("needs_meditation"):
+        bonus += 0.05
+
+    total = min(1.0, mention_score + type_score + name_score + bonus)
+    return round(total, 4)
 
 
 class GraphStore:
@@ -132,6 +199,13 @@ class GraphStore:
         if not self._is_valid_entity_name(entity.name):
             return ""
 
+        # 自动计算注意力分数
+        attention = compute_attention_score(
+            entity.name, entity.entity_type, 
+            getattr(entity, 'mention_count', 0),
+            getattr(entity, 'properties', {})
+        )
+
         query = """
         MERGE (e:Entity {name: $name})
         ON CREATE SET
@@ -140,12 +214,14 @@ class GraphStore:
             e.created_at = timestamp(),
             e.updated_at = timestamp(),
             e.mention_count = 1,
+            e.attention_score = $attention,
             e.needs_meditation = true
         ON MATCH SET
             e.entity_type = $entity_type,
             e.properties = $properties,
             e.updated_at = timestamp(),
             e.mention_count = coalesce(e.mention_count, 0) + 1,
+            e.attention_score = $attention,
             e.needs_meditation = true
         RETURN elementId(e) AS eid
         """
@@ -155,12 +231,13 @@ class GraphStore:
                 name=entity.name,
                 entity_type=entity.entity_type,
                 properties=json.dumps(entity.properties, ensure_ascii=False),
+                attention=attention,
             )
             record = result.single()
             return record["eid"] if record else ""
 
     def upsert_entities(self, entities: List[Entity]) -> int:
-        """批量插入或更新实体，返回处理数量（自动质量过滤）"""
+        """批量插入或更新实体，返回处理数量（自动质量过滤 + 注意力分数）"""
         valid = [e for e in entities if self._is_valid_entity_name(e.name)]
         if not valid:
             return 0
@@ -172,13 +249,15 @@ class GraphStore:
             e.properties = item.properties,
             e.created_at = timestamp(),
             e.updated_at = timestamp(),
-            e.mention_count = 1,
+            e.mention_count = item.mention_count,
+            e.attention_score = item.attention,
             e.needs_meditation = true
         ON MATCH SET
             e.entity_type = item.entity_type,
             e.properties = item.properties,
             e.updated_at = timestamp(),
-            e.mention_count = coalesce(e.mention_count, 0) + 1,
+            e.mention_count = coalesce(e.mention_count, 0) + item.mention_count,
+            e.attention_score = item.attention,
             e.needs_meditation = true
         RETURN count(e) AS updated
         """
@@ -187,6 +266,9 @@ class GraphStore:
                 "name": e.name,
                 "entity_type": e.entity_type,
                 "properties": json.dumps(e.properties, ensure_ascii=False),
+                "attention": compute_attention_score(
+                    e.name, e.entity_type, 1, e.properties
+                ),
             }
             for e in valid
         ]
@@ -194,6 +276,51 @@ class GraphStore:
             result = session.run(query, batch=batch)
             record = result.single()
             return record["updated"] if record else 0
+
+    def get_top_entities_by_attention(
+        self, limit: int = 30, min_score: float = 0.0
+    ) -> List[Dict[str, Any]]:
+        """
+        按注意力分数获取优先级最高的实体。
+        冥思系统可用此方法优先处理重要实体。
+        """
+        query = """
+        MATCH (e:Entity)
+        WHERE e.attention_score IS NOT NULL
+          AND e.attention_score >= $min_score
+        RETURN e.name AS name,
+               e.entity_type AS entity_type,
+               e.mention_count AS mention_count,
+               e.attention_score AS attention_score,
+               e.created_at AS created_at,
+               e.updated_at AS updated_at
+        ORDER BY e.attention_score DESC
+        LIMIT $limit
+        """
+        with self.driver.session(database=self._config.database) as session:
+            result = session.run(query, min_score=min_score, limit=limit)
+            return [dict(r) for r in result]
+
+    def get_low_attention_entities_batch(
+        self, limit: int = 100, min_mention_count: int = 1
+    ) -> List[Dict[str, Any]]:
+        """
+        获取注意力分数较低但已被多次提及的实体。
+        这些实体可能有信息丢失或质量问题，需要冥思重点关注。
+        """
+        query = """
+        MATCH (e:Entity)
+        WHERE e.mention_count >= $min_mentions
+        RETURN e.name AS name,
+               e.entity_type AS entity_type,
+               e.mention_count AS mention_count,
+               e.attention_score AS attention_score
+        ORDER BY e.mention_count DESC, e.attention_score ASC
+        LIMIT $limit
+        """
+        with self.driver.session(database=self._config.database) as session:
+            result = session.run(query, min_mentions=min_mention_count, limit=limit)
+            return [dict(r) for r in result]
 
     # ================================================================
     # 实体质量过滤
