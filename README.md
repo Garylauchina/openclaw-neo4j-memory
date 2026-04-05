@@ -32,39 +32,54 @@ license: MIT
 
 ### 快速注入仪式
 
-```yaml
-# 步骤 1：运行 Docker 结界
+```bash
+# 步骤 1：构筑海马体迷宫（运行 Neo4j Docker）
 docker run -d --name neo4j -p 7687:7687 -p 7474:7474 -e NEO4J_AUTH=neo4j/YOUR_PASSWORD neo4j:5
 
-# 步骤 2：安装依赖
+# 步骤 2：注入神经递质（安装依赖）
 cd plugins/neo4j-memory && pip install neo4j fastapi uvicorn httpx openai
 
-# 步骤 3：配置 OpenClaw（~/.openclaw/openclaw.json）
-plugins:
-  allow: ["neo4j-memory"]
-  load:
-    paths: ["/path/to/openclaw-neo4j-memory/plugins/neo4j-memory"]
-  slots:
-    memory: "neo4j-memory"
-  entries:
-    neo4j-memory:
-      enabled: true
-      config:
-        apiPort: 18900
-        apiHost: 127.0.0.1
-        auto_ingest: true
-        auto_search: true
-        use_llm_ingest: true
-        use_llm_search: true
+# 步骤 3：开启感知器官（配置 OpenClaw）
+# 在 ~/.openclaw/openclaw.json 中合并以下 JSON 配置：
+cat >> ~/.openclaw/openclaw.json << 'EOF'
+{
+  "plugins": {
+    "allow": ["neo4j-memory"],
+    "load": {
+      "paths": ["/path/to/openclaw-neo4j-memory/plugins/neo4j-memory"]
+    },
+    "slots": {
+      "memory": "neo4j-memory"
+    },
+    "entries": {
+      "neo4j-memory": {
+        "enabled": true,
+        "config": {
+          "apiPort": 18900,
+          "apiHost": "127.0.0.1",
+          "auto_ingest": true,
+          "auto_search": true,
+          "use_llm_ingest": true,
+          "use_llm_search": true
+        }
+      }
+    }
+  }
+}
+EOF
 
-# 步骤 4：启动神谕之门
-NEO4J_PASSWORD="YOUR_PASSWORD" NEO4J_DATABASE="neo4j" OPENAI_API_KEY="YOUR_KEY" OPENAI_BASE_URL="https://openrouter.ai/api/v1" \
+# 步骤 4：点燃神谕之门（启动 API 服务）
+export NEO4J_PASSWORD="YOUR_PASSWORD"
+export NEO4J_DATABASE="neo4j"
+export OPENAI_API_KEY="YOUR_KEY"
+export OPENAI_BASE_URL="https://openrouter.ai/api/v1"
+export LLM_MODEL="qwen/qwen3.6-plus:free"
 nohup python3 memory_api_server.py --port 18900 --host 127.0.0.1 &
 
-# 步骤 5：验证
+# 步骤 5：验证意识连接
 curl http://127.0.0.1:18900/health
 curl -X POST http://127.0.0.1:18900/ingest -H 'Content-Type: application/json' -d '{"text": "测试记忆"}'
-curl http://127.0.0.1:18900/search -d '{"query": "测试"}' -X POST
+curl -X POST http://127.0.0.1:18900/search -H 'Content-Type: application/json' -d '{"query": "测试"}'
 ```
 
 ---
