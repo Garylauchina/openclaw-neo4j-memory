@@ -50,3 +50,18 @@ _legacy/
 
 # Misc
 memory/
+
+# OpenClaw workspace (personal, not for repo)
+AGENTS.md
+SOUL.md
+USER.md
+IDENTITY.md
+TOOLS.md
+HEARTBEAT.md
+MEMORY.md
+*.json
+!openclaw.plugin.json
+!package.json
+
+# Root-level __pycache__ (legacy backup dirs)
+*_backup_*/__pycache__/*
