@@ -1230,6 +1230,10 @@ class GraphStore:
         Returns:
             是否成功
         """
+        logger.info(
+            "Attempting to merge entities: %s (alias) -> %s (main)",
+            alias_eid, main_eid
+        )
         # 步骤 1：将 alias 的出边转移到 main
         transfer_out = """
         MATCH (alias:Entity)-[r:RELATES_TO]->(target:Entity)
@@ -1316,6 +1320,10 @@ class GraphStore:
                     alias_eid=alias_eid,
                     aliases=json.dumps(aliases, ensure_ascii=False),
                     extra_mentions=extra_mentions,
+                )
+                logger.info(
+                    "Successfully merged entity %s (alias) into %s (main), archived alias",
+                    alias_eid, main_eid
                 )
                 return True
         except Exception as e:
@@ -1492,6 +1500,54 @@ class GraphStore:
         """
         try:
             with self.driver.session(database=self._config.database) as session:
+                # 调试：先检查是否存在这样的边
+                check_query = """
+                MATCH (src:Entity {name: $source})-[r:RELATES_TO {relation_type: $old_type}]->(tgt:Entity {name: $target})
+                WHERE NOT src:Archived AND NOT tgt:Archived
+                RETURN elementId(r) AS eid, r.relation_type AS current_type
+                """
+                check_result = session.run(
+                    check_query,
+                    source=source_name,
+                    target=target_name,
+                    old_type=old_relation_type,
+                )
+                check_record = check_result.single()
+                if check_record:
+                    logger.info(
+                        "Found relation to relabel: %s->%s (eid=%s, current=%s)",
+                        source_name, target_name, check_record["eid"], check_record["current_type"]
+                    )
+                else:
+                    logger.warning(
+                        "No relation found to relabel: %s->%s with type=%s",
+                        source_name, target_name, old_relation_type
+                    )
+                    # 尝试不指定 relation_type 查找
+                    fallback_query = """
+                    MATCH (src:Entity {name: $source})-[r:RELATES_TO]->(tgt:Entity {name: $target})
+                    WHERE NOT src:Archived AND NOT tgt:Archived
+                    RETURN elementId(r) AS eid, r.relation_type AS current_type
+                    """
+                    fallback_result = session.run(
+                        fallback_query,
+                        source=source_name,
+                        target=target_name,
+                    )
+                    fallback_record = fallback_result.single()
+                    if fallback_record:
+                        logger.warning(
+                            "Found relation but with different type: %s->%s (current=%s)",
+                            source_name, target_name, fallback_record["current_type"]
+                        )
+                    else:
+                        logger.warning(
+                            "No relation found at all between %s and %s",
+                            source_name, target_name
+                        )
+                    return False
+                
+                # 执行更新
                 result = session.run(
                     query,
                     source=source_name,
@@ -1499,7 +1555,18 @@ class GraphStore:
                     old_type=old_relation_type,
                     new_type=new_relation_type,
                 )
-                return result.single() is not None
+                success = result.single() is not None
+                if success:
+                    logger.info(
+                        "Successfully relabeled relation: %s->%s from %s to %s",
+                        source_name, target_name, old_relation_type, new_relation_type
+                    )
+                else:
+                    logger.warning(
+                        "Update query returned no results for %s->%s",
+                        source_name, target_name
+                    )
+                return success
         except Exception as e:
             logger.error(
                 "Failed to update relation type %s->%s from %s to %s: %s",

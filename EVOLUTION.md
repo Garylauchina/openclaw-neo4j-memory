@@ -105,10 +105,21 @@
 ## 5. 正在进行的工作
 
 ### 🚧 当前焦点（2026-04-06）
-- **搜索优化** - 刚刚实现 META 节点过滤，搜索结果从 2004 字符降到 191 字符
-- **模型切换** - 将 kakamac-mini 的模型从 gemma4:26b 切换到 OpenRouter 免费模型
-- **配置清理** - 移除硬编码密码，修复 Control UI 模型显示问题
+- **冥思 execute 模式修复** - 正在诊断和修复 Step 3.1（同义词合并）和 Step 4.1（关系重标注）的 write bug
+- **搜索优化** - 已实现 META 节点过滤，搜索结果从 2004 字符降到 191 字符
+- **模型切换** - 已切换 kakamac-mini 的模型到 OpenRouter 免费模型
+- **配置清理** - 已移除硬编码密码，修复 Control UI 模型显示问题
 - **多 Agent 协作验证** - 成功让 kakamac-mini 的 AI 评审代码并发现真实 bug
+
+### 🔍 P0-1 诊断进展
+**Step 4.1（关系重标注）问题分析：**
+- `get_related_to_edges()` 用 `r.relation_type = "related_to"` 抓取边
+- `update_relation_type()` 用 `src:Entity {name: $source}-[r:RELATES_TO {relation_type: $old_type}]->tgt:Entity {name: $target}` 匹配
+- 潜在问题：节点名不匹配（编码、空格）、边不存在（Step 3.0 合并时转移）、dry-run 与 execute 边列表不一致
+
+**Step 3.1（同义词合并）问题分析：**
+- `merge_entity_nodes()` 逻辑：转移边 + 归档别名节点
+- 潜在问题：节点名变更导致后续查询失败、MERGE 去重丢失边
 
 ### 📋 待办事项（按优先级整合 P0-P2 建议）
 #### P0 - 高优先级
@@ -158,6 +169,12 @@
 **背景：** Claude 在 Issue 11 中指出"实体抽取质量是根源问题"，Issue 3 也报告了碎片实体污染  
 **决定：** 下一阶段优先在 ingest pipeline 增加停用词过滤和实体类型白名单  
 **理由：** 从源头减少噪声数据比事后冥思清理更高效，直接影响搜索召回质量
+
+### 决策 5：采用结构化工作流修复冥思 execute 模式 bug
+**日期：** 2026-04-06  
+**背景：** Issue 1 和 Issue 2 报告冥思流水线 Step 3.1 和 Step 4.1 在 dry-run 正常但 execute 不生效  
+**决定：** 按标准工作流推进：读代码 → 评估 → 更新文档 → 执行修复 → 验证结果  
+**理由：** 避免 ad-hoc 修复，确保每一步都有记录和验证，保持进化轨迹清晰
 
 ---
 
