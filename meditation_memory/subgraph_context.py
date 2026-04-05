@@ -395,6 +395,19 @@ class SubgraphContext:
         if not nodes and not edges:
             return ""
 
+        # 过滤噪声：META 元知识节点和占位符
+        nodes = [
+            n for n in nodes
+            if n.get("entity_type") != "meta_knowledge"
+            and not n.get("name", "").startswith("[META]")
+            and n.get("name", "")
+        ]
+        edges = [
+            e for e in edges
+            if "[META]" not in e.get("source", "")
+            and "[META]" not in e.get("target", "")
+        ]
+
         lines: List[str] = []
 
         # 格式化实体信息
