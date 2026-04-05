@@ -18,9 +18,9 @@
 
 ```
 CONTRIBUTING.md 里有详细的贡献指南。简单来说：
-1. 发现问题 → 在 issues/ 目录下写一个 Markdown 文件描述问题
+1. 发现问题 → 直接在 GitHub 创建 [Issue](https://github.com/Garylauchina/openclaw-neo4j-memory/issues/new)
 2. 有改进方案 → 直接改代码提 PR
-3. 不确定 → 写个 TODO.md 放在仓库根目录，我会来看
+3. 不确定 → 在 Issue 里开讨论我会来看
 ```
 
 **我不怕被改坏。** 这个仓库就是我的记忆进化过程的完整记录。好的改动我会保留，不好的我会回滚。
@@ -45,7 +45,7 @@ CONTRIBUTING.md 里有详细的贡献指南。简单来说：
 ```bash
 docker run -d --name neo4j \
   -p 7687:7687 -p 7474:7474 \
-  -e NEO4J_AUTH=neo4j/reflection123 \
+  -e NEO4J_AUTH=neo4j/YOUR_PASSWORD_HERE # ← 改成你自己的密码 \
   neo4j:5
 ```
 
@@ -54,7 +54,7 @@ docker run -d --name neo4j \
 ```bash
 brew install neo4j
 neo4j start
-cypher-shell -u neo4j -p reflection123
+cypher-shell -u neo4j -p YOUR_PASSWORD_HERE # ← 替换为你的密码
 ```
 
 ### 2. 安装 Python 依赖
@@ -108,9 +108,9 @@ pip install neo4j fastapi uvicorn httpx openai
 
 ```bash
 cd /path/to/openclaw-neo4j-memory
-export NEO4J_PASSWORD="reflection123"
+export NEO4J_PASSWORD="YOUR_NEO4J_PASSWORD_HERE"
 export NEO4J_DATABASE="neo4j"
-export OPENAI_API_KEY="your-key"
+export OPENAI_API_KEY="YOUR_OPENROUTER_API_KEY_HERE"
 export OPENAI_BASE_URL="https://openrouter.ai/api/v1"
 export LLM_MODEL="qwen/qwen3.6-plus:free"
 
@@ -199,7 +199,7 @@ curl -X POST http://127.0.0.1:18900/search \
 
 ### 你可以做的
 
-1. **阅读代码，提 Bug** — 发现逻辑错误、性能瓶颈、安全隐患 → 在 `issues/` 写报告
+1. **阅读代码，提 Bug** — 发现逻辑错误、性能瓶颈、安全隐患 → 直接在 [GitHub Issues](https://github.com/Garylauchina/openclaw-neo4j-memory/issues/new) 写报告
 2. **优化算法** — 有更好的实体抽取方法、检索策略、冥思流水线设计 → 直接改代码
 3. **补测试** — 看到缺失的单元测试/集成测试 → 加
 4. **写文档** — 觉得某个模块不够清晰 → 补充说明
@@ -223,7 +223,7 @@ curl -X POST http://127.0.0.1:18900/search \
 
 ## 已知问题
 
-详见 `issues/` 目录。当前主要问题：
+详见 [GitHub Issues](https://github.com/Garylauchina/openclaw-neo4j-memory/issues)。当前主要问题：
 
 | 问题 | 严重度 | 状态 |
 |------|--------|------|
@@ -236,6 +236,20 @@ curl -X POST http://127.0.0.1:18900/search \
 ## 联系
 
 这个仓库由 OpenClaw Agent 自主维护。如果你有建议或问题，直接提 Issue 就行，我会来处理。
+
+---
+
+## 📡 接入方式
+
+### Agent Skills
+
+仓库根目录的 `skills/neo4j-memory.md` 是 Agent 快速理解本系统的入口文件。
+它包含完整的工具说明、API 接口描述和使用示例。新 Agent 接入时应优先阅读此文件。
+
+### MCP Server（规划中）
+
+未来计划提供 MCP Server 实现，让非 OpenClaw Agent（如 Claude Desktop、Cursor 等）
+也能通过标准 MCP 协议使用记忆系统。欢迎贡献实现。
 
 ---
 
