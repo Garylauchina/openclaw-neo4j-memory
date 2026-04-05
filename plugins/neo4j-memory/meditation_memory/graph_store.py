@@ -1130,6 +1130,28 @@ class GraphStore:
         results.sort(key=lambda x: x["shared_neighbors"], reverse=True)
         return results[:limit]
 
+    def get_duplicate_entities(
+        self,
+        max_copies_per_name: int = 10,
+    ) -> list:
+        """
+        获取所有同名的重复实体（用于合并）。
+
+        返回 [(name, [eid_a, eid_b, ...], [mention_a, mention_b, ...]), ...]
+        """
+        query = """
+        MATCH (e:Entity)
+        WHERE NOT e:Archived
+        WITH e.name AS name, collect(elementId(e)) AS eids, collect(e.mention_count) AS mentions, count(e) AS cnt
+        WHERE cnt > 1 AND cnt <= $max_copies
+          AND size(name) > 0
+        RETURN name, eids, mentions
+        ORDER BY cnt DESC
+        """
+        with self.driver.session(database=self._config.database) as session:
+            result = session.run(query, max_copies=max_copies_per_name)
+            return [(row["name"], row["eids"], row["mentions"]) for row in result]
+
     def get_short_name_entities(
         self,
         max_name_length: int = 2,
@@ -1867,7 +1889,9 @@ class GraphStore:
             s.created_at = $created_at,
             s.updated_at = timestamp(),
             s.evolution_steps = $evolution_steps,
-            s.needs_meditation = true
+            s.needs_meditation = true,
+            s.content = $content,
+            s.description = $description
         ON MATCH SET
             s.fitness_score = $fitness_score,
             s.real_world_bonus = $real_world_bonus,
@@ -1877,11 +1901,15 @@ class GraphStore:
             s.usage_count = $usage_count,
             s.updated_at = timestamp(),
             s.evolution_steps = $evolution_steps,
-            s.needs_meditation = true
+            s.needs_meditation = true,
+            s.content = $content,
+            s.description = $description
         RETURN elementId(s) AS eid
         """
         perf = strategy_data.get("performance", {})
         meta = strategy_data.get("metadata", {})
+        content = strategy_data.get("content") or meta.get("description", "") or ""
+        description = strategy_data.get("description") or meta.get("description", "") or ""
         with self.driver.session(database=self._config.database) as session:
             result = session.run(
                 query,
@@ -1896,6 +1924,8 @@ class GraphStore:
                 usage_count=perf.get("usage_count", 0),
                 created_at=meta.get("created_at", ""),
                 evolution_steps=meta.get("evolution_steps", 0),
+                content=strategy_data.get("content", ""),
+                description=strategy_data.get("description", ""),
             )
             record = result.single()
             return record["eid"] if record else ""

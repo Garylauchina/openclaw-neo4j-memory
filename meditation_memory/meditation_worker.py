@@ -771,6 +771,22 @@ class MeditationEngine:
 
     async def _step_3_merging(self, result: MeditationRunResult, nodes: List[Dict[str, Any]]):
         """同义词合并、截断修复、元数据补充。"""
+        # 3.0 同名实体合并（Bug 修复：get_similar_entity_pairs 不查同名副本）
+        dupes = self.store.get_duplicate_entities(max_copies_per_name=10)
+        if dupes:
+            logger.info(f"Step 3.0: Found {len(dupes)} duplicate entity groups.")
+            for dup_name, eid_list, mention_counts in dupes:
+                if len(eid_list) < 2:
+                    continue
+                # 保留 mention_count 最高的作为主节点
+                main_idx = max(range(len(mention_counts)), key=lambda i: mention_counts[i] or 0)
+                main_eid = eid_list[main_idx]
+                for i, alias_eid in enumerate(eid_list):
+                    if i != main_idx and alias_eid != main_eid:
+                        if self.store.merge_entity_nodes(main_eid, alias_eid):
+                            result.entities_merged += 1
+            logger.info(f"Step 3.0 done: merged {result.entities_merged} duplicate entities.")
+
         # 3.1 同义词合并
         pairs = self.store.get_similar_entity_pairs(limit=100)
         logger.info(f"Step 3.1: Found {len(pairs)} candidate synonym pairs.")
@@ -1072,6 +1088,8 @@ class MeditationEngine:
                 "type": "distilled",
                 "uses_real_data": s.get("uses_real_data", False),
                 "fitness": s.get("expected_accuracy", 0.5),
+                "content": s.get("content", s.get("reasoning", "")),
+                "description": s.get("description", ""),
                 "performance": {
                     "avg_accuracy": s.get("expected_accuracy", 0.5),
                     "avg_success": 0.0,
