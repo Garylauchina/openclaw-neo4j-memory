@@ -197,7 +197,7 @@ async def health_check():
 
 @app.post("/ingest")
 async def ingest_memory(request: IngestRequest, background_tasks: BackgroundTasks):
-    """写入记忆"""
+    """写入记忆（带写入后验证）"""
     try:
         if request.async_mode:
             background_tasks.add_task(
@@ -208,6 +208,27 @@ async def ingest_memory(request: IngestRequest, background_tasks: BackgroundTask
         result = memory_system.ingest(request.text, use_llm=request.use_llm)
         result_dict = result.to_dict()
         result_dict["extraction_mode"] = result.extraction.extraction_mode
+        
+        # 写入后验证：立即检查新实体是否可查询
+        entities_written = result_dict.get("entities_written", 0)
+        if entities_written > 0:
+            import time
+            time.sleep(0.5)  # 等待事务提交
+            extract_result = result.extraction
+            verified = 0
+            for entity in extract_result.entities[:5]:  # 验证前5个
+                try:
+                    found = memory_system.store.search_entities(entity.name, limit=1)
+                    if found:
+                        verified += 1
+                except Exception:
+                    pass  # 单个验证失败不阻塞
+            result_dict["verified_count"] = verified
+            if verified < entities_written:
+                logger.warning(
+                    f"Ingest verification: expected {entities_written}, verified {verified}"
+                )
+        
         return {
             "status": "success",
             "data": result_dict,
@@ -222,7 +243,7 @@ async def search_memory(request: SearchRequest):
     """搜索记忆（升级版：同时返回策略推荐）"""
     try:
         # 1. 检索记忆上下文（保持原有逻辑）
-        context = memory_system.get_context(request.query, request.session_id)
+        context = memory_system.retrieve_context(request.query, request.session_id)
         context_dict = context.to_dict() if hasattr(context, "to_dict") else context
 
         # 2. 检索推荐策略（Phase 4 新增）
