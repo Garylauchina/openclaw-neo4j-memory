@@ -1,0 +1,62 @@
+{
+  "monitoring_start_time": "2026-03-27T01:18:25.185422",
+  "elapsed_seconds": 0.000394,
+  "strategy_status": {
+    "active_strategies": 5,
+    "eliminated_strategies": 2,
+    "total_strategies": 7
+  },
+  "elimination_history_summary": {
+    "total_eliminations": 2,
+    "elimination_actions": 2,
+    "recovery_actions": 0
+  },
+  "performance_tracking": {
+    "total_elimination_checks": 3,
+    "strategies_marked_for_elimination": 2,
+    "strategies_actually_eliminated": 0,
+    "strategies_recovered": 0,
+    "avg_time_to_elimination": 0.0
+  },
+  "current_strategies": [
+    {
+      "name": "reality_greedy_strategy",
+      "type": "api_based",
+      "fitness": 0.0,
+      "usage_count": 0,
+      "composite_score": 0.0
+    },
+    {
+      "name": "reality_trend_strategy",
+      "type": "api_based",
+      "fitness": 0.0,
+      "usage_count": 0,
+      "composite_score": 0.0
+    },
+    {
+      "name": "simulation_greedy_strategy",
+      "type": "heuristic",
+      "fitness": 0.7026084807026959,
+      "usage_count": 90,
+      "composite_score": 0.8215650884216175
+    },
+    {
+      "name": "simulation_trend_strategy",
+      "type": "heuristic",
+      "fitness": 0.0,
+      "usage_count": 0,
+      "composite_score": 0.0
+    },
+    {
+      "name": "hybrid_strategy",
+      "type": "api_based",
+      "fitness": 0.0,
+      "usage_count": 0,
+      "composite_score": 0.0
+    }
+  ],
+  "eliminated_strategies": [
+    "reality_greedy_strategy",
+    "reality_trend_strategy"
+  ]
+}

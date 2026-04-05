@@ -1,0 +1,165 @@
+{
+  "dashboard": {
+    "title": "AI冥思记忆系统监控仪表板",
+    "uid": "meditation-monitor",
+    "description": "冥思记忆系统实时监控仪表板",
+    "tags": ["meditation", "memory", "monitoring"],
+    "timezone": "browser",
+    "refresh": "30s",
+    "panels": [
+      {
+        "id": 1,
+        "title": "系统概览",
+        "type": "stat",
+        "gridPos": {"h": 4, "w": 6, "x": 0, "y": 0},
+        "targets": [
+          {
+            "expr": "up{job=\"meditation-service\"}",
+            "legendFormat": "服务状态"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "color": {"mode": "thresholds"},
+            "thresholds": {
+              "steps": [
+                {"color": "red", "value": null},
+                {"color": "green", "value": 1}
+              ]
+            },
+            "mappings": [
+              {"options": {"0": {"text": "离线"}}, "type": "value"},
+              {"options": {"1": {"text": "在线"}}, "type": "value"}
+            ]
+          }
+        }
+      },
+      {
+        "id": 2,
+        "title": "节点数量",
+        "type": "graph",
+        "gridPos": {"h": 8, "w": 12, "x": 6, "y": 0},
+        "targets": [
+          {
+            "expr": "meditation_graph_nodes",
+            "legendFormat": "图节点"
+          },
+          {
+            "expr": "meditation_graph_edges",
+            "legendFormat": "图边数"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "color": {"mode": "palette-classic"}
+          }
+        }
+      },
+      {
+        "id": 3,
+        "title": "优化效果",
+        "type": "gauge",
+        "gridPos": {"h": 8, "w": 6, "x": 0, "y": 4},
+        "targets": [
+          {
+            "expr": "meditation_optimization_rate",
+            "legendFormat": "优化率"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "min": 0,
+            "max": 1,
+            "unit": "percent",
+            "thresholds": {
+              "steps": [
+                {"color": "red", "value": 0},
+                {"color": "yellow", "value": 0.1},
+                {"color": "green", "value": 0.25}
+              ]
+            }
+          }
+        }
+      },
+      {
+        "id": 4,
+        "title": "冥思任务执行时间",
+        "type": "graph",
+        "gridPos": {"h": 8, "w": 12, "x": 6, "y": 8},
+        "targets": [
+          {
+            "expr": "rate(meditation_task_duration_seconds[5m])",
+            "legendFormat": "执行时间"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "s"
+          }
+        }
+      },
+      {
+        "id": 5,
+        "title": "系统资源使用",
+        "type": "graph",
+        "gridPos": {"h": 8, "w": 12, "x": 0, "y": 12},
+        "targets": [
+          {
+            "expr": "rate(process_cpu_seconds_total[5m]) * 100",
+            "legendFormat": "CPU使用率"
+          },
+          {
+            "expr": "(process_resident_memory_bytes / node_memory_MemAvailable_bytes) * 100",
+            "legendFormat": "内存使用率"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "percent"
+          }
+        }
+      },
+      {
+        "id": 6,
+        "title": "冥思规则执行统计",
+        "type": "bargauge",
+        "gridPos": {"h": 8, "w": 12, "x": 12, "y": 12},
+        "targets": [
+          {
+            "expr": "sum(meditation_rule_executions)",
+            "legendFormat": "总执行次数"
+          },
+          {
+            "expr": "sum(meditation_rule_successes)",
+            "legendFormat": "成功次数"
+          },
+          {
+            "expr": "sum(meditation_rule_failures)",
+            "legendFormat": "失败次数"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "short"
+          }
+        }
+      },
+      {
+        "id": 7,
+        "title": "告警统计",
+        "type": "table",
+        "gridPos": {"h": 8, "w": 24, "x": 0, "y": 20},
+        "targets": [
+          {
+            "expr": "ALERTS",
+            "format": "table"
+          }
+        ]
+      }
+    ],
+    "time": {
+      "from": "now-1h",
+      "to": "now"
+    }
+  }
+}

@@ -1,99 +1,52 @@
+# Python
 __pycache__/
-*.pyc
-*.pyo
-*.pyd
+*.py[cod]
+*$py.class
+*.so
+.Python
+*.egg-info/
+dist/
+build/
 .pytest_cache/
-*.egg-info/
-dist/
-build/
-.env
-
-# 插件不应跟踪 workspace 根目录文件
-AGENTS.md
-IDENTITY.md
-SOUL.md
-USER.md
-HEARTBEAT.md
-BOOTSTRAP.md
-memory/
-.openclaw/
-
-# 插件不应跟踪 skills 目录
-skills/
-
-# Python artifacts
-*.egg-info/
-dist/
-build/
-*.egg
-.mypy_cache/
 .ruff_cache/
 
-# Test scripts (generated during development)
-*_test*.py
-test_*.py
-run_*.py
-cleanup_*.py
-fix_*.py
-simple_*.py
-final_*.py
-integrated_*.py
-integrate_*.py
-real_*.py
-reflection_*.py
-debug_*.py
-elimination_*.py
-evaluation_*.py
-evolution_*.py
-consolidate_*.py
-activate_*.py
-active_*.py
-adaptive_*.py
-attention_*.py
-baseline_*.py
-belief_*.py
-call_log*.json
-config*.json
-startup*.py
-takeover*.md
-elimination_*.json
-consolidate_*.py
-evolution_*.py
-final_*.py
-fully_*.py
-global_*.py
-learning_*.py
-meditation_results/
-meditation_memory/meditation_evolution*.py
-memory_quality_score.py
-meta_learning*.py
-openclaw_cognitive_hook.py
-reinforcement_*.py
-rqs_system.py
-self_correcting_reasoner.py
-strategy_elimination_monitor.py
-strategy_evolution_dashboard.py
-strategy_reinforcement_system.py
-test_*.py
-world_interface/
-action_system/
-attention_layer/
-cognitive_adapter/
-cognitive_adapter_backup*/
-goal_system/
-planning_system/
-meditation-deployment/
+# Node modules
+node_modules/
+
+# Temp / backup
+.tmp_backup/
+.tmp_backup_all/
+*.bak
+*backup*
+*.log
+
+# Nested git repos (not our code)
 meditation-memory-system/
-neo4j-mcp-server/
-neo4j_mmeditation/
 iran-war-gh-pages/
 iran-war-report-pages/
+plugins/a2a-gateway/
+neo4j-mcp-server/
+
+# Unrelated projects
 iran_war_reports/
-golden_test_results/
+
+# Results / generated
 meditation_results/
+golden_test_results/
 evaluation_results/
 
-# Old backup dirs
-*_backup*/
-*_old*/
-backup_*/
+# Hybrid memory prototype (old prototype)
+hybrid_memory_prototype/
+
+# IDE
+.vscode/
+.idea/
+
+# Legacy code (historical, not in active use)
+_legacy/
+
+# OpenClaw managed files (not for repo)
+.openclaw/
+
+# Misc
+memory/

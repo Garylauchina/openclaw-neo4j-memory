@@ -1,0 +1,23 @@
+{
+  "name": "冥思记忆系统定时任务",
+  "schedule": {
+    "kind": "cron",
+    "expr": "0 2 * * *",
+    "tz": "Asia/Shanghai"
+  },
+  "payload": {
+    "kind": "agentTurn",
+    "message": "运行每日冥思优化任务。使用GNN增强模式，增量处理。完成后报告优化结果。",
+    "model": "zenmux/deepseek/deepseek-chat",
+    "thinking": "high",
+    "timeoutSeconds": 3600
+  },
+  "sessionTarget": "isolated",
+  "delivery": {
+    "mode": "announce",
+    "channel": "telegram",
+    "to": "5273762787",
+    "bestEffort": true
+  },
+  "enabled": true
+}

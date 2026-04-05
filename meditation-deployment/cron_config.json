@@ -1,0 +1,60 @@
+{
+  "schedules": {
+    "daily_meditation": {
+      "enabled": true,
+      "cron_expression": "0 2 * * *",
+      "description": "每日凌晨2点运行冥思优化",
+      "command": "python meditation_engine_with_gnn_fixed.py --mode daily --use-gnn --incremental",
+      "timeout_seconds": 3600,
+      "retry_count": 3,
+      "retry_delay_seconds": 300
+    },
+    "self_improving_sync": {
+      "enabled": true,
+      "cron_expression": "0 3 * * *",
+      "description": "每日凌晨3点同步self-improving记忆",
+      "command": "python meditation_self_integration.py --sync",
+      "timeout_seconds": 600,
+      "retry_count": 3,
+      "retry_delay_seconds": 60
+    },
+    "health_check": {
+      "enabled": true,
+      "cron_expression": "0 * * * *",
+      "description": "每小时运行健康检查",
+      "command": "curl -s http://meditation-service:8080/api/health",
+      "timeout_seconds": 30,
+      "retry_count": 1,
+      "retry_delay_seconds": 10
+    },
+    "backup": {
+      "enabled": true,
+      "cron_expression": "0 4 * * *",
+      "description": "每日凌晨4点备份数据",
+      "command": "tar -czf /data/backups/backup-$(date +%Y%m%d).tar.gz /data/models /data/state /data/results",
+      "timeout_seconds": 1800,
+      "retry_count": 2,
+      "retry_delay_seconds": 300
+    }
+  },
+  "notifications": {
+    "enabled": true,
+    "on_success": false,
+    "on_failure": true,
+    "channels": ["log", "email"],
+    "email_recipients": ["admin@example.com"],
+    "failure_threshold": 3
+  },
+  "logging": {
+    "level": "INFO",
+    "file_path": "/var/log/meditation/cron.log",
+    "max_size_mb": 100,
+    "backup_count": 10
+  },
+  "performance": {
+    "max_concurrent_jobs": 2,
+    "default_timeout_seconds": 3600,
+    "memory_limit_mb": 2048,
+    "cpu_limit": 2
+  }
+}

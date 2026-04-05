@@ -1,0 +1,45 @@
+{
+  "name": "@garylauchina/openclaw-neo4j-memory",
+  "version": "2.0.0",
+  "description": "Neo4j graph-based long-term memory plugin for OpenClaw (tools + hooks mode)",
+  "type": "module",
+  "main": "index.js",
+  "scripts": {
+    "build": "tsc",
+    "typecheck": "tsc --noEmit",
+    "start:api": "python3 memory_api_server.py"
+  },
+  "openclaw": {
+    "extensions": [
+      "./index.ts"
+    ],
+    "install": {
+      "npmSpec": "@garylauchina/openclaw-neo4j-memory",
+      "defaultChoice": "npm",
+      "minHostVersion": ">=2026.3.0"
+    },
+    "compat": {
+      "pluginApi": ">=2026.3.0",
+      "minGatewayVersion": "2026.3.0"
+    },
+    "release": {
+      "publishToNpm": false
+    }
+  },
+  "dependencies": {
+    "@sinclair/typebox": "^0.34.0"
+  },
+  "devDependencies": {
+    "typescript": "^5.5.0"
+  },
+  "keywords": [
+    "openclaw",
+    "plugin",
+    "memory",
+    "neo4j",
+    "graph",
+    "knowledge-graph"
+  ],
+  "author": "garylauchina",
+  "license": "MIT"
+}

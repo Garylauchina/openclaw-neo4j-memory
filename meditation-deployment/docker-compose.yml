@@ -1,0 +1,134 @@
+# AI冥思记忆系统 v2.0 - Docker Compose配置
+# 支持多服务部署
+
+version: '3.8'
+
+services:
+  # 主冥思服务
+  meditation-service:
+    build: .
+    container_name: meditation-memory-system
+    restart: unless-stopped
+    volumes:
+      - ./models:/data/models
+      - ./state:/data/state
+      - ./results:/data/results
+      - ./logs:/var/log/meditation
+    environment:
+      - ENVIRONMENT=production
+      - LOG_LEVEL=INFO
+      - MEDITATION_FREQUENCY=daily
+      - GNN_MODEL_PATH=/data/models/gnn_meditation_model.pth
+      - STATE_FILE=/data/state/meditation_state.json
+    ports:
+      - "8080:8080"
+    healthcheck:
+      test: ["CMD", "python", "-c", "import sys; sys.exit(0)"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    command: ["python", "meditation_engine_with_gnn_fixed.py", "--mode", "service"]
+
+  # Redis缓存服务（可选）
+  redis:
+    image: redis:7-alpine
+    container_name: meditation-redis
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis-data:/data
+    command: redis-server --appendonly yes
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+
+  # PostgreSQL数据库（可选）
+  postgres:
+    image: postgres:15-alpine
+    container_name: meditation-postgres
+    restart: unless-stopped
+    environment:
+      - POSTGRES_USER=meditation
+      - POSTGRES_PASSWORD=meditation_password
+      - POSTGRES_DB=meditation_db
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U meditation"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # 监控服务（Prometheus + Grafana）
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: meditation-prometheus
+    restart: unless-stopped
+    volumes:
+      - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml
+      - prometheus-data:/prometheus
+    ports:
+      - "9090:9090"
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--web.console.libraries=/etc/prometheus/console_libraries'
+      - '--web.console.templates=/etc/prometheus/consoles'
+      - '--storage.tsdb.retention.time=200h'
+      - '--web.enable-lifecycle'
+
+  grafana:
+    image: grafana/grafana:latest
+    container_name: meditation-grafana
+    restart: unless-stopped
+    environment:
+      - GF_SECURITY_ADMIN_PASSWORD=admin
+      - GF_USERS_ALLOW_SIGN_UP=false
+    volumes:
+      - grafana-data:/var/lib/grafana
+      - ./monitoring/grafana/dashboards:/etc/grafana/provisioning/dashboards
+      - ./monitoring/grafana/datasources:/etc/grafana/provisioning/datasources
+    ports:
+      - "3000:3000"
+    depends_on:
+      - prometheus
+
+  # 定时任务服务
+  scheduler:
+    build: .
+    container_name: meditation-scheduler
+    restart: unless-stopped
+    volumes:
+      - ./models:/data/models
+      - ./state:/data/state
+      - ./results:/data/results
+      - ./logs:/var/log/meditation
+    environment:
+      - ENVIRONMENT=production
+      - LOG_LEVEL=INFO
+      - MEDITATION_FREQUENCY=daily
+      - SCHEDULE_TIME=02:00
+    command: ["python", "scheduler_service.py", "--frequency", "daily", "--time", "02:00"]
+    depends_on:
+      - meditation-service
+
+volumes:
+  redis-data:
+    driver: local
+  postgres-data:
+    driver: local
+  prometheus-data:
+    driver: local
+  grafana-data:
+    driver: local
+
+networks:
+  default:
+    name: meditation-network
+    driver: bridge

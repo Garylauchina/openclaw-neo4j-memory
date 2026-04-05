@@ -772,7 +772,7 @@ class MeditationEngine:
     async def _step_3_merging(self, result: MeditationRunResult, nodes: List[Dict[str, Any]]):
         """同义词合并、截断修复、元数据补充。"""
         # 3.0 同名实体合并（Bug 修复：get_similar_entity_pairs 不查同名副本）
-        dupes = self.store.get_duplicate_entities(max_copies_per_name=10)
+        dupes = self.store.get_duplicate_entities(max_copies_per_name=50)
         if dupes:
             logger.info(f"Step 3.0: Found {len(dupes)} duplicate entity groups.")
             for dup_name, eid_list, mention_counts in dupes:

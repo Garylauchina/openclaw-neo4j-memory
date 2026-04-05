@@ -1,0 +1,84 @@
+{
+  "id": "neo4j-memory",
+  "name": "Neo4j Graph Memory",
+  "description": "Long-term memory backed by a Neo4j knowledge graph with auto-recall, auto-capture, and manual tools",
+  "version": "2.0.0",
+  "kind": "memory",
+  "uiHints": {
+    "apiHost": {
+      "label": "API Host",
+      "placeholder": "127.0.0.1",
+      "help": "Hostname of the memory_api_server.py process",
+      "advanced": true
+    },
+    "apiPort": {
+      "label": "API Port",
+      "placeholder": "18900",
+      "help": "Port of the memory_api_server.py process",
+      "advanced": true
+    },
+    "auto_ingest": {
+      "label": "Auto-Capture",
+      "help": "Automatically ingest conversation into the Neo4j graph after each turn"
+    },
+    "auto_search": {
+      "label": "Auto-Recall",
+      "help": "Automatically search the graph for relevant context before each turn"
+    },
+    "archive_on_compaction": {
+      "label": "Archive on Compaction",
+      "help": "Archive the full session to the graph before context compaction"
+    },
+    "use_llm_ingest": {
+      "label": "LLM Ingest",
+      "help": "Use LLM for higher-quality entity extraction during ingest (slower, higher cost)",
+      "advanced": true
+    },
+    "use_llm_search": {
+      "label": "LLM Search",
+      "help": "Use LLM for entity extraction during search queries (slower, higher cost)",
+      "advanced": true
+    }
+  },
+  "configSchema": {
+    "type": "object",
+    "additionalProperties": false,
+    "properties": {
+      "apiPort": {
+        "type": "number",
+        "default": 18900,
+        "description": "Port of the memory API server"
+      },
+      "apiHost": {
+        "type": "string",
+        "default": "127.0.0.1",
+        "description": "Host of the memory API server"
+      },
+      "auto_ingest": {
+        "type": "boolean",
+        "default": true,
+        "description": "Automatically ingest conversation into graph after each turn"
+      },
+      "auto_search": {
+        "type": "boolean",
+        "default": true,
+        "description": "Automatically search graph for context before each turn"
+      },
+      "archive_on_compaction": {
+        "type": "boolean",
+        "default": true,
+        "description": "Archive full session to graph before compaction"
+      },
+      "use_llm_ingest": {
+        "type": "boolean",
+        "default": false,
+        "description": "Use LLM for entity extraction during ingest"
+      },
+      "use_llm_search": {
+        "type": "boolean",
+        "default": false,
+        "description": "Use LLM for entity extraction during search"
+      }
+    }
+  }
+}

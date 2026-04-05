@@ -1,0 +1,122 @@
+groups:
+  - name: meditation_service_alerts
+    interval: 30s
+    rules:
+      # 服务宕机告警
+      - alert: MeditationServiceDown
+        expr: up{job="meditation-service"} == 0
+        for: 5m
+        labels:
+          severity: critical
+          component: meditation-service
+        annotations:
+          summary: "冥思服务宕机"
+          description: "冥思服务 {{ $labels.instance }} 已宕机超过5分钟"
+
+      # 服务响应时间过长
+      - alert: MeditationServiceSlowResponse
+        expr: http_request_duration_seconds{job="meditation-service"} > 10
+        for: 5m
+        labels:
+          severity: warning
+          component: meditation-service
+        annotations:
+          summary: "冥思服务响应时间过长"
+          description: "冥思服务 {{ $labels.instance }} 响应时间超过10秒"
+
+      # 冥思任务失败
+      - alert: MeditationTaskFailed
+        expr: meditation_task_success{job="scheduler"} == 0
+        for: 10m
+        labels:
+          severity: critical
+          component: scheduler
+        annotations:
+          summary: "冥思任务执行失败"
+          description: "冥思任务 {{ $labels.instance }} 执行失败"
+
+  - name: performance_alerts
+    interval: 1m
+    rules:
+      # CPU使用率过高
+      - alert: HighCPUUsage
+        expr: rate(process_cpu_seconds_total[5m]) * 100 > 80
+        for: 10m
+        labels:
+          severity: warning
+          component: system
+        annotations:
+          summary: "CPU使用率过高"
+          description: "{{ $labels.instance }} CPU使用率超过80%"
+
+      # 内存使用率过高
+      - alert: HighMemoryUsage
+        expr: (process_resident_memory_bytes / node_memory_MemAvailable_bytes) * 100 > 80
+        for: 10m
+        labels:
+          severity: warning
+          component: system
+        annotations:
+          summary: "内存使用率过高"
+          description: "{{ $labels.instance }} 内存使用率超过80%"
+
+      # 磁盘使用率过高
+      - alert: HighDiskUsage
+        expr: (node_filesystem_avail_bytes / node_filesystem_size_bytes) * 100 < 20
+        for: 10m
+        labels:
+          severity: warning
+          component: system
+        annotations:
+          summary: "磁盘使用率过高"
+          description: "{{ $labels.instance }} 磁盘使用率超过80%"
+
+  - name: data_quality_alerts
+    interval: 5m
+    rules:
+      # 图数据异常
+      - alert: GraphDataAnomaly
+        expr: meditation_graph_nodes{job="meditation-service"} < 10
+        for: 30m
+        labels:
+          severity: warning
+          component: data
+        annotations:
+          summary: "图数据节点数量异常"
+          description: "图数据节点数量 {{ $value }}，低于10个"
+
+      # 优化效果不佳
+      - alert: PoorOptimizationResult
+        expr: meditation_optimization_rate{job="scheduler"} < 0.1
+        for: 1h
+        labels:
+          severity: info
+          component: optimization
+        annotations:
+          summary: "优化效果不佳"
+          description: "冥思优化率 {{ $value | humanizePercentage }}，低于10%"
+
+  - name: backup_alerts
+    interval: 1h
+    rules:
+      # 备份失败
+      - alert: BackupFailed
+        expr: backup_success{job="scheduler"} == 0
+        for: 1h
+        labels:
+          severity: critical
+          component: backup
+        annotations:
+          summary: "备份任务失败"
+          description: "{{ $labels.instance }} 备份任务已失败超过1小时"
+
+      # 备份未完成
+      - alert: BackupNotCompleted
+        expr: time() - backup_last_success_timestamp{job="scheduler"} > 90000
+        for: 0s
+        labels:
+          severity: warning
+          component: backup
+        annotations:
+          summary: "备份未按时完成"
+          description: "{{ $labels.instance }} 备份已超过25小时未完成"
