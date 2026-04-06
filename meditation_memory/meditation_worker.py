@@ -778,8 +778,11 @@ class MeditationEngine:
             for dup_name, eid_list, mention_counts in dupes:
                 if len(eid_list) < 2:
                     continue
-                # 保留 mention_count 最高的作为主节点
-                main_idx = max(range(len(mention_counts)), key=lambda i: mention_counts[i] or 0)
+                # 保留 mention_count 最高的作为主节点（安全处理空列表）
+                if mention_counts and any(c is not None for c in mention_counts):
+                    main_idx = max(range(len(mention_counts)), key=lambda i: mention_counts[i] or 0)
+                else:
+                    main_idx = 0  # 回退：选第一个节点
                 main_eid = eid_list[main_idx]
                 for i, alias_eid in enumerate(eid_list):
                     if i != main_idx and alias_eid != main_eid:
