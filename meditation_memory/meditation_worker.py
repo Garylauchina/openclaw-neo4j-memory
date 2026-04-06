@@ -897,7 +897,8 @@ class MeditationEngine:
                         })
                     else:
                         if self.store.update_relation_type(
-                            edge["source_name"], edge["target_name"], "related_to", new_type
+                            edge["source_name"], edge["target_name"], "related_to", new_type,
+                            rel_element_id=edge.get("rel_element_id")
                         ):
                             result.relations_relabeled += 1
 

@@ -1474,6 +1474,7 @@ class GraphStore:
         target_name: str,
         old_relation_type: str,
         new_relation_type: str,
+        rel_element_id: Optional[str] = None,
     ) -> bool:
         """
         更新关系的 relation_type 属性。
@@ -1484,87 +1485,86 @@ class GraphStore:
             target_name: 目标实体名称
             old_relation_type: 旧关系类型
             new_relation_type: 新关系类型
+            rel_element_id: 【新参数】关系的 elementId（优先使用，避免 name 匹配失败）
 
         Returns:
             是否成功
         """
-        query = """
-        MATCH (src:Entity {name: $source})-[r:RELATES_TO {relation_type: $old_type}]->(tgt:Entity {name: $target})
-        WHERE NOT src:Archived AND NOT tgt:Archived
-        SET r.relation_type = $new_type,
-            r.original_relation_type = $old_type,
-            r.relabeled_by = "meditation",
-            r.relabeled_at = timestamp(),
-            r.updated_at = timestamp()
-        RETURN type(r) AS rel_type
-        """
         try:
             with self.driver.session(database=self._config.database) as session:
-                # 调试：先检查是否存在这样的边
-                check_query = """
-                MATCH (src:Entity {name: $source})-[r:RELATES_TO {relation_type: $old_type}]->(tgt:Entity {name: $target})
-                WHERE NOT src:Archived AND NOT tgt:Archived
-                RETURN elementId(r) AS eid, r.relation_type AS current_type
-                """
-                check_result = session.run(
-                    check_query,
-                    source=source_name,
-                    target=target_name,
-                    old_type=old_relation_type,
-                )
-                check_record = check_result.single()
-                if check_record:
-                    logger.info(
-                        "Found relation to relabel: %s->%s (eid=%s, current=%s)",
-                        source_name, target_name, check_record["eid"], check_record["current_type"]
+                if rel_element_id:
+                    # ★ 优先路径：用 elementId 精确匹配边
+                    query = """
+                    MATCH ()-[r:RELATES_TO]->()
+                    WHERE elementId(r) = $element_id
+                      AND r.relation_type = $old_type
+                    SET r.relation_type = $new_type,
+                        r.original_relation_type = $old_type,
+                        r.relabeled_by = "meditation",
+                        r.relabeled_at = timestamp(),
+                        r.updated_at = timestamp()
+                    RETURN type(r) AS rel_type
+                    """
+                    result = session.run(
+                        query,
+                        element_id=rel_element_id,
+                        old_type=old_relation_type,
+                        new_type=new_relation_type,
                     )
                 else:
-                    logger.warning(
-                        "No relation found to relabel: %s->%s with type=%s",
-                        source_name, target_name, old_relation_type
-                    )
-                    # 尝试不指定 relation_type 查找
-                    fallback_query = """
+                    # 回退路径：用 entity name 匹配（兼容旧调用）
+                    query = """
+                    MATCH (src:Entity {name: $source})-[r:RELATES_TO {relation_type: $old_type}]->(tgt:Entity {name: $target})
+                    WHERE NOT src:Archived AND NOT tgt:Archived
+                    SET r.relation_type = $new_type,
+                        r.original_relation_type = $old_type,
+                        r.relabeled_by = "meditation",
+                        r.relabeled_at = timestamp(),
+                        r.updated_at = timestamp()
+                    RETURN type(r) AS rel_type
+                    """
+                    # 先检查边是否存在
+                    check_query = """
                     MATCH (src:Entity {name: $source})-[r:RELATES_TO]->(tgt:Entity {name: $target})
                     WHERE NOT src:Archived AND NOT tgt:Archived
                     RETURN elementId(r) AS eid, r.relation_type AS current_type
                     """
-                    fallback_result = session.run(
-                        fallback_query,
-                        source=source_name,
-                        target=target_name,
-                    )
-                    fallback_record = fallback_result.single()
-                    if fallback_record:
-                        logger.warning(
-                            "Found relation but with different type: %s->%s (current=%s)",
-                            source_name, target_name, fallback_record["current_type"]
-                        )
+                    check_result = session.run(check_query, source=source_name, target=target_name)
+                    check_record = check_result.single()
+                    if check_record:
+                        if check_record["current_type"] != old_relation_type:
+                            logger.warning(
+                                "Relation type mismatch: %s->%s expected %s but has %s",
+                                source_name, target_name, old_relation_type, check_record["current_type"]
+                            )
+                            return False
                     else:
                         logger.warning(
-                            "No relation found at all between %s and %s",
+                            "No relation found to relabel: %s->%s",
                             source_name, target_name
                         )
-                    return False
-                
-                # 执行更新
-                result = session.run(
-                    query,
-                    source=source_name,
-                    target=target_name,
-                    old_type=old_relation_type,
-                    new_type=new_relation_type,
-                )
+                        return False
+
+                    result = session.run(
+                        query,
+                        source=source_name,
+                        target=target_name,
+                        old_type=old_relation_type,
+                        new_type=new_relation_type,
+                    )
+
                 success = result.single() is not None
                 if success:
                     logger.info(
-                        "Successfully relabeled relation: %s->%s from %s to %s",
-                        source_name, target_name, old_relation_type, new_relation_type
+                        "Successfully relabeled: %s->%s [%s→%s]%s",
+                        source_name, target_name, old_relation_type, new_relation_type,
+                        f" (id={rel_element_id})" if rel_element_id else ""
                     )
                 else:
                     logger.warning(
-                        "Update query returned no results for %s->%s",
-                        source_name, target_name
+                        "Relabel query matched nothing: %s->%s%s",
+                        source_name, target_name,
+                        f" (id={rel_element_id})" if rel_element_id else ""
                     )
                 return success
         except Exception as e:
