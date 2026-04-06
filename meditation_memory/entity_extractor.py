@@ -131,6 +131,64 @@ _STOP_WORDS = {
     "看到", "听到", "说", "讲", "告诉", "建议", "希望", "需要", "想", "要",
 }
 
+# 英文停用词（规则模式/回退模式）
+_EN_STOP_WORDS = {
+    "The", "This", "That", "What", "How", "Why", "When", "Where", "Who",
+    "Which", "And", "But", "For", "Not", "You", "Are", "Was", "Were",
+    "Has", "Have", "Had", "Can", "Could", "Will", "Would", "Should",
+    "May", "Might", "Just", "Also", "Very", "Only", "Some", "Any", "All",
+    "One", "Two", "Three", "First", "Second", "Third", "Many", "More",
+    "Such", "Own", "Same", "Other", "Another", "Each", "Every",
+}
+
+# 元数据标签前缀（如冥想生成的摘要节点）
+_META_PREFIXES = ["[META]", "[TAG]", "<META>", "<TAG>"]
+
+# 动词短语/句子碎片特征后缀（表示这不是一个完整实体）
+_VERB_PHRASE_ENDINGS = [
+    "导致", "导致价格", "导致数据", "导致系统",
+    "暴跌", "上涨", "下降", "上升", "增加", "减少",
+    "怎么做", "是什么", "为什么", "怎么办",
+    "依赖于", "取决于", "取决于系统",
+    "影响了", "改善了", "优化了", "提高了",
+    "进行了", "完成了", "开始了", "结束了",
+]
+
+# ========== 通用实体名称验证函数 ==========
+
+def _is_valid_name(name: str) -> bool:
+    """
+    统一的实体名称验证。
+    拦截以下噪声类型：
+    1. 纯符号/纯数字
+    2. [META]/[TAG] 元数据前缀
+    3. 动词短语/句子碎片
+    4. 停用词
+    5. 超出长度范围（< 2 或 > 30）
+    """
+    if not name:
+        return False
+    # 长度约束
+    if len(name) < 2 or len(name) > 30:
+        return False
+    # 纯符号/纯数字/纯空白
+    if re.match(r"^[^a-zA-Z\u4e00-\u9fff]+$", name):
+        return False
+    # 元数据标签
+    if any(name.startswith(p) for p in _META_PREFIXES):
+        return False
+    # 中文停用词
+    if name in _STOP_WORDS:
+        return False
+    # 英文停用词
+    if name in _EN_STOP_WORDS:
+        return False
+    # 动词短语后缀
+    if any(name.endswith(s) for s in _VERB_PHRASE_ENDINGS):
+        return False
+    return True
+
+
 _PERSON_INDICATORS = {"先生", "女士", "老师", "教授", "博士", "同学", "朋友", "总裁",
                       "经理", "院长", "主任", "总统", "主席", "部长", "将军", "医生"}
 _PLACE_INDICATORS = {"市", "省", "区", "县", "镇", "村", "路", "街", "国", "州",
@@ -270,9 +328,7 @@ class EntityExtractor:
             if not isinstance(e, dict) or "name" not in e:
                 continue
             name = e["name"].strip()
-            if len(name) < 2 or len(name) > 30:
-                continue
-            if name in _STOP_WORDS:
+            if not _is_valid_name(name):
                 continue
             entities.append(Entity(
                 name=name,
@@ -324,9 +380,7 @@ class EntityExtractor:
                 for word, pos in merged_words:
                     word = word.strip()
 
-                    if len(word) < 2:
-                        continue
-                    if word in _STOP_WORDS:
+                    if not _is_valid_name(word):
                         continue
                     if word in seen:
                         continue
@@ -372,13 +426,11 @@ class EntityExtractor:
             if len(entities) >= 20:
                 break
             ent = ent.strip()
-            if ent not in seen and len(ent) > 1 and ent not in {
-                "The", "This", "That", "What", "How", "Why", "When", "Where", "Who",
-                "Which", "And", "But", "For", "Not", "You", "Are", "Was", "Were",
-                "Has", "Have", "Had", "Can", "Could", "Will", "Would", "Should",
-                "May", "Might",
-            }:
-                seen.add(ent)
+            if ent in seen:
+                continue
+            if not _is_valid_name(ent):  # 统一验证
+                continue
+            seen.add(ent)
                 entities.append(Entity(
                     name=ent,
                     entity_type="concept",
