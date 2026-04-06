@@ -160,6 +160,7 @@ class FeedbackResponse(BaseModel):
     strategy_updated: bool
     rqs_updated: bool
     belief_updated: bool
+    feedback_stored: bool = False
     details: Dict[str, Any] = {}
 
 
@@ -513,9 +514,8 @@ async def process_feedback(request: FeedbackRequest):
         except Exception:
             pass
         
-        # 5. 保存增强反馈数据用于冥思进化分析（Phase 4.1）
+        # 5. 保存增强反馈数据到 Neo4j（Phase 4.1 冥思进化分析）
         try:
-            # 创建Feedback节点，包含所有增强字段
             feedback_data = {
                 "query": request.query,
                 "success": request.success,
@@ -528,24 +528,83 @@ async def process_feedback(request: FeedbackRequest):
                 "noise_entities": request.noise_entities or [],
                 "error_msg": request.error_msg,
                 "timestamp": time.time(),
-                "type": "Feedback"
             }
-            
-            # 使用现有的upsert_entity方法保存反馈
-            # 首先，需要导入Entity类或使用store的原始查询方法
-            # 简化：将反馈作为文本存储到图谱中，包含metadata
-            feedback_text = f"FEEDBACK: {request.query}|success:{request.success}|confidence:{request.confidence}|result_count:{request.result_count}"
-            feedback_metadata = json.dumps(feedback_data, ensure_ascii=False)
-            
-            # 使用memory_system.ingest存储，但需要扩展以处理metadata
-            # 暂时先记录日志
-            logger.info(f"Enhanced feedback data (not yet stored): {feedback_data}")
-            
-            # TODO: 实现反馈节点存储
-            # store.upsert_entity(Entity(name=feedback_text, type="Feedback", metadata=feedback_metadata))
-            
+
+            # 使用 store 的 Cypher 查询直接插入 Feedback 节点
+            feedback_node_query = """
+            MERGE (f:Feedback {query: $query, timestamp: $ts})
+            ON CREATE SET
+                f.success = $success,
+                f.confidence = $confidence,
+                f.applied_strategy_name = $strategy,
+                f.validation_status = $validation_status,
+                f.result_count = $result_count,
+                f.returned_entities = $returned_entities,
+                f.useful_entities = $useful_entities,
+                f.noise_entities = $noise_entities,
+                f.error_msg = $error_msg,
+                f.created_at = timestamp()
+            RETURN elementId(f) AS eid
+            """
+            record = None
+            with store.driver.session(database=store._config.database) as session:
+                result = session.run(
+                    feedback_node_query,
+                    query=request.query,
+                    ts=feedback_data["timestamp"],
+                    success=request.success,
+                    confidence=request.confidence,
+                    strategy=request.applied_strategy_name or "",
+                    validation_status=request.validation_status or "",
+                    result_count=feedback_data["result_count"],
+                    returned_entities=json.dumps(feedback_data["returned_entities"], ensure_ascii=False),
+                    useful_entities=json.dumps(feedback_data["useful_entities"], ensure_ascii=False),
+                    noise_entities=json.dumps(feedback_data["noise_entities"], ensure_ascii=False),
+                    error_msg=request.error_msg or "",
+                )
+                record = result.single()
+                if record:
+                    logger.info("Enhanced feedback stored: id=%s, query='%s', success=%s",
+                                record["eid"], request.query, request.success)
+
+            # 如果有使用的策略，建立 Feedback → Strategy 的关系
+            if request.applied_strategy_name:
+                link_query = """
+                MATCH (f:Feedback {query: $query, timestamp: $ts})
+                MATCH (s:Strategy {name: $strategy_name})
+                MERGE (f)-[:FEEDBACK_FOR]->(s)
+                """
+                with store.driver.session(database=store._config.database) as session:
+                    session.run(
+                        link_query,
+                        query=request.query,
+                        ts=feedback_data["timestamp"],
+                        strategy_name=request.applied_strategy_name,
+                    )
+
+            # 如果有噪音实体，建立 Feedback → Entity 的关系
+            if request.noise_entities:
+                noise_link_query = """
+                MATCH (f:Feedback {query: $query, timestamp: $ts})
+                MATCH (e:Entity {name: $entity_name})
+                WHERE NOT e:Archived
+                MERGE (f)-[:NOISE_ENTITY]->(e)
+                """
+                with store.driver.session(database=store._config.database) as session:
+                    for noise_entity in feedback_data["noise_entities"][:10]:  # 最多关联 10 个
+                        session.run(
+                            noise_link_query,
+                            query=request.query,
+                            ts=feedback_data["timestamp"],
+                            entity_name=noise_entity,
+                        )
+
+            result["feedback_stored"] = True
+            result["details"]["feedback_node_id"] = record["eid"] if record else None
+
         except Exception as e:
             logger.warning(f"Failed to save enhanced feedback: {e}")
+            result["feedback_stored"] = False
 
         return FeedbackResponse(status="success", **result)
 

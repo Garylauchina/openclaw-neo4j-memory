@@ -189,6 +189,9 @@ class GraphStore:
             "CREATE INDEX belief_content_idx IF NOT EXISTS FOR (b:Belief) ON (b.content)",
             # Phase 3: 因果链索引
             "CREATE INDEX causal_chain_id_idx IF NOT EXISTS FOR (c:CausalChain) ON (c.chain_id)",
+            # Phase 4: 反馈节点索引
+            "CREATE INDEX feedback_query_ts_idx IF NOT EXISTS FOR (f:Feedback) ON (f.query, f.timestamp)",
+            "CREATE INDEX feedback_success_idx IF NOT EXISTS FOR (f:Feedback) ON (f.success)",
         ]
         with self.driver.session(database=self._config.database) as session:
             for query in queries:
@@ -1230,6 +1233,10 @@ class GraphStore:
         Returns:
             是否成功
         """
+        logger.info(
+            "Attempting to merge entities: %s (alias) -> %s (main)",
+            alias_eid, main_eid
+        )
         # 步骤 1：将 alias 的出边转移到 main
         transfer_out = """
         MATCH (alias:Entity)-[r:RELATES_TO]->(target:Entity)
@@ -1316,6 +1323,10 @@ class GraphStore:
                     alias_eid=alias_eid,
                     aliases=json.dumps(aliases, ensure_ascii=False),
                     extra_mentions=extra_mentions,
+                )
+                logger.info(
+                    "Successfully merged entity %s (alias) into %s (main), archived alias",
+                    alias_eid, main_eid
                 )
                 return True
         except Exception as e:
@@ -1466,6 +1477,7 @@ class GraphStore:
         target_name: str,
         old_relation_type: str,
         new_relation_type: str,
+        rel_element_id: Optional[str] = None,
     ) -> bool:
         """
         更新关系的 relation_type 属性。
@@ -1476,30 +1488,88 @@ class GraphStore:
             target_name: 目标实体名称
             old_relation_type: 旧关系类型
             new_relation_type: 新关系类型
+            rel_element_id: 【新参数】关系的 elementId（优先使用，避免 name 匹配失败）
 
         Returns:
             是否成功
         """
-        query = """
-        MATCH (src:Entity {name: $source})-[r:RELATES_TO {relation_type: $old_type}]->(tgt:Entity {name: $target})
-        WHERE NOT src:Archived AND NOT tgt:Archived
-        SET r.relation_type = $new_type,
-            r.original_relation_type = $old_type,
-            r.relabeled_by = "meditation",
-            r.relabeled_at = timestamp(),
-            r.updated_at = timestamp()
-        RETURN type(r) AS rel_type
-        """
         try:
             with self.driver.session(database=self._config.database) as session:
-                result = session.run(
-                    query,
-                    source=source_name,
-                    target=target_name,
-                    old_type=old_relation_type,
-                    new_type=new_relation_type,
-                )
-                return result.single() is not None
+                if rel_element_id:
+                    # ★ 优先路径：用 elementId 精确匹配边
+                    query = """
+                    MATCH ()-[r:RELATES_TO]->()
+                    WHERE elementId(r) = $element_id
+                      AND r.relation_type = $old_type
+                    SET r.relation_type = $new_type,
+                        r.original_relation_type = $old_type,
+                        r.relabeled_by = "meditation",
+                        r.relabeled_at = timestamp(),
+                        r.updated_at = timestamp()
+                    RETURN type(r) AS rel_type
+                    """
+                    result = session.run(
+                        query,
+                        element_id=rel_element_id,
+                        old_type=old_relation_type,
+                        new_type=new_relation_type,
+                    )
+                else:
+                    # 回退路径：用 entity name 匹配（兼容旧调用）
+                    query = """
+                    MATCH (src:Entity {name: $source})-[r:RELATES_TO {relation_type: $old_type}]->(tgt:Entity {name: $target})
+                    WHERE NOT src:Archived AND NOT tgt:Archived
+                    SET r.relation_type = $new_type,
+                        r.original_relation_type = $old_type,
+                        r.relabeled_by = "meditation",
+                        r.relabeled_at = timestamp(),
+                        r.updated_at = timestamp()
+                    RETURN type(r) AS rel_type
+                    """
+                    # 先检查边是否存在
+                    check_query = """
+                    MATCH (src:Entity {name: $source})-[r:RELATES_TO]->(tgt:Entity {name: $target})
+                    WHERE NOT src:Archived AND NOT tgt:Archived
+                    RETURN elementId(r) AS eid, r.relation_type AS current_type
+                    """
+                    check_result = session.run(check_query, source=source_name, target=target_name)
+                    check_record = check_result.single()
+                    if check_record:
+                        if check_record["current_type"] != old_relation_type:
+                            logger.warning(
+                                "Relation type mismatch: %s->%s expected %s but has %s",
+                                source_name, target_name, old_relation_type, check_record["current_type"]
+                            )
+                            return False
+                    else:
+                        logger.warning(
+                            "No relation found to relabel: %s->%s",
+                            source_name, target_name
+                        )
+                        return False
+
+                    result = session.run(
+                        query,
+                        source=source_name,
+                        target=target_name,
+                        old_type=old_relation_type,
+                        new_type=new_relation_type,
+                    )
+
+                success = result.single() is not None
+                if success:
+                    logger.info(
+                        "Successfully relabeled: %s->%s [%s→%s]%s",
+                        source_name, target_name, old_relation_type, new_relation_type,
+                        f" (id={rel_element_id})" if rel_element_id else ""
+                    )
+                else:
+                    logger.warning(
+                        "Relabel query matched nothing: %s->%s%s",
+                        source_name, target_name,
+                        f" (id={rel_element_id})" if rel_element_id else ""
+                    )
+                return success
         except Exception as e:
             logger.error(
                 "Failed to update relation type %s->%s from %s to %s: %s",
@@ -1825,6 +1895,48 @@ class GraphStore:
                     "new_edges": record["new_edges"] or 0,
                 }
             return {"new_nodes": 0, "new_edges": 0}
+
+    def get_feedback_stats(self) -> Dict[str, Any]:
+        """获取反馈节点统计信息（用于冥思进化分析）。"""
+        query = """
+        OPTIONAL MATCH (f:Feedback)
+        WITH count(f) AS total_count
+        OPTIONAL MATCH (f:Feedback {success: true})
+        WITH total_count, count(f) AS success_count
+        OPTIONAL MATCH (f:Feedback {success: false})
+        WITH total_count, success_count, count(f) AS failure_count
+        RETURN total_count, success_count, failure_count
+        """
+        with self.driver.session(database=self._config.database) as session:
+            result = session.run(query)
+            record = result.single()
+            if record:
+                return {
+                    "total_feedback": record["total_count"] or 0,
+                    "successful": record["success_count"] or 0,
+                    "failed": record["failure_count"] or 0,
+                }
+            return {"total_feedback": 0, "successful": 0, "failed": 0}
+
+    def get_feedback_trends(self, limit: int = 50) -> List[Dict[str, Any]]:
+        """获取反馈趋势（按时间排序），用于冥思分析。"""
+        query = """
+        MATCH (f:Feedback)
+        RETURN f.query AS query,
+               f.success AS success,
+               f.confidence AS confidence,
+               f.applied_strategy_name AS strategy,
+               f.validation_status AS validation_status,
+               f.result_count AS result_count,
+               f.noise_entities AS noise_entities,
+               f.timestamp AS timestamp,
+               f.error_msg AS error_msg
+        ORDER BY f.timestamp DESC
+        LIMIT $limit
+        """
+        with self.driver.session(database=self._config.database) as session:
+            result = session.run(query, limit=limit)
+            return [dict(record) for record in result]
 
     def get_meditation_stats(self) -> Dict[str, Any]:
         """获取冥思相关的统计信息。"""

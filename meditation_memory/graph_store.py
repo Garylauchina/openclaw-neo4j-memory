@@ -189,6 +189,9 @@ class GraphStore:
             "CREATE INDEX belief_content_idx IF NOT EXISTS FOR (b:Belief) ON (b.content)",
             # Phase 3: 因果链索引
             "CREATE INDEX causal_chain_id_idx IF NOT EXISTS FOR (c:CausalChain) ON (c.chain_id)",
+            # Phase 4: 反馈节点索引
+            "CREATE INDEX feedback_query_ts_idx IF NOT EXISTS FOR (f:Feedback) ON (f.query, f.timestamp)",
+            "CREATE INDEX feedback_success_idx IF NOT EXISTS FOR (f:Feedback) ON (f.success)",
         ]
         with self.driver.session(database=self._config.database) as session:
             for query in queries:
@@ -1892,6 +1895,48 @@ class GraphStore:
                     "new_edges": record["new_edges"] or 0,
                 }
             return {"new_nodes": 0, "new_edges": 0}
+
+    def get_feedback_stats(self) -> Dict[str, Any]:
+        """获取反馈节点统计信息（用于冥思进化分析）。"""
+        query = """
+        OPTIONAL MATCH (f:Feedback)
+        WITH count(f) AS total_count
+        OPTIONAL MATCH (f:Feedback {success: true})
+        WITH total_count, count(f) AS success_count
+        OPTIONAL MATCH (f:Feedback {success: false})
+        WITH total_count, success_count, count(f) AS failure_count
+        RETURN total_count, success_count, failure_count
+        """
+        with self.driver.session(database=self._config.database) as session:
+            result = session.run(query)
+            record = result.single()
+            if record:
+                return {
+                    "total_feedback": record["total_count"] or 0,
+                    "successful": record["success_count"] or 0,
+                    "failed": record["failure_count"] or 0,
+                }
+            return {"total_feedback": 0, "successful": 0, "failed": 0}
+
+    def get_feedback_trends(self, limit: int = 50) -> List[Dict[str, Any]]:
+        """获取反馈趋势（按时间排序），用于冥思分析。"""
+        query = """
+        MATCH (f:Feedback)
+        RETURN f.query AS query,
+               f.success AS success,
+               f.confidence AS confidence,
+               f.applied_strategy_name AS strategy,
+               f.validation_status AS validation_status,
+               f.result_count AS result_count,
+               f.noise_entities AS noise_entities,
+               f.timestamp AS timestamp,
+               f.error_msg AS error_msg
+        ORDER BY f.timestamp DESC
+        LIMIT $limit
+        """
+        with self.driver.session(database=self._config.database) as session:
+            result = session.run(query, limit=limit)
+            return [dict(record) for record in result]
 
     def get_meditation_stats(self) -> Dict[str, Any]:
         """获取冥思相关的统计信息。"""
