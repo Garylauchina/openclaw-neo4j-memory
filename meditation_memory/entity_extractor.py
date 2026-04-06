@@ -431,11 +431,11 @@ class EntityExtractor:
             if not _is_valid_name(ent):  # 统一验证
                 continue
             seen.add(ent)
-                entities.append(Entity(
-                    name=ent,
-                    entity_type="concept",
-                    properties={"extraction_mode": "rules"},
-                ))
+            entities.append(Entity(
+                name=ent,
+                entity_type="concept",
+                properties={"extraction_mode": "rules"},
+            ))
 
         return ExtractionResult(
             entities=entities,
