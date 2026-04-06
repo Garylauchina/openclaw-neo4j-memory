@@ -533,7 +533,7 @@ async def process_feedback(request: FeedbackRequest):
 
             # 使用 store 的 Cypher 查询直接插入 Feedback 节点
             feedback_node_query = """
-            MERGE (f:Feedback {query: $query, timestamp: $ts})
+            MERGE (f:Feedback {query: $fquery, timestamp: $ts})
             ON CREATE SET
                 f.success = $success,
                 f.confidence = $confidence,
@@ -551,7 +551,7 @@ async def process_feedback(request: FeedbackRequest):
             with store.driver.session(database=store._config.database) as session:
                 neo4j_result = session.run(
                     feedback_node_query,
-                    query=request.query,
+                    fquery=request.query,
                     ts=feedback_data["timestamp"],
                     success=request.success,
                     confidence=request.confidence,
@@ -571,14 +571,14 @@ async def process_feedback(request: FeedbackRequest):
             # 如果有使用的策略，建立 Feedback → Strategy 的关系
             if request.applied_strategy_name:
                 link_query = """
-                MATCH (f:Feedback {query: $query, timestamp: $ts})
+                MATCH (f:Feedback {query: $fquery, timestamp: $ts})
                 MATCH (s:Strategy {name: $strategy_name})
                 MERGE (f)-[:FEEDBACK_FOR]->(s)
                 """
                 with store.driver.session(database=store._config.database) as session:
                     session.run(
                         link_query,
-                        query=request.query,
+                        fquery=request.query,
                         ts=feedback_data["timestamp"],
                         strategy_name=request.applied_strategy_name,
                     )
@@ -586,7 +586,7 @@ async def process_feedback(request: FeedbackRequest):
             # 如果有噪音实体，建立 Feedback → Entity 的关系
             if request.noise_entities:
                 noise_link_query = """
-                MATCH (f:Feedback {query: $query, timestamp: $ts})
+                MATCH (f:Feedback {query: $fquery, timestamp: $ts})
                 MATCH (e:Entity {name: $entity_name})
                 WHERE NOT e:Archived
                 MERGE (f)-[:NOISE_ENTITY]->(e)
@@ -595,7 +595,7 @@ async def process_feedback(request: FeedbackRequest):
                     for noise_entity in feedback_data["noise_entities"][:10]:  # 最多关联 10 个
                         session.run(
                             noise_link_query,
-                            query=request.query,
+                            fquery=request.query,
                             ts=feedback_data["timestamp"],
                             entity_name=noise_entity,
                         )
