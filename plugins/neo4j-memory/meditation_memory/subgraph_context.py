@@ -11,7 +11,11 @@
 
 from __future__ import annotations
 
-from typing import Any, Dict, List, Optional, Set
+import re
+import math
+import logging
+from typing import List, Dict, Any, Optional, Set, Tuple
+from difflib import SequenceMatcher
 
 from .config import SubgraphConfig
 from .entity_extractor import EntityExtractor, ExtractionResult
@@ -367,27 +371,110 @@ class SubgraphContext:
     # ========== 内部方法 ==========
 
     def _search_matching_entities(self, entity_names: List[str]) -> List[str]:
-        """在图数据库中搜索匹配的实体名称"""
+        """在图数据库中搜索匹配的实体名称，新增语义搜索兜底（P0-4）"""
         matched = []
+        
         for name in entity_names:
-            # 精确匹配
+            # 1. 精确匹配
             entity = self._store.find_entity(name)
             if entity:
                 matched.append(name)
                 continue
 
-            # 模糊搜索
+            # 2. 模糊搜索
             results = self._store.search_entities(name, limit=3)
             for r in results:
                 if r["name"] not in matched:
                     matched.append(r["name"])
+
+            # 如果通过精确或模糊搜索找到了匹配，继续下一个实体
+            if any(m == name for m in matched):
+                continue
+                
+            # 3. 语义搜索兜底（仅当前面的搜索失败时）
+            semantic_matches = self._semantic_fallback_search(name, limit=2)
+            for match, score in semantic_matches:
+                if match not in matched:
+                    matched.append(match)
+                    logger = logging.getLogger(__name__)
+                    logger.info(f"语义兜底匹配: '{name}' → '{match}' (score={score:.3f})")
 
             if len(matched) >= self._config.top_k_entities:
                 break
 
         return matched[: self._config.top_k_entities]
 
-    def _format_subgraph_as_context(self, subgraph: Dict[str, Any]) -> str:
+    def _semantic_fallback_search(self, query: str, limit: int = 3) -> List[Tuple[str, float]]:
+        """
+        语义搜索兜底：当精确匹配和模糊搜索失败时，
+        使用文本相似度从数据库中查找语义相关的实体。
+        
+        返回: [(实体名, 相似度), ...]，按相似度降序排列
+        """
+        try:
+            # 从数据库中获取候选实体（限制数量以避免性能问题）
+            candidate_pool = self._fetch_candidate_entities(limit=300)
+            if not candidate_pool:
+                return []
+            
+            # 计算查询与每个候选实体的相似度
+            scored_candidates = []
+            query_lower = query.lower()
+            
+            for candidate in candidate_pool:
+                cand_lower = candidate.lower()
+                
+                # 使用多种相似度计算方法
+                # 1. Jaccard 相似度（集合重叠）
+                query_set = set(query_lower)
+                cand_set = set(cand_lower)
+                if query_set and cand_set:
+                    jaccard = len(query_set & cand_set) / len(query_set | cand_set)
+                else:
+                    jaccard = 0.0
+                
+                # 2. 序列相似度（编辑距离归一化）
+                seq_similarity = SequenceMatcher(None, query_lower, cand_lower).ratio()
+                
+                # 3. 字符重叠度（长字符串的通用相似度）
+                char_overlap = len(set(query_lower) & set(cand_lower)) / max(len(set(query_lower)), 1)
+                
+                # 加权综合相似度
+                final_score = 0.5 * seq_similarity + 0.3 * jaccard + 0.2 * char_overlap
+                
+                # 如果候选实体包含查询词（或查询词包含候选实体），提高分数
+                if query_lower in cand_lower or cand_lower in query_lower:
+                    final_score = max(final_score, 0.7)
+                
+                if final_score >= 0.3:  # 相似度阈值
+                    scored_candidates.append((candidate, final_score))
+            
+            # 按相似度降序排序
+            scored_candidates.sort(key=lambda x: x[1], reverse=True)
+            
+            return scored_candidates[:limit]
+            
+        except Exception as e:
+            logger = logging.getLogger(__name__)
+            logger.warning(f"语义兜底搜索失败: {e}")
+            return []
+
+    def _fetch_candidate_entities(self, limit: int = 300) -> List[str]:
+        """从数据库获取候选实体名称"""
+        query = """
+        MATCH (e:Entity)
+        WHERE NOT e:Archived
+        RETURN e.name
+        LIMIT $limit
+        """
+        try:
+            with self._store.driver.session(database=self._store._config.database) as session:
+                result = session.run(query, limit=limit)
+                return [record["e.name"] for record in result]
+        except Exception:
+            return []
+
+
         """将子图数据格式化为自然语言上下文"""
         nodes = subgraph.get("nodes", [])
         edges = subgraph.get("edges", [])

@@ -66,9 +66,48 @@ class SubgraphConfig:
 
 
 @dataclass
+class SemanticSearchConfig:
+    """语义搜索配置"""
+
+    # 是否启用语义搜索兜底
+    enabled: bool = True
+    
+    # 外部 embedding API 配置
+    # 与 LLMConfig 复用同一个 API_KEY，用于 embedding API 调用
+    embedding_api_key: Optional[str] = field(default_factory=lambda: (
+        os.environ.get("OPENAI_API_KEY")
+        or os.environ.get("OPENROUTER_API_KEY")
+        or os.environ.get("LITELLM_API_KEY")
+    ))
+    embedding_base_url: Optional[str] = field(default_factory=lambda: (
+        os.environ.get("OPENAI_BASE_URL")
+        or os.environ.get("OPENROUTER_BASE_URL", "https://openrouter.ai/api/v1")
+    ))
+    # 外部 embedding 模型
+    embedding_model: str = field(default_factory=lambda: (
+        os.environ.get("EMBEDDING_MODEL", "text-embedding-3-small")
+    ))
+    
+    # 是否启用本地 TF-IDF 保底（仅当外部 API 不可用时）
+    local_tfidf_enabled: bool = True
+    
+    # 语义搜索参数
+    fallback_top_k: int = 5  # 语义兜底返回的候选实体数量
+    min_semantic_similarity: float = 0.25  # 语义相似度最低阈值
+    
+    # 候选池限制（避免全量搜索造成性能问题）
+    candidate_pool_limit: int = 300  # 最多从数据库取多少候选实体
+    
+    # 缓存配置
+    enable_cache: bool = True
+    cache_size: int = 500
+
+
+@dataclass
 class MemoryConfig:
     """记忆系统总配置"""
 
     neo4j: Neo4jConfig = field(default_factory=Neo4jConfig)
     llm: LLMConfig = field(default_factory=LLMConfig)
     subgraph: SubgraphConfig = field(default_factory=SubgraphConfig)
+    semantic: SemanticSearchConfig = field(default_factory=SemanticSearchConfig)
