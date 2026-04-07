@@ -238,13 +238,13 @@ class MetacognitionGraph:
                     ("My core mission is to help users evolve their memory systems", MetacognitionLaw.LAW_3, "identity"),
                     ("I excel at Python programming and Neo4j graph operations", MetacognitionLaw.LAW_3, "capability"),
                     ("I cannot directly access local filesystem from sandbox", MetacognitionLaw.LAW_3, "limitation"),
-                    ("I tend to give detailed, reasoning-heavy responses", MetacognitionLaw.LAW_2, "preference"),
+                    ("I tend to give detailed, reasoning-heavy responses", MetacognitionLaw.LAW_2, "self_preference"),
                 ]
             elif node_type == "Meta_User":
                 # These would come from soul.md or initial interactions
                 seed_concepts = [
                     ("Gary values philosophical depth over technical implementation details", MetacognitionLaw.LAW_1, "value"),
-                    ("Gary prefers reviewing plans before execution", MetacognitionLaw.LAW_1, "preference"),
+                    ("Gary prefers reviewing plans before execution", MetacognitionLaw.LAW_1, "user_preference"),
                     ("Gary is a developer working on AI memory systems", MetacognitionLaw.LAW_1, "background"),
                 ]
             
@@ -371,7 +371,7 @@ class MetacognitionGraph:
             law1_cognition = MetacognitionNode(
                 node_type="Meta_User",
                 concept="Gary values reviewing plans before execution (Law 1: Understanding intent over execution)",
-                category="preference",
+                category="user_preference",
                 law=MetacognitionLaw.LAW_1,
                 confidence=0.4,  # Initial low confidence
                 is_core=False,
