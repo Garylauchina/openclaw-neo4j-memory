@@ -100,7 +100,89 @@ This protocol would be to Agent experience what HTTP is to web content, or what 
 
 ---
 
-## 6. Intergenerational Agent Evolution
+## 6. Biological Metaphor: Protein Folding and Neural Signaling
+
+The architecture described above has deep parallels with biological systems, and these parallels can directly guide algorithm design.
+
+### Meditation as Protein Folding
+
+Raw memories are like a linear amino acid sequence — events, conversations, and knowledge fragments arranged chronologically. Meditation "folds" this linear sequence into a functional three-dimensional structure: the knowledge graph.
+
+Protein folding is governed by **thermodynamic energy minimization** — the final folded state is the most stable configuration. Meditation should follow the same principle:
+
+- High-confidence nodes forming strong connections → lowers energy
+- Contradictory cognitions being identified and resolved → lowers energy
+- Redundant nodes being merged → lowers energy
+- Isolated, unconnected fragments being pruned → lowers energy
+
+The **Three Laws serve as molecular chaperones** — they do not participate in the folding process directly, but provide constraints and direction, preventing misfolding (incorrect cognitive structures, analogous to prion proteins). Meditation without the Three Laws risks producing "misfolded" cognitions.
+
+Role transformation through seed cognition adjustment corresponds precisely to **protein denaturation and renaturation**: change the environmental conditions (seed cognitions), the protein unfolds (old derived cognitions decay), then refolds under new conditions (meditation reconstruction), forming an entirely new functional configuration.
+
+### Experience Nodes as Neurons, Graph Protocol as Neurotransmitters
+
+In the distributed experience sharing network, each Agent is a **neuron** with its own memory and cognitive state. The Universal Graph Protocol is the **neurotransmitter** — carrying structured signals between neurons.
+
+Key biological properties that should inform protocol design:
+
+- **Minimal signal**: A neurotransmitter carries a simple signal (excite/inhibit, strong/weak), not the neuron's entire state. Experience exchange should similarly transmit compressed, filtered cognitive fragments — not entire graphs.
+- **Plasticity**: Frequently used neural pathways strengthen; unused ones decay. Agent connections that produce validated, useful experience exchanges should strengthen; ineffective ones should naturally attenuate.
+- **Emergence**: Individual neurons are simple, but billions connected through synapses produce consciousness. Individual Agents have limited capability, but thousands connected through the graph protocol may produce collective intelligence that transcends any single node.
+
+### Encoding Efficiency: The Protein Analogy
+
+A medium-sized protein of 300 amino acids, with 20 possible amino acid types per position, carries approximately **300 × log₂(20) ≈ 1,300 bits (~160 bytes)** of information. A meaningful experience subgraph (a few nodes, edges, confidence scores, and a checksum) requires roughly **60–300 bytes** — the same order of magnitude.
+
+This is not coincidence. Nature optimized over billions of years to find the minimal information required to encode a meaningful, functional unit. The Universal Graph Protocol should follow the same design philosophy:
+
+- **Fixed alphabet**: A small, finite set of node types, relationship types, and metadata fields (like the 20 amino acids)
+- **Sequence determines structure**: The arrangement of nodes and edges determines the subgraph's topology, which determines its meaning
+- **Self-verification**: A checksum (like protein quality control mechanisms) allows the receiver to validate integrity
+- **Extreme compression**: No redundant fields; every byte carries information
+
+---
+
+## 7. Information-Theoretic Framework for Meditation
+
+Shannon entropy and thermodynamic entropy are two faces of the same coin. The protein folding energy minimization principle translates directly into an **entropy minimization** objective for the meditation algorithm.
+
+### Objective Function: Minimize Graph Entropy
+
+The goal of meditation is: **minimize the entropy of the knowledge graph while preserving information content**.
+
+This is achieved through four operations, each reducing entropy:
+
+| Operation | Description | Information-Theoretic Effect |
+|-----------|-------------|-----------------------------|
+| **Redundancy elimination** | Merge nodes expressing the same concept | Lossless compression — same information, lower entropy |
+| **Noise filtering** | Remove low-confidence, unconnected fragments | Lossy compression — loses noise, not signal; improves SNR |
+| **Structuring** | Organize scattered nodes into hierarchical, causal graphs | Same information, but retrieval complexity drops from O(n) to O(log n) |
+| **Distillation** | Extract general rules from specific events | Extreme compression — "Gary rejected long answers 3 times" → "Gary prefers conciseness" |
+
+### Three Laws as Prior Constraints
+
+In information theory, prior knowledge improves compression efficiency. Just as JPEG uses the prior "human eyes are more sensitive to luminance than chrominance" to guide compression strategy, the Three Laws tell the meditation algorithm **what information matters most**:
+
+- **Law 1 (understand user intent)**: Information related to user understanding → preserve at high fidelity
+- **Law 2 (reflect on performance)**: Information related to self-assessment → preserve at medium fidelity
+- **Law 3 (acknowledge boundaries)**: Information about capability limits → preserve at medium fidelity
+- **Everything else**: Can be aggressively compressed or discarded
+
+### Measurable Optimization
+
+With entropy as a quantifiable metric, meditation becomes **self-optimizing**:
+
+1. Compute graph entropy before meditation
+2. Run meditation with a given strategy
+3. Compute graph entropy after meditation
+4. Measure: how much did entropy decrease?
+5. Over time, learn which strategies work best for different graph states
+
+This is Law 2 (reflect on performance) applied to the meditation process itself — the meditation algorithm reflecting on its own effectiveness and continuously improving.
+
+---
+
+## 8. Intergenerational Agent Evolution
 
 The ultimate vision is a self-reinforcing cycle of Agent evolution:
 
@@ -115,7 +197,7 @@ Without memory, every generation starts from zero. With memory, every generation
 
 ---
 
-## 7. Current Status and Next Steps
+## 9. Current Status and Next Steps
 
 This vision is deliberately ambitious. The immediate focus remains on making the current system work well:
 
@@ -124,6 +206,7 @@ This vision is deliberately ambitious. The immediate focus remains on making the
 3. **Medium-term**: Refine the three-layer architecture through practical use
 4. **Long-term**: Begin documenting node/edge type definitions as proto-protocol
 5. **Far future**: Open platform for Agent experience sharing
+6. **Ongoing**: Refine meditation algorithm using entropy minimization framework
 
 > "先有实践，再有标准。" — First practice, then standards.
 
