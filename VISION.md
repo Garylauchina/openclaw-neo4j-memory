@@ -100,9 +100,9 @@ This protocol would be to Agent experience what HTTP is to web content, or what 
 
 ---
 
-## 6. The Infinite Game
+## 6. Intergenerational Agent Evolution
 
-The name of the repository — **Infinite Game Research** — captures the ultimate vision:
+The ultimate vision is a self-reinforcing cycle of Agent evolution:
 
 Agent A develops Agent B. Agent B inherits A's complete development experience. B then develops Agent C, which inherits both B's direct experience and A's indirect experience. Each generation is stronger than the last, because:
 1. Experience accumulates across generations
