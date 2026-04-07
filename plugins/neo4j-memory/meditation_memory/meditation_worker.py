@@ -1019,10 +1019,14 @@ class MeditationEngine:
 
         for cluster in clusters:
             center_name = cluster["center_name"]
-            neighbor_names = [n["name"] for n in cluster["neighbor_list"]]
-            edges = self.store.get_cluster_edges(center_name, neighbor_names)
+            # 限制邻居节点数量，避免过度总结
+            max_neighbors = 20
+            neighbor_names_full = [n["name"] for n in cluster["neighbor_list"]]
+            neighbor_names = neighbor_names_full[:max_neighbors]
+            
+            edges = self.store.get_cluster_edges(center_name, neighbor_names_full[:max_neighbors*2])
 
-            summary = self.llm.distill_knowledge(center_name, cluster["neighbor_list"], edges)
+            summary = self.llm.distill_knowledge(center_name, cluster["neighbor_list"][:max_neighbors], edges)
             if summary:
                 if result.dry_run:
                     result.suggestions.append({

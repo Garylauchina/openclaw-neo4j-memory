@@ -475,6 +475,7 @@ class SubgraphContext:
             return []
 
 
+    def _format_subgraph_as_context(self, subgraph: Dict[str, Any]) -> str:
         """将子图数据格式化为自然语言上下文"""
         nodes = subgraph.get("nodes", [])
         edges = subgraph.get("edges", [])

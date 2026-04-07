@@ -1,0 +1,27 @@
+# 临时测试文件和日志
+*.log
+*.pyc
+__pycache__/
+*.swp
+*.bak
+
+# 本地配置文件
+.env
+*.env.local
+
+# 测试数据文件
+test_*.py
+check_*.py
+relationship_*.py
+fix_*.py
+moltbook_*.py
+telegram_*.txt
+
+# 诊断输出
+/tmp/
+/var/tmp/
+
+# IDE文件
+.vscode/
+.idea/
+*.iml

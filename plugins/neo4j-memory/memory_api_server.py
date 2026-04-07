@@ -629,5 +629,19 @@ async def run_meditation_task(mode: str, target_nodes: Optional[List[str]] = Non
         current_run = None
 
 if __name__ == "__main__":
+    import argparse
+    
+    parser = argparse.ArgumentParser(description="Neo4j 记忆服务器")
+    parser.add_argument("--port", type=int, default=18900, help="服务端口 (默认: 18900)")
+    parser.add_argument("--host", type=str, default="0.0.0.0", help="绑定主机 (默认: 0.0.0.0)")
+    parser.add_argument("--max-meditation-time", type=int, default=1200, help="冥思最大执行时间(秒) (默认: 1200)")
+    
+    args = parser.parse_args()
+    
+    # 设置冥思超时配置
+    import os
+    os.environ["MEDITATION_MAX_TIME_SECONDS"] = str(args.max_meditation_time)
+    
+    print(f"启动 Neo4j 记忆服务器在 {args.host}:{args.port} (冥思超时: {args.max_meditation_time}秒)")
     import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=18900)
+    uvicorn.run(app, host=args.host, port=args.port)

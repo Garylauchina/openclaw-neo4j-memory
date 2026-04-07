@@ -53,7 +53,7 @@ def analyze_and_adjust_simple(store: Any) -> Dict[str, Any]:
                     entity_name, count = item[0], item[1]
 
                     if count <= 1:
-                    params["cleanup_targets"].append(entity_name)
+                        params["cleanup_targets"].append(entity_name)
         
         # 2. 查找超级节点 (关系扇出度 > 15)
         super_nodes = find_super_nodes_simple(store)

@@ -39,7 +39,7 @@ class LLMConfig:
     ))
     model: str = field(default_factory=lambda: (
         os.environ.get("LLM_MODEL")
-        or os.environ.get("MEDITATION_LLM_MODEL", "qwen/qwen3.6-plus:free")
+        or os.environ.get("MEDITATION_LLM_MODEL", "deepseek/deepseek-chat")
     ))
 
 

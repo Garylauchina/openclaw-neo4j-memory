@@ -86,7 +86,7 @@ class MeditationLLMConfig:
     # 冥思使用的模型（默认使用更强的推理模型）
     model: str = field(
         default_factory=lambda: os.environ.get(
-            "MEDITATION_LLM_MODEL", "gpt-4.1-mini"
+            "MEDITATION_LLM_MODEL", "deepseek/deepseek-chat"
         )
     )
 

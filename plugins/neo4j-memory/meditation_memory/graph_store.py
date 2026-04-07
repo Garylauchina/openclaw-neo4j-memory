@@ -840,7 +840,7 @@ class GraphStore:
     def get_nodes_needing_meditation(
         self,
         limit: int = 500,
-        skip_recent_seconds: int = 300,
+        skip_recent_seconds: int = 30,
     ) -> List[Dict[str, Any]]:
         """
         获取标记了 needs_meditation=true 的节点。
@@ -875,7 +875,7 @@ class GraphStore:
     def get_nodes_in_time_window(
         self,
         hours: int = 24,
-        skip_recent_seconds: int = 300,
+        skip_recent_seconds: int = 30,
         limit: int = 500,
     ) -> List[Dict[str, Any]]:
         """获取指定时间窗口内更新的节点（用于定时冥思）。"""
@@ -959,7 +959,7 @@ class GraphStore:
     def get_orphan_nodes(
         self,
         min_mentions: int = 2,
-        skip_recent_seconds: int = 300,
+        skip_recent_seconds: int = 30,
     ) -> List[Dict[str, Any]]:
         """获取孤立节点（无边连接且 mention_count 低于阈值）。"""
         query = """
@@ -987,7 +987,7 @@ class GraphStore:
     def get_generic_word_nodes(
         self,
         generic_words: List[str],
-        skip_recent_seconds: int = 300,
+        skip_recent_seconds: int = 30,
     ) -> List[Dict[str, Any]]:
         """获取通用词节点（名称在黑名单中的节点）。"""
         query = """
@@ -1039,7 +1039,7 @@ class GraphStore:
 
     def get_similar_entity_pairs(
         self,
-        skip_recent_seconds: int = 300,
+        skip_recent_seconds: int = 30,
         limit: int = 100,
     ) -> List[Dict[str, Any]]:
         """获取共享邻居节点的同类型实体对（候选合并对）。
@@ -1158,7 +1158,7 @@ class GraphStore:
     def get_short_name_entities(
         self,
         max_name_length: int = 2,
-        skip_recent_seconds: int = 300,
+        skip_recent_seconds: int = 30,
     ) -> List[Dict[str, Any]]:
         """获取名称过短的实体（可能是截断实体）及其邻居。"""
         query = """
@@ -1184,7 +1184,7 @@ class GraphStore:
 
     def get_entities_missing_metadata(
         self,
-        skip_recent_seconds: int = 300,
+        skip_recent_seconds: int = 30,
         limit: int = 100,
     ) -> List[Dict[str, Any]]:
         """获取缺少描述的实体及其邻居关系。"""
@@ -1444,8 +1444,8 @@ class GraphStore:
 
     def get_related_to_edges(
         self,
-        skip_recent_seconds: int = 300,
-        limit: int = 200,
+        skip_recent_seconds: int = 30,
+        limit: int = 500,
     ) -> List[Dict[str, Any]]:
         """获取所有 relation_type='related_to' 的边（用于关系重标注）。"""
         query = """
@@ -1631,7 +1631,7 @@ class GraphStore:
 
     def get_all_active_nodes_for_weighting(
         self,
-        skip_recent_seconds: int = 300,
+        skip_recent_seconds: int = 30,
         limit: int = 1000,
     ) -> List[Dict[str, Any]]:
         """获取所有活跃节点及其度数用于权重计算。"""
