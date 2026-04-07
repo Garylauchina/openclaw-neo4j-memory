@@ -485,10 +485,21 @@ class GraphStore:
 
         query = """
         MATCH (e:Entity)
-        WHERE e.name CONTAINS $keyword AND NOT e:Archived
+        WHERE e.name CONTAINS $keyword AND NOT e:Archived AND e.updated_at IS NOT NULL
+        // 时间窗口过滤：为近期记忆赋予更高权重
+        WITH e,
+             CASE 
+               WHEN (timestamp() - e.updated_at) < (1000 * 3600 * 24 * 7) THEN 1.0      // 一周内：全权重
+               WHEN (timestamp() - e.updated_at) < (1000 * 3600 * 24 * 30) THEN 0.7     // 一月内：70%
+               WHEN (timestamp() - e.updated_at) < (1000 * 3600 * 24 * 90) THEN 0.4     // 三月内：40%
+               ELSE 0.2                                                                   // 更久：20%
+             END as recency_factor
         RETURN e.name AS name, e.entity_type AS entity_type,
-               e.properties AS properties, e.mention_count AS mention_count
-        ORDER BY e.mention_count DESC
+               e.properties AS properties, e.mention_count AS mention_count,
+               e.updated_at AS updated_at,
+               e.mention_count * recency_factor AS weighted_score,
+               recency_factor
+        ORDER BY weighted_score DESC
         LIMIT $limit
         """
         with self.driver.session(database=self._config.database) as session:
