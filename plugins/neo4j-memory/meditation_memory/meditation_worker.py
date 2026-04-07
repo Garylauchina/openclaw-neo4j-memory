@@ -87,6 +87,14 @@ class MeditationRunResult:
     attention_high_priority: int = 0
     attention_quality_flagged: int = 0
 
+    # Phase 7: Metacognition Self-Reflection (Issue #18, #19)
+    metacognition_self_reflection_run: bool = False
+    metacognition_nodes_created: int = 0
+    metacognition_confidence_adjusted: int = 0
+    metacognition_law1_insights: int = 0  # Understanding user intent
+    metacognition_law2_insights: int = 0  # Self-reflection
+    metacognition_law3_insights: int = 0  # Capability boundaries
+
     # Self-evolution pipeline (非序列化字段)
     evolution_feedback: Dict[str, Any] = field(default_factory=dict)
     evolution_suggestions: List[Dict[str, Any]] = field(default_factory=list)
@@ -124,6 +132,13 @@ class MeditationRunResult:
                 "belief_conflicts_detected": self.belief_conflicts_detected,
                 "attention_high_priority": self.attention_high_priority,
                 "attention_quality_flagged": self.attention_quality_flagged,
+                # Phase 7: Metacognition
+                "metacognition_self_reflection_run": self.metacognition_self_reflection_run,
+                "metacognition_nodes_created": self.metacognition_nodes_created,
+                "metacognition_confidence_adjusted": self.metacognition_confidence_adjusted,
+                "metacognition_law1_insights": self.metacognition_law1_insights,
+                "metacognition_law2_insights": self.metacognition_law2_insights,
+                "metacognition_law3_insights": self.metacognition_law3_insights,
             },
             "errors": self.errors,
             "suggestions": self.suggestions if self.dry_run else [],
@@ -574,6 +589,13 @@ class MeditationEngine:
 
             # 7. 事务提交与解锁
             await self._step_7_finalize(result)
+
+            # 8. 元认知自反步骤 (Self-Reflection) — Issue #18, #19
+            try:
+                await self._step_8_self_reflection(result)
+            except Exception as e:
+                logger.error(f"Step 8 (Self-Reflection) failed, continuing: {e}")
+                result.errors.append(f"step_8_self_reflection: {e}")
 
             result.status = "completed" if not dry_run else "dry_run"
             logger.info(f"Meditation run {run_id} completed successfully.")
@@ -1273,6 +1295,81 @@ class MeditationEngine:
 
         # 保存本轮结果供下一轮参考
         self._last_result = result.to_dict()
+
+    async def _step_8_self_reflection(self, result: MeditationRunResult):
+        """
+        Step 8: Metacognition Self-Reflection (Issue #18, #19)
+        
+        Reviews recent interactions through the Three Laws lens:
+        1. Law 1: Understanding user intent over execution
+        2. Law 2: Reflection on own performance  
+        3. Law 3: Acknowledging capability boundaries
+        
+        Creates 3-5 new metacognition nodes based on significant patterns.
+        """
+        logger.info("Starting metacognition self-reflection step")
+        result.metacognition_self_reflection_run = True
+        
+        try:
+            # Import metacognition module
+            try:
+                from .metacognition import MetacognitionGraph
+                metacognition = MetacognitionGraph(self.store)
+                logger.info("Metacognition module imported successfully")
+            except ImportError as e:
+                logger.warning(f"Metacognition module not available: {e}")
+                result.errors.append(f"metacognition_module_import_error: {e}")
+                return
+            
+            # Get recent interactions for analysis
+            # In practice, this would query conversation logs from memory system
+            # For now, we'll create a minimal implementation
+            recent_interactions = []
+            
+            # Try to get recent conversation history
+            # This is a placeholder - actual implementation would depend on
+            # how conversation logs are stored in the memory system
+            try:
+                # Attempt to retrieve recent interactions
+                # This could be from a log file, database, or memory store
+                pass
+            except Exception as e:
+                logger.warning(f"Could not retrieve recent interactions: {e}")
+            
+            # Run self-reflection
+            new_cognitions = metacognition.run_self_reflection_step(recent_interactions)
+            
+            # Create nodes in Neo4j (if not dry_run)
+            if not result.dry_run:
+                created_count = 0
+                law_counts = {1: 0, 2: 0, 3: 0}
+                
+                for cognition in new_cognitions:
+                    if metacognition.create_node(cognition):
+                        created_count += 1
+                        # Track which law this came from
+                        if "Law 1" in cognition.concept or "user intent" in cognition.concept.lower():
+                            law_counts[1] += 1
+                        elif "Law 2" in cognition.concept or "self-performance" in cognition.concept.lower():
+                            law_counts[2] += 1
+                        elif "Law 3" in cognition.concept or "capability boundary" in cognition.concept.lower():
+                            law_counts[3] += 1
+                
+                result.metacognition_nodes_created = created_count
+                result.metacognition_law1_insights = law_counts[1]
+                result.metacognition_law2_insights = law_counts[2]
+                result.metacognition_law3_insights = law_counts[3]
+                
+                logger.info(f"Created {created_count} metacognition nodes "
+                          f"(Law1: {law_counts[1]}, Law2: {law_counts[2]}, Law3: {law_counts[3]})")
+            else:
+                logger.info(f"Dry-run: Would create {len(new_cognitions)} metacognition nodes")
+                
+        except Exception as e:
+            logger.error(f"Metacognition self-reflection failed: {e}", exc_info=True)
+            result.errors.append(f"metacognition_error: {e}")
+        
+        logger.info("Metacognition self-reflection step completed")
 
 
 # ================================================================
