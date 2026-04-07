@@ -1,67 +1,47 @@
-# Python
-__pycache__/
-*.py[cod]
-*$py.class
-*.so
-.Python
-*.egg-info/
-dist/
-build/
-.pytest_cache/
-.ruff_cache/
+# 临时测试和诊断脚本
+check_*.py
+test_*.py
+relationship_*.py
+fix_*.py
+moltbook_*.py
+telegram_*.txt
 
-# Node modules
-node_modules/
-
-# Temp / backup
-.tmp_backup/
-.tmp_backup_all/
-*.bak
-*backup*
+# 临时报告和日志
+neo4j_meditation/
 *.log
 
-# Nested git repos (not our code)
-meditation-memory-system/
-iran-war-gh-pages/
-iran-war-report-pages/
-plugins/a2a-gateway/
-neo4j-mcp-server/
-
-# Unrelated projects
-iran_war_reports/
-
-# Results / generated
-meditation_results/
-golden_test_results/
-evaluation_results/
-
-# Hybrid memory prototype (old prototype)
-hybrid_memory_prototype/
-
-# IDE
+# IDE文件
 .vscode/
 .idea/
+*.iml
 
-# Legacy code (historical, not in active use)
-_legacy/
+# Python缓存
+__pycache__/
+*.pyc
 
-# OpenClaw managed files (not for repo)
+# 环境变量
+.env
+*.env.local
+
+# OpenClaw 工作区配置和备份文件
 .openclaw/
-
-# Misc
-memory/
-
-# OpenClaw workspace (personal, not for repo)
+.tmp_backup*
 AGENTS.md
-SOUL.md
-USER.md
-IDENTITY.md
-TOOLS.md
 HEARTBEAT.md
-MEMORY.md
-*.json
-!openclaw.plugin.json
-!package.json
-
-# Root-level __pycache__ (legacy backup dirs)
-*_backup_*/__pycache__/*
+IDENTITY.md
+SOUL.md
+TOOLS.md
+USER.md
+_legacy/
+cognitive_adapter_backup_*/
+elimination_*.json
+evaluation_results/
+golden_test_results/
+iran-war-*
+iran_war_reports/
+meditation-deployment/
+meditation_results/
+memory/
+neo4j-mcp-server/
+plugins/neo4j-memory/node_modules/
+*.backup
