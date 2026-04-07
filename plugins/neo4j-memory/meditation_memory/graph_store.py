@@ -496,15 +496,27 @@ class GraphStore:
             return [dict(record) for record in result]
 
     def _fulltext_search(self, keyword: str, limit: int) -> List[Dict[str, Any]]:
-        """全文索引搜索（过滤 :Archived）"""
+        """全文索引搜索（过滤 :Archived，加入时间窗口过滤）"""
         query = """
         CALL db.index.fulltext.queryNodes('entity_fulltext_idx', $keyword)
         YIELD node, score
-        WHERE NOT node:Archived
+        WHERE NOT node:Archived AND node.updated_at IS NOT NULL
+        // 时间窗口过滤：为近期记忆赋予更高权重
+        // 计算时间衰减因子：1.0（最新）到 0.0（30天前），线性衰减
+        WITH node, score,
+             (timestamp() - node.updated_at) / (1000.0 * 3600 * 24 * 30) as days_ago_normalized,
+             CASE 
+               WHEN (timestamp() - node.updated_at) < (1000 * 3600 * 24 * 7) THEN 1.0      // 一周内：全权重
+               WHEN (timestamp() - node.updated_at) < (1000 * 3600 * 24 * 30) THEN 0.7     // 一月内：70%
+               WHEN (timestamp() - node.updated_at) < (1000 * 3600 * 24 * 90) THEN 0.4     // 三月内：40%
+               ELSE 0.2                                                                   // 更久：20%
+             END as recency_factor
         RETURN node.name AS name, node.entity_type AS entity_type,
                node.properties AS properties, node.mention_count AS mention_count,
-               score
-        ORDER BY score DESC
+               node.updated_at AS updated_at,
+               score * recency_factor AS weighted_score,
+               recency_factor
+        ORDER BY weighted_score DESC
         LIMIT $limit
         """
         with self.driver.session(database=self._config.database) as session:
