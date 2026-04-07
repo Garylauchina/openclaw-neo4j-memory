@@ -40,13 +40,13 @@ class MetacognitionCategory(Enum):
     IDENTITY = "identity"          # Who am I? (core persona)
     CAPABILITY = "capability"      # What I can do
     LIMITATION = "limitation"      # What I cannot do
-    PREFERENCE = "preference"      # My behavioral tendencies
+    SELF_PREFERENCE = "self_preference"      # My behavioral tendencies
     
     # Meta_User categories  
     BACKGROUND = "background"      # User's profession, experience
     COGNITIVE_STYLE = "cognitive_style"  # How user thinks/prefers
     VALUE = "value"                # What matters to user
-    PREFERENCE = "preference"      # User's specific preferences
+    USER_PREFERENCE = "user_preference"      # User's specific preferences
     
     # Meta_Relationship categories
     INTERACTION_PATTERN = "interaction_pattern"  # How we interact
