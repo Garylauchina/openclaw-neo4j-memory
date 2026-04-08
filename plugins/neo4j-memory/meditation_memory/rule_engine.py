@@ -185,7 +185,7 @@ class FrequencyAnalyzer:
         self.logger.info(f"Frequency filtering: {kept_count} entities kept, {filtered_count} filtered out, "
                         f"avg frequency: {avg_frequency:.2f}")
         
-
+        return {
             'filtered_entities': filtered,
             'filtered_out_entities': filtered_out,
             'kept_count': kept_count,

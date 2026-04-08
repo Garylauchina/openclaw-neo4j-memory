@@ -30,6 +30,11 @@ from datetime import datetime
 from difflib import SequenceMatcher
 from typing import Any, Dict, List, Optional, Tuple
 
+# Import new information theory and rule engine modules
+from .information_theory import GraphEntropyMetrics, EntropyReductionAnalyzer, MeditationOptimizer
+from .rule_engine import RuleEngine
+
+
 # Phase 4.1: 冥思进化系统
 from .meditation_evolution import analyze_and_adjust, MeditationLogManager
 
@@ -472,6 +477,11 @@ class MeditationEngine:
         self.store = graph_store
         self.config = config or MeditationConfig()
         self.llm = MeditationLLMClient(self.config)
+        # Initialize information-theoretic components
+        self.entropy_calculator = GraphEntropyMetrics()
+        self.entropy_analyzer = EntropyReductionAnalyzer()
+        self.meditation_optimizer = MeditationOptimizer()
+        self.rule_engine = RuleEngine()
         self._is_running = False
         self._last_result: Optional[Dict[str, Any]] = None  # 上一次冥思结果，供元学习对比
         # Phase 3: 策略蒸馏器
@@ -813,32 +823,36 @@ class MeditationEngine:
         pairs = self.store.get_similar_entity_pairs(limit=100)
         logger.info(f"Step 3.1: Found {len(pairs)} candidate synonym pairs.")
         if pairs:
-            judgments = self.llm.judge_synonym_entities(pairs)
-            for j in judgments:
-                idx = j.get("pair_index")
-                if idx is not None and idx < len(pairs) and j.get("is_same"):
-                    pair = pairs[idx]
-                    # 自合并保护
-                    if pair["eid_a"] == pair["eid_b"]:
-                        continue
-                    main_name = j.get("main_name") or pair["name_a"]
-                    # 根据 main_name 确定哪个是主节点
-                    if main_name == pair["name_a"]:
-                        main_eid = pair["eid_a"]
-                        alias_eid = pair["eid_b"]
-                        alias_name = pair["name_b"]
+            # Use rule engine for synonym decisions (LLM only as fallback)
+            for idx, pair in enumerate(pairs):
+                # Gather simple context for rule engine
+                context = {
+                    "mention_counts": {
+                        pair["name_a"]: pair.get("mentions_a", 0),
+                        pair["name_b"]: pair.get("mentions_b", 0)
+                    },
+                    "shared_neighbors": pair.get("shared_neighbors", 0)
+                }
+                decision = self.rule_engine.decide_entity_merge(pair["name_a"], pair["name_b"], context)
+                if decision.get("should_merge"):
+                    # Determine main and alias based on confidence
+                    if decision.get("metrics", {}).get("similarity_breakdown", {}).get("composite_score", 0) >= 0.5:
+                        # Prefer higher mention count as main
+                        if context["mention_counts"][pair["name_a"]] >= context["mention_counts"][pair["name_b"]]:
+                            main_eid, alias_eid = pair["eid_a"], pair["eid_b"]
+                        else:
+                            main_eid, alias_eid = pair["eid_b"], pair["eid_a"]
                     else:
-                        main_eid = pair["eid_b"]
-                        alias_eid = pair["eid_a"]
-                        alias_name = pair["name_a"]
+                        # If low similarity, still merge based on rule engine suggestion
+                        main_eid, alias_eid = pair["eid_a"], pair["eid_b"]
 
                     if result.dry_run:
                         result.suggestions.append({
                             "step": "merging",
                             "action": "merge",
-                            "main": main_name,
-                            "alias": alias_name,
-                            "reason": j.get("reason")
+                            "main": pair["name_a"] if main_eid == pair["eid_a"] else pair["name_b"],
+                            "alias": pair["name_b"] if alias_eid == pair["eid_b"] else pair["name_a"],
+                            "reason": "rule_engine"
                         })
                     else:
                         if self.store.merge_entity_nodes(main_eid, alias_eid):
@@ -1313,7 +1327,7 @@ class MeditationEngine:
         try:
             # Import metacognition module
             try:
-                from .metacognition import MetacognitionGraph
+                from .metacognition import MetacognitionGraph, MetacognitionLaw
                 metacognition = MetacognitionGraph(self.store)
                 logger.info("Metacognition module imported successfully")
             except ImportError as e:
@@ -1348,11 +1362,11 @@ class MeditationEngine:
                     if metacognition.create_node(cognition):
                         created_count += 1
                         # Track which law this came from
-                        if "Law 1" in cognition.concept or "user intent" in cognition.concept.lower():
+                        if cognition.law == MetacognitionLaw.LAW_1:
                             law_counts[1] += 1
-                        elif "Law 2" in cognition.concept or "self-performance" in cognition.concept.lower():
+                        elif cognition.law == MetacognitionLaw.LAW_2:
                             law_counts[2] += 1
-                        elif "Law 3" in cognition.concept or "capability boundary" in cognition.concept.lower():
+                        elif cognition.law == MetacognitionLaw.LAW_3:
                             law_counts[3] += 1
                 
                 result.metacognition_nodes_created = created_count

@@ -1,3 +1,13 @@
+__pycache__/
+*.pyc
+*.pyo
+*.egg-info/
+.env
+*.env
+.venv/
+venv/
+*.log
+.DS_Store
 plugins/neo4j-memory/neo4j-memory.env
 moltbook_api_key.txt
 neo4j-mcp-server/.env

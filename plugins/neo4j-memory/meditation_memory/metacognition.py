@@ -286,7 +286,7 @@ class MetacognitionGraph:
             
         elif law == MetacognitionLaw.LAW_2:
             # Self-reflection
-            node_type = "Meta_Relationship" 
+            node_type = "Meta_Self" 
             concept = f"Self-performance insight: {evidence}"
             category = "interaction_pattern"
             user_id = context.get("user_id", "unknown")
@@ -364,6 +364,7 @@ class MetacognitionGraph:
         self.logger.info(f"Running self-reflection step with {len(recent_interactions)} recent interactions")
         
         # Fallback: If no recent interactions, generate example cognitions for development
+        # TODO: Remove development fallback before production
         if len(recent_interactions) == 0:
             self.logger.info("No recent interactions, generating example cognitions for development")
             
