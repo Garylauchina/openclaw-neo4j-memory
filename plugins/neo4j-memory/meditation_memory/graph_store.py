@@ -28,6 +28,7 @@ import json
 import logging
 import math
 import time
+from collections import Counter
 from typing import Any, Dict, List, Optional, Tuple
 
 from neo4j import GraphDatabase, Driver
@@ -450,20 +451,41 @@ class GraphStore:
             query = """
             MATCH (e:Entity {name: $name, entity_type: $entity_type})
             WHERE NOT e:Archived
-            RETURN e.name AS name, e.entity_type AS entity_type,
+            RETURN elementId(e) AS eid, e.name AS name, e.entity_type AS entity_type,
                    e.properties AS properties, e.mention_count AS mention_count,
-                   e.created_at AS created_at, e.updated_at AS updated_at
+                   e.created_at AS created_at, e.updated_at AS updated_at,
+                   e.law_priority AS law_priority
             """
             params = {"name": name, "entity_type": entity_type}
         else:
             query = """
             MATCH (e:Entity {name: $name})
             WHERE NOT e:Archived
-            RETURN e.name AS name, e.entity_type AS entity_type,
+            RETURN elementId(e) AS eid, e.name AS name, e.entity_type AS entity_type,
                    e.properties AS properties, e.mention_count AS mention_count,
-                   e.created_at AS created_at, e.updated_at AS updated_at
+                   e.created_at AS created_at, e.updated_at AS updated_at,
+                   e.law_priority AS law_priority
             """
             params = {"name": name}
+
+        with self.driver.session(database=self._config.database) as session:
+            result = session.run(query, **params)
+            record = result.single()
+            if record:
+                return dict(record)
+            return None
+            
+    def find_entity_by_eid(self, eid: str) -> Optional[Dict[str, Any]]:
+        """根据元素ID查找实体（默认过滤 :Archived 节点）"""
+        query = """
+        MATCH (e:Entity)
+        WHERE elementId(e) = $eid AND NOT e:Archived
+        RETURN elementId(e) AS eid, e.name AS name, e.entity_type AS entity_type,
+               e.properties AS properties, e.mention_count AS mention_count,
+               e.created_at AS created_at, e.updated_at AS updated_at,
+               e.law_priority AS law_priority
+        """
+        params = {"eid": eid}
 
         with self.driver.session(database=self._config.database) as session:
             result = session.run(query, **params)
@@ -2538,3 +2560,360 @@ class GraphStore:
             logger.error("Failed to get graph statistics: %s", e)
         
         return stats
+
+    def get_nodes_by_three_laws_priority(self) -> Dict[str, List[Dict[str, Any]]]:
+        """
+        根据元认知三定律优先级获取节点
+        
+        Returns:
+            按优先级分类的节点字典
+        """
+        priority_nodes = {
+            'law1_high': [],
+            'law2_medium': [],
+            'law3_medium': [],
+            'other_discard': []
+        }
+        
+        try:
+            with self.driver.session(database=self._config.database) as session:
+                # 查询所有带有定律标记的节点
+                query = """
+                MATCH (n)
+                RETURN n.name AS name,
+                       n.entity_type AS entity_type,
+                       n.confidence AS confidence,
+                       n.mention_count AS mention_count,
+                       n.law_priority AS law_priority
+                """
+                results = session.run(query)
+                
+                for record in results:
+                    node = {
+                        'name': record['name'],
+                        'entity_type': record.get('entity_type'),
+                        'confidence': record.get('confidence', 0.5),
+                        'mention_count': record.get('mention_count', 0)
+                    }
+                    
+                    priority = record.get('law_priority', 'other_discard')
+                    if priority == 'law1_high':
+                        priority_nodes['law1_high'].append(node)
+                    elif priority == 'law2_medium':
+                        priority_nodes['law2_medium'].append(node)
+                    elif priority == 'law3_medium':
+                        priority_nodes['law3_medium'].append(node)
+                    else:
+                        priority_nodes['other_discard'].append(node)
+                        
+                # 统计没有标记的节点
+                if not results:
+                    # 如果没有任何节点有优先级标记，将所有节点视为 other_discard
+                    all_query = """
+                    MATCH (n)
+                    WHERE NOT exists(n.law_priority)
+                    RETURN n.name AS name,
+                           n.entity_type AS entity_type,
+                           n.confidence AS confidence,
+                           n.mention_count AS mention_count
+                    """
+                    all_results = session.run(all_query)
+                    for record in all_results:
+                        node = {
+                            'name': record['name'],
+                            'entity_type': record.get('entity_type'),
+                            'confidence': record.get('confidence', 0.5),
+                            'mention_count': record.get('mention_count', 0)
+                        }
+                        priority_nodes['other_discard'].append(node)
+                        
+        except Exception as e:
+            logger.error("Failed to get nodes by three laws priority: %s", e)
+        
+        return priority_nodes
+        
+    def update_node_three_laws_priority(self, node_name: str, priority: str) -> None:
+        """
+        更新节点的元认知三定律优先级标记
+        
+        Args:
+            node_name: 节点名称
+            priority: 优先级（law1_high, law2_medium, law3_medium, other_discard）
+        """
+        valid_priorities = ['law1_high', 'law2_medium', 'law3_medium', 'other_discard']
+        if priority not in valid_priorities:
+            raise ValueError(f"Invalid priority: {priority}. Must be one of {valid_priorities}")
+            
+        try:
+            with self.driver.session(database=self._config.database) as session:
+                query = """
+                MATCH (n {name: $node_name})
+                SET n.law_priority = $priority
+                RETURN count(n) AS updated
+                """
+                result = session.run(query, node_name=node_name, priority=priority).single()
+                if result and result['updated'] > 0:
+                    logger.info(f"Updated node '{node_name}' priority to {priority}")
+                else:
+                    logger.warning(f"Node '{node_name}' not found for priority update")
+                    
+        except Exception as e:
+            logger.error(f"Failed to update node priority: {e}")
+            
+    def get_nodes_to_prune_with_priority(self, 
+                                       min_mentions: int = 1,
+                                       skip_recent_seconds: int = 86400) -> List[Dict[str, Any]]:
+        """
+        根据元认知三定律优先级获取待修剪的节点
+        Law 1 节点跳过删除/压缩，Law 2/3 节点适度压缩，其他节点可丢弃
+        
+        Args:
+            min_mentions: 最小提及次数
+            skip_recent_seconds: 跳过最近更新的节点（秒）
+            
+        Returns:
+            待修剪的节点列表
+        """
+        to_prune = []
+        
+        try:
+            with self.driver.session(database=self._config.database) as session:
+                # 查询可丢弃的节点（其他 + 低置信度 + 低提及）
+                query = """
+                MATCH (n)
+                WHERE (
+                    (n.law_priority IS NULL OR n.law_priority = 'other_discard')
+                    AND (n.mention_count < $min_mentions OR NOT exists(n.mention_count))
+                    AND (NOT exists(n.updated_at) OR n.updated_at < (timestamp() - $skip_recent_seconds * 1000))
+                    AND (n.confidence < 0.5 OR NOT exists(n.confidence))
+                )
+                RETURN n.name AS name,
+                       n.entity_type AS entity_type,
+                       n.confidence AS confidence,
+                       n.mention_count AS mention_count
+                """
+                results = session.run(query, 
+                                    min_mentions=min_mentions,
+                                    skip_recent_seconds=skip_recent_seconds)
+                
+                for record in results:
+                    to_prune.append({
+                        'name': record['name'],
+                        'entity_type': record.get('entity_type'),
+                        'confidence': record.get('confidence', 0.5),
+                        'mention_count': record.get('mention_count', 0)
+                    })
+                    
+                # 对 Law 2/3 节点添加适度压缩的候选（置信度低+提及少）
+                law23_query = """
+                MATCH (n)
+                WHERE (
+                    (n.law_priority = 'law2_medium' OR n.law_priority = 'law3_medium')
+                    AND n.mention_count < 5  # 较低提及次数
+                    AND (n.confidence < 0.3 OR NOT exists(n.confidence))
+                    AND (NOT exists(n.updated_at) OR n.updated_at < (timestamp() - 7 * 86400 * 1000))  # 超过1周未更新
+                )
+                RETURN n.name AS name,
+                       n.entity_type AS entity_type,
+                       n.confidence AS confidence,
+                       n.mention_count AS mention_count
+                """
+                law23_results = session.run(law23_query)
+                
+                for record in law23_results:
+                    to_prune.append({
+                        'name': record['name'],
+                        'entity_type': record.get('entity_type'),
+                        'confidence': record.get('confidence', 0.5),
+                        'mention_count': record.get('mention_count', 0),
+                        'priority': record.get('law_priority')
+                    })
+                    
+        except Exception as e:
+            logger.error(f"Failed to get nodes to prune with priority: {e}")
+            
+        return to_prune
+        
+    def get_nodes_to_merge_with_priority(self) -> List[Dict[str, Any]]:
+        """
+        根据元认知三定律优先级获取待合并的节点
+        Law 1 节点保持高保真，Law 2/3 节点适度合并，其他节点可自由合并
+        
+        Returns:
+            待合并的节点列表
+        """
+        to_merge = []
+        
+        try:
+            with self.driver.session(database=self._config.database) as session:
+                # 查询可自由合并的节点（其他）
+                query = """
+                MATCH (n)
+                WHERE (n.law_priority IS NULL OR n.law_priority = 'other_discard')
+                AND exists(n.mention_count) AND n.mention_count > 0
+                RETURN n.name AS name,
+                       n.entity_type AS entity_type,
+                       n.mention_count AS mention_count
+                """
+                results = session.run(query)
+                
+                for record in results:
+                    to_merge.append({
+                        'name': record['name'],
+                        'entity_type': record.get('entity_type'),
+                        'mention_count': record.get('mention_count', 0)
+                    })
+                    
+                # 对 Law 2/3 节点添加适度合并的候选
+                law23_query = """
+                MATCH (n)
+                WHERE (n.law_priority = 'law2_medium' OR n.law_priority = 'law3_medium')
+                AND exists(n.mention_count) AND n.mention_count >= 3
+                RETURN n.name AS name,
+                       n.entity_type AS entity_type,
+                       n.mention_count AS mention_count
+                """
+                law23_results = session.run(law23_query)
+                
+                for record in law23_results:
+                    to_merge.append({
+                        'name': record['name'],
+                        'entity_type': record.get('entity_type'),
+                        'mention_count': record.get('mention_count', 0),
+                        'priority': record.get('law_priority')
+                    })
+                    
+        except Exception as e:
+            logger.error(f"Failed to get nodes to merge with priority: {e}")
+            
+        return to_merge
+        
+    def update_pruning_behavior_based_on_priority(self, 
+                                                 nodes_to_prune: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+        """
+        根据元认知三定律优先级调整修剪行为
+        Law 1 节点跳过删除/压缩
+        Law 2/3 节点根据置信度和提及次数决定是否压缩
+        
+        Args:
+            nodes_to_prune: 待修剪的节点列表
+            
+        Returns:
+            调整后的待修剪节点列表
+        """
+        final_prune = []
+        
+        for node in nodes_to_prune:
+            priority = node.get('priority', 'other_discard')
+            
+            if priority == 'law1_high':
+                # Law 1 信息高保真：跳过删除/压缩
+                logger.debug(f"Skipping pruning of Law 1 node: {node['name']}")
+                continue
+            elif priority in ['law2_medium', 'law3_medium']:
+                # Law 2/3 信息中保真：适度压缩
+                confidence = node.get('confidence', 0.5)
+                mention_count = node.get('mention_count', 0)
+                
+                # 只有低置信度和低提及次数的才进行压缩
+                if confidence < 0.3 and mention_count < 5:
+                    final_prune.append(node)
+                else:
+                    logger.debug(f"Skipping pruning of Law 2/3 node with sufficient confidence/mentions: {node['name']}")
+            else:
+                # 其他信息可丢弃
+                final_prune.append(node)
+                
+        return final_prune
+        
+    def get_compression_factor_for_priority(self, priority: str) -> float:
+        """
+        根据元认知三定律优先级获取压缩因子
+        
+        Args:
+            priority: 节点优先级
+            
+        Returns:
+            压缩因子（0.0-1.0，0表示不压缩，1表示完全压缩）
+        """
+        if priority == 'law1_high':
+            return 0.0  # 不压缩
+        elif priority == 'law2_medium':
+            return 0.3  # 适度压缩（保留70%）
+        elif priority == 'law3_medium':
+            return 0.4  # 适度压缩（保留60%）
+        else:
+            return 0.8  # 高度压缩（保留20%）
+
+    def merge_entity_by_name(self, main_name: str, alias_name: str, entity_type: Optional[str] = None) -> bool:
+        """
+        根据名称合并两个实体节点
+        
+        Args:
+            main_name: 主节点名称
+            alias_name: 待合并的别名节点名称
+            entity_type: 实体类型（可选，用于精确匹配）
+        
+        Returns:
+            合并成功返回 True，失败返回 False
+        """
+        try:
+            with self.driver.session(database=self._config.database) as session:
+                # 找到主节点
+                if entity_type:
+                    main_query = """
+                    MATCH (main:Entity {name: $main_name, entity_type: $entity_type})
+                    WHERE NOT main:Archived
+                    RETURN elementId(main) AS main_eid
+                    LIMIT 1
+                    """
+                    main_result = session.run(main_query, main_name=main_name, entity_type=entity_type).single()
+                else:
+                    main_query = """
+                    MATCH (main:Entity {name: $main_name})
+                    WHERE NOT main:Archived
+                    RETURN elementId(main) AS main_eid
+                    LIMIT 1
+                    """
+                    main_result = session.run(main_query, main_name=main_name).single()
+
+                if not main_result:
+                    logger.warning(f"Main entity not found for merge: {main_name}")
+                    return False
+
+                main_eid = main_result['main_eid']
+
+                # 找到别名节点
+                if entity_type:
+                    alias_query = """
+                    MATCH (alias:Entity {name: $alias_name, entity_type: $entity_type})
+                    WHERE NOT alias:Archived AND elementId(alias) <> $main_eid
+                    RETURN elementId(alias) AS alias_eid
+                    """
+                    alias_results = session.run(alias_query, alias_name=alias_name, entity_type=entity_type, main_eid=main_eid)
+                else:
+                    alias_query = """
+                    MATCH (alias:Entity {name: $alias_name})
+                    WHERE NOT alias:Archived AND elementId(alias) <> $main_eid
+                    RETURN elementId(alias) AS alias_eid
+                    """
+                    alias_results = session.run(alias_query, alias_name=alias_name, main_eid=main_eid)
+
+                # 合并所有找到的别名节点
+                success_count = 0
+                for alias_record in alias_results:
+                    alias_eid = alias_record['alias_eid']
+                    # 调用已有的合并方法
+                    if self.merge_entity_nodes(main_eid, alias_eid):
+                        success_count += 1
+
+                if success_count > 0:
+                    logger.info(f"Merged {success_count} alias(es) into main entity: {main_name}")
+                    return True
+                else:
+                    logger.warning(f"No alias entities found for merge: {alias_name}")
+                    return False
+
+        except Exception as e:
+            logger.error(f"Failed to merge entities by name: {e}")
+            return False

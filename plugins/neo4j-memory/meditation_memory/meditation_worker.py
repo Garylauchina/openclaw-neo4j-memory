@@ -840,21 +840,34 @@ class MeditationEngine:
                 result.belief_conflicts_detected = len(belief_conflicts)
             logger.info(f"Step 2.0: Detected {len(belief_conflicts)} belief conflicts.")
 
-        # 2.1 处理孤立节点
+        # Phase 3: 基于元认知三定律优先级的节点筛选
+        # Law 1 信息高保真：跳过删除/压缩
+        # Law 2/3 信息中保真：适度压缩
+        # 其他信息可丢弃：低置信度、低频次节点优先作为噪声过滤候选
+        
+        # 2.1 获取基于优先级的待修剪节点
+        priority_nodes = self.store.get_nodes_to_prune_with_priority(
+            min_mentions=self.config.pruning.orphan_min_mentions,
+            skip_recent_seconds=self.config.safety.skip_recently_updated_seconds
+        )
+        logger.info(f"Step 2.1: Found {len(priority_nodes)} potential nodes to prune based on priority")
+        
+        # 2.2 传统噪声过滤
+        # 处理孤立节点
         orphans = self.store.get_orphan_nodes(
             min_mentions=self.config.pruning.orphan_min_mentions,
             skip_recent_seconds=self.config.safety.skip_recently_updated_seconds
         )
         orphan_names = [o["name"] for o in orphans]
 
-        # 2.2 处理通用词节点
+        # 处理通用词节点
         generics = self.store.get_generic_word_nodes(
             generic_words=self.config.pruning.generic_words,
             skip_recent_seconds=self.config.safety.skip_recently_updated_seconds
         )
         generic_names = [g["name"] for g in generics]
 
-        # 2.3 基于频次的噪声过滤（接入 rule_engine 的 FrequencyAnalyzer）
+        # 基于频次的噪声过滤（接入 rule_engine 的 FrequencyAnalyzer）
         entity_counts = self.store.get_entity_mention_counts()
         total_documents = self.store.get_total_documents()
         
@@ -863,41 +876,118 @@ class MeditationEngine:
         )
         
         filtered_out_names = list(frequency_result.get('filtered_out_entities', {}).keys())
-        logger.info(f"Step 2.3: Frequency filtering identified {len(filtered_out_names)} low-frequency entities to prune")
+        logger.info(f"Step 2.2: Frequency filtering identified {len(filtered_out_names)} low-frequency entities to prune")
 
-        # 合并所有待归档节点
-        to_archive = list(set(orphan_names + generic_names + filtered_out_names))
-        if not to_archive:
+        # 合并所有候选节点
+        all_candidate_names = list(set(orphan_names + generic_names + filtered_out_names))
+        
+        # 将候选节点转换为完整节点字典，以便进行优先级调整
+        candidate_nodes = []
+        for name in all_candidate_names:
+            node = self.store.find_entity(name)
+            if node:
+                # 添加优先级信息
+                node_with_priority = {
+                    'name': node.get('name'),
+                    'entity_type': node.get('entity_type'),
+                    'confidence': node.get('confidence', 0.5),
+                    'mention_count': node.get('mention_count', 0),
+                    'priority': node.get('law_priority', 'other_discard')
+                }
+                candidate_nodes.append(node_with_priority)
+        
+        # 添加基于优先级的待修剪节点（去重）
+        existing_names = set([n['name'] for n in candidate_nodes])
+        new_nodes_from_priority = [n for n in priority_nodes if n['name'] not in existing_names]
+        candidate_nodes.extend(new_nodes_from_priority)
+        logger.info(f"Added {len(new_nodes_from_priority)} unique nodes from priority filtering")
+        
+        # 最终优先级调整
+        final_to_archive = self.store.update_pruning_behavior_based_on_priority(candidate_nodes)
+        final_to_archive_names = list(set([n['name'] for n in final_to_archive]))
+        
+        if not final_to_archive_names:
+            logger.info("Step 2: No nodes need pruning after priority filtering")
+            result.pruning_stats = {
+                "total_entities": len(entity_counts),
+                "priority_filtered_entities": len(candidate_nodes),
+                "final_pruned_entities": 0
+            }
             return
 
         if result.dry_run:
             result.suggestions.append({
                 "step": "pruning",
                 "action": "archive",
-                "nodes": to_archive,
-                "reason": "orphan, generic word, or low-frequency entity"
+                "nodes": final_to_archive_names,
+                "reason": "priority-filtered nodes (orphans, generics, low-frequency, non-Law1)"
             })
+            logger.info(f"Step 2: Would archive {len(final_to_archive_names)} nodes in dry run")
         else:
-            archived_count = self.store.archive_nodes(to_archive, reason="meditation_pruning")
+            archived_count = self.store.archive_nodes(final_to_archive_names, reason="meditation_pruning_priority_filtered")
             result.nodes_pruned = archived_count
-            logger.info(f"Pruned {archived_count} nodes (orphans: {len(orphan_names)}, generics: {len(generic_names)}, low-frequency: {len(filtered_out_names)})")
+            logger.info(f"Pruned {archived_count} nodes after priority filtering (from {len(candidate_nodes)} candidates)")
         
         # 记录频次过滤的统计信息
         result.pruning_stats = {
             "total_entities": len(entity_counts),
             "kept_entities": frequency_result.get('kept_count', 0),
             "filtered_entities": frequency_result.get('filtered_count', 0),
-            "average_frequency": frequency_result.get('average_frequency', 0.0)
+            "average_frequency": frequency_result.get('average_frequency', 0.0),
+            "priority_candidates": len(candidate_nodes),
+            "final_pruned": len(final_to_archive_names),
+            "law1_nodes_skipped": len([n for n in candidate_nodes if n.get('priority') == 'law1_high']),
+            "law2_nodes_skipped": len([n for n in candidate_nodes if n.get('priority') == 'law2_medium']),
+            "law3_nodes_skipped": len([n for n in candidate_nodes if n.get('priority') == 'law3_medium'])
         }
 
     # ---------- 步骤 3: 实体整合与修复 (Merging) ----------
 
     async def _step_3_merging(self, result: MeditationRunResult, nodes: List[Dict[str, Any]]):
         """同义词合并、截断修复、元数据补充。"""
-        # 3.0 同名实体合并（Bug 修复：get_similar_entity_pairs 不查同名副本）
+        # Phase 3: 基于元认知三定律优先级的合并
+        # Law 1 信息高保真：优先合并以保持信息完整性
+        # Law 2/3 信息中保真：适度合并
+        # 其他信息可丢弃：自由合并
+        
+        # 3.0 基于优先级的待合并节点
+        priority_merge_nodes = self.store.get_nodes_to_merge_with_priority()
+        logger.info(f"Step 3.0: Found {len(priority_merge_nodes)} nodes for merging based on priority")
+        
+        # 3.1 处理优先级待合并节点
+        merged_from_priority = 0
+        if priority_merge_nodes:
+            # 按优先级排序，优先处理 Law 1 节点
+            priority_sorted = sorted(
+                priority_merge_nodes,
+                key=lambda n: n.get('priority', 'other_discard') == 'law1_high',
+                reverse=True
+            )
+            
+            # 简单的合并策略：将相同类型的节点合并
+            entity_groups = {}
+            for node in priority_sorted:
+                entity_type = node.get('entity_type', 'unknown')
+                key = (node['name'], entity_type)
+                if key not in entity_groups:
+                    entity_groups[key] = []
+                entity_groups[key].append(node['name'])
+            
+            # 合并每组中的所有节点（保留第一个作为主节点）
+            for (name, entity_type), members in entity_groups.items():
+                if len(members) >= 2:
+                    main_node_name = members[0]
+                    for alias_node_name in members[1:]:
+                        if self.store.merge_entity_by_name(main_node_name, alias_node_name):
+                            merged_from_priority += 1
+            
+            logger.info(f"Step 3.0 done: merged {merged_from_priority} entities based on priority")
+            result.entities_merged += merged_from_priority
+        
+        # 3.2 同名实体合并（Bug 修复：get_similar_entity_pairs 不查同名副本）
         dupes = self.store.get_duplicate_entities(max_copies_per_name=50)
         if dupes:
-            logger.info(f"Step 3.0: Found {len(dupes)} duplicate entity groups.")
+            logger.info(f"Step 3.2: Found {len(dupes)} duplicate entity groups.")
             for dup_name, eid_list, mention_counts in dupes:
                 if len(eid_list) < 2:
                     continue
@@ -906,9 +996,23 @@ class MeditationEngine:
                 main_eid = eid_list[main_idx]
                 for i, alias_eid in enumerate(eid_list):
                     if i != main_idx and alias_eid != main_eid:
-                        if self.store.merge_entity_nodes(main_eid, alias_eid):
-                            result.entities_merged += 1
-            logger.info(f"Step 3.0 done: merged {result.entities_merged} duplicate entities.")
+                        # 检查节点优先级
+                        main_node = self.store.find_entity_by_eid(main_eid)
+                        alias_node = self.store.find_entity_by_eid(alias_eid)
+                        
+                        # Law 1 节点优先保留
+                        if main_node and main_node.get('law_priority') == 'law1_high':
+                            if self.store.merge_entity_nodes(main_eid, alias_eid):
+                                result.entities_merged += 1
+                        elif alias_node and alias_node.get('law_priority') == 'law1_high':
+                            # 反转合并方向，保留 Law 1 节点
+                            if self.store.merge_entity_nodes(alias_eid, main_eid):
+                                result.entities_merged += 1
+                        else:
+                            # 正常合并
+                            if self.store.merge_entity_nodes(main_eid, alias_eid):
+                                result.entities_merged += 1
+            logger.info(f"Step 3.2 done: merged {result.entities_merged - merged_from_priority} duplicate entities.")
 
         # 3.1 同义词合并
         pairs = self.store.get_similar_entity_pairs(limit=100)
@@ -1233,8 +1337,42 @@ class MeditationEngine:
 
         for cluster in clusters:
             center_name = cluster["center_name"]
-            # 限制邻居节点数量，避免过度总结
-            max_neighbors = 20
+            
+            # Phase 3: 获取中心节点的优先级并调整蒸馏参数
+            center_node = self.store.find_entity(center_name)
+            compression_factor = 0.3  # 默认压缩因子
+            priority = "other_discard"
+            
+            if center_node:
+                priority = center_node.get('law_priority', 'other_discard')
+                compression_factor = self.store.get_compression_factor_for_priority(priority)
+                
+            # 根据压缩因子调整邻居节点数量和LLM参数
+            base_max_neighbors = 20
+            max_neighbors = int(base_max_neighbors * (1 - compression_factor))
+            max_neighbors = max(5, min(base_max_neighbors * 2, max_neighbors))  # 限制范围
+            
+            base_max_tokens = 300
+            max_tokens = int(base_max_tokens * (1 - compression_factor))
+            max_tokens = max(100, min(base_max_tokens * 2, max_tokens))  # 限制范围
+            
+            # 根据优先级调整蒸馏策略
+            temperature = 0.3  # 默认温度
+            if priority == 'law1_high':
+                # Law 1 高保真：不压缩，保留更多细节
+                max_neighbors = base_max_neighbors * 2
+                max_tokens = base_max_tokens * 2
+                temperature = 0.1  # 更精确
+                logger.info(f"Law 1 node detected: using high-fidelity distillation for {center_name}")
+            elif priority in ['law2_medium', 'law3_medium']:
+                # Law 2/3 中保真：适度压缩
+                temperature = 0.2  # 适中
+                logger.info(f"Law 2/3 node detected: using medium-fidelity distillation for {center_name}")
+            else:
+                # 其他可丢弃：高度压缩
+                temperature = 0.4  # 更灵活的摘要
+                logger.info(f"Non-priority node detected: using efficient distillation for {center_name}")
+            
             neighbor_names_full = [n["name"] for n in cluster["neighbor_list"]]
             neighbor_names = neighbor_names_full[:max_neighbors]
             
@@ -1242,7 +1380,7 @@ class MeditationEngine:
             
             # 使用精准的蒸馏prompt生成
             prompt = self._generate_llm_distillation_prompt(center_name, cluster["neighbor_list"][:max_neighbors], edges)
-            summary = self.llm.call_llm(prompt, temperature=0.3, max_tokens=300)
+            summary = self.llm.call_llm(prompt, temperature=temperature, max_tokens=max_tokens)
             
             if summary:
                 if result.dry_run:
@@ -1250,7 +1388,9 @@ class MeditationEngine:
                         "step": "distillation",
                         "action": "create_meta",
                         "summary": summary,
-                        "targets": [center_name] + neighbor_names[:5]
+                        "targets": [center_name] + neighbor_names[:5],
+                        "priority": priority,
+                        "compression_factor": compression_factor
                     })
                 else:
                     if self.store.create_meta_knowledge_node(
@@ -1260,6 +1400,7 @@ class MeditationEngine:
                         self.config.distillation.summarizes_relation_type
                     ):
                         result.meta_knowledge_created += 1
+                        logger.info(f"Created meta knowledge node for {center_name} (priority: {priority}, compression: {compression_factor:.2f})")
     
     def _generate_llm_distillation_prompt(self, center_name: str, neighbors: List[Dict[str, Any]], edges: List[Dict[str, Any]]) -> str:
         """生成精准的知识蒸馏prompt"""
