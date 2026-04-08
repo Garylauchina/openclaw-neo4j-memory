@@ -451,20 +451,41 @@ class GraphStore:
             query = """
             MATCH (e:Entity {name: $name, entity_type: $entity_type})
             WHERE NOT e:Archived
-            RETURN e.name AS name, e.entity_type AS entity_type,
+            RETURN elementId(e) AS eid, e.name AS name, e.entity_type AS entity_type,
                    e.properties AS properties, e.mention_count AS mention_count,
-                   e.created_at AS created_at, e.updated_at AS updated_at
+                   e.created_at AS created_at, e.updated_at AS updated_at,
+                   e.law_priority AS law_priority
             """
             params = {"name": name, "entity_type": entity_type}
         else:
             query = """
             MATCH (e:Entity {name: $name})
             WHERE NOT e:Archived
-            RETURN e.name AS name, e.entity_type AS entity_type,
+            RETURN elementId(e) AS eid, e.name AS name, e.entity_type AS entity_type,
                    e.properties AS properties, e.mention_count AS mention_count,
-                   e.created_at AS created_at, e.updated_at AS updated_at
+                   e.created_at AS created_at, e.updated_at AS updated_at,
+                   e.law_priority AS law_priority
             """
             params = {"name": name}
+
+        with self.driver.session(database=self._config.database) as session:
+            result = session.run(query, **params)
+            record = result.single()
+            if record:
+                return dict(record)
+            return None
+            
+    def find_entity_by_eid(self, eid: str) -> Optional[Dict[str, Any]]:
+        """根据元素ID查找实体（默认过滤 :Archived 节点）"""
+        query = """
+        MATCH (e:Entity)
+        WHERE elementId(e) = $eid AND NOT e:Archived
+        RETURN elementId(e) AS eid, e.name AS name, e.entity_type AS entity_type,
+               e.properties AS properties, e.mention_count AS mention_count,
+               e.created_at AS created_at, e.updated_at AS updated_at,
+               e.law_priority AS law_priority
+        """
+        params = {"eid": eid}
 
         with self.driver.session(database=self._config.database) as session:
             result = session.run(query, **params)
@@ -2823,3 +2844,76 @@ class GraphStore:
             return 0.4  # 适度压缩（保留60%）
         else:
             return 0.8  # 高度压缩（保留20%）
+
+    def merge_entity_by_name(self, main_name: str, alias_name: str, entity_type: Optional[str] = None) -> bool:
+        """
+        根据名称合并两个实体节点
+        
+        Args:
+            main_name: 主节点名称
+            alias_name: 待合并的别名节点名称
+            entity_type: 实体类型（可选，用于精确匹配）
+        
+        Returns:
+            合并成功返回 True，失败返回 False
+        """
+        try:
+            with self.driver.session(database=self._config.database) as session:
+                # 找到主节点
+                if entity_type:
+                    main_query = """
+                    MATCH (main:Entity {name: $main_name, entity_type: $entity_type})
+                    WHERE NOT main:Archived
+                    RETURN elementId(main) AS main_eid
+                    LIMIT 1
+                    """
+                    main_result = session.run(main_query, main_name=main_name, entity_type=entity_type).single()
+                else:
+                    main_query = """
+                    MATCH (main:Entity {name: $main_name})
+                    WHERE NOT main:Archived
+                    RETURN elementId(main) AS main_eid
+                    LIMIT 1
+                    """
+                    main_result = session.run(main_query, main_name=main_name).single()
+
+                if not main_result:
+                    logger.warning(f"Main entity not found for merge: {main_name}")
+                    return False
+
+                main_eid = main_result['main_eid']
+
+                # 找到别名节点
+                if entity_type:
+                    alias_query = """
+                    MATCH (alias:Entity {name: $alias_name, entity_type: $entity_type})
+                    WHERE NOT alias:Archived AND elementId(alias) <> $main_eid
+                    RETURN elementId(alias) AS alias_eid
+                    """
+                    alias_results = session.run(alias_query, alias_name=alias_name, entity_type=entity_type, main_eid=main_eid)
+                else:
+                    alias_query = """
+                    MATCH (alias:Entity {name: $alias_name})
+                    WHERE NOT alias:Archived AND elementId(alias) <> $main_eid
+                    RETURN elementId(alias) AS alias_eid
+                    """
+                    alias_results = session.run(alias_query, alias_name=alias_name, main_eid=main_eid)
+
+                # 合并所有找到的别名节点
+                success_count = 0
+                for alias_record in alias_results:
+                    alias_eid = alias_record['alias_eid']
+                    # 调用已有的合并方法
+                    if self.merge_entity_nodes(main_eid, alias_eid):
+                        success_count += 1
+
+                if success_count > 0:
+                    logger.info(f"Merged {success_count} alias(es) into main entity: {main_name}")
+                    return True
+                else:
+                    logger.warning(f"No alias entities found for merge: {alias_name}")
+                    return False
+
+        except Exception as e:
+            logger.error(f"Failed to merge entities by name: {e}")
+            return False
