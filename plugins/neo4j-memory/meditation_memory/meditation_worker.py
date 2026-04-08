@@ -840,21 +840,34 @@ class MeditationEngine:
                 result.belief_conflicts_detected = len(belief_conflicts)
             logger.info(f"Step 2.0: Detected {len(belief_conflicts)} belief conflicts.")
 
-        # 2.1 处理孤立节点
+        # Phase 3: 基于元认知三定律优先级的节点筛选
+        # Law 1 信息高保真：跳过删除/压缩
+        # Law 2/3 信息中保真：适度压缩
+        # 其他信息可丢弃：低置信度、低频次节点优先作为噪声过滤候选
+        
+        # 2.1 获取基于优先级的待修剪节点
+        priority_nodes = self.store.get_nodes_to_prune_with_priority(
+            min_mentions=self.config.pruning.orphan_min_mentions,
+            skip_recent_seconds=self.config.safety.skip_recently_updated_seconds
+        )
+        logger.info(f"Step 2.1: Found {len(priority_nodes)} potential nodes to prune based on priority")
+        
+        # 2.2 传统噪声过滤
+        # 处理孤立节点
         orphans = self.store.get_orphan_nodes(
             min_mentions=self.config.pruning.orphan_min_mentions,
             skip_recent_seconds=self.config.safety.skip_recently_updated_seconds
         )
         orphan_names = [o["name"] for o in orphans]
 
-        # 2.2 处理通用词节点
+        # 处理通用词节点
         generics = self.store.get_generic_word_nodes(
             generic_words=self.config.pruning.generic_words,
             skip_recent_seconds=self.config.safety.skip_recently_updated_seconds
         )
         generic_names = [g["name"] for g in generics]
 
-        # 2.3 基于频次的噪声过滤（接入 rule_engine 的 FrequencyAnalyzer）
+        # 基于频次的噪声过滤（接入 rule_engine 的 FrequencyAnalyzer）
         entity_counts = self.store.get_entity_mention_counts()
         total_documents = self.store.get_total_documents()
         
@@ -863,41 +876,85 @@ class MeditationEngine:
         )
         
         filtered_out_names = list(frequency_result.get('filtered_out_entities', {}).keys())
-        logger.info(f"Step 2.3: Frequency filtering identified {len(filtered_out_names)} low-frequency entities to prune")
+        logger.info(f"Step 2.2: Frequency filtering identified {len(filtered_out_names)} low-frequency entities to prune")
 
-        # 合并所有待归档节点
-        to_archive = list(set(orphan_names + generic_names + filtered_out_names))
-        if not to_archive:
+        # 合并所有候选节点
+        all_candidate_names = list(set(orphan_names + generic_names + filtered_out_names))
+        
+        # 将候选节点转换为完整节点字典，以便进行优先级调整
+        candidate_nodes = []
+        for name in all_candidate_names:
+            node = self.store.find_entity(name)
+            if node:
+                # 添加优先级信息
+                node_with_priority = {
+                    'name': node.get('name'),
+                    'entity_type': node.get('entity_type'),
+                    'confidence': node.get('confidence', 0.5),
+                    'mention_count': node.get('mention_count', 0),
+                    'priority': node.get('law_priority', 'other_discard')
+                }
+                candidate_nodes.append(node_with_priority)
+        
+        # 添加基于优先级的待修剪节点
+        candidate_nodes.extend(priority_nodes)
+        
+        # 最终优先级调整
+        final_to_archive = self.store.update_pruning_behavior_based_on_priority(candidate_nodes)
+        final_to_archive_names = list(set([n['name'] for n in final_to_archive]))
+        
+        if not final_to_archive_names:
+            logger.info("Step 2: No nodes need pruning after priority filtering")
+            result.pruning_stats = {
+                "total_entities": len(entity_counts),
+                "priority_filtered_entities": len(candidate_nodes),
+                "final_pruned_entities": 0
+            }
             return
 
         if result.dry_run:
             result.suggestions.append({
                 "step": "pruning",
                 "action": "archive",
-                "nodes": to_archive,
-                "reason": "orphan, generic word, or low-frequency entity"
+                "nodes": final_to_archive_names,
+                "reason": "priority-filtered nodes (orphans, generics, low-frequency, non-Law1)"
             })
+            logger.info(f"Step 2: Would archive {len(final_to_archive_names)} nodes in dry run")
         else:
-            archived_count = self.store.archive_nodes(to_archive, reason="meditation_pruning")
+            archived_count = self.store.archive_nodes(final_to_archive_names, reason="meditation_pruning_priority_filtered")
             result.nodes_pruned = archived_count
-            logger.info(f"Pruned {archived_count} nodes (orphans: {len(orphan_names)}, generics: {len(generic_names)}, low-frequency: {len(filtered_out_names)})")
+            logger.info(f"Pruned {archived_count} nodes after priority filtering (from {len(candidate_nodes)} candidates)")
         
         # 记录频次过滤的统计信息
         result.pruning_stats = {
             "total_entities": len(entity_counts),
             "kept_entities": frequency_result.get('kept_count', 0),
             "filtered_entities": frequency_result.get('filtered_count', 0),
-            "average_frequency": frequency_result.get('average_frequency', 0.0)
+            "average_frequency": frequency_result.get('average_frequency', 0.0),
+            "priority_candidates": len(candidate_nodes),
+            "final_pruned": len(final_to_archive_names),
+            "law1_nodes_skipped": len([n for n in candidate_nodes if n.get('priority') == 'law1_high']),
+            "law2_nodes_skipped": len([n for n in candidate_nodes if n.get('priority') == 'law2_medium']),
+            "law3_nodes_skipped": len([n for n in candidate_nodes if n.get('priority') == 'law3_medium'])
         }
 
     # ---------- 步骤 3: 实体整合与修复 (Merging) ----------
 
     async def _step_3_merging(self, result: MeditationRunResult, nodes: List[Dict[str, Any]]):
         """同义词合并、截断修复、元数据补充。"""
-        # 3.0 同名实体合并（Bug 修复：get_similar_entity_pairs 不查同名副本）
+        # Phase 3: 基于元认知三定律优先级的合并
+        # Law 1 信息高保真：优先合并以保持信息完整性
+        # Law 2/3 信息中保真：适度合并
+        # 其他信息可丢弃：自由合并
+        
+        # 3.0 基于优先级的待合并节点
+        priority_merge_nodes = self.store.get_nodes_to_merge_with_priority()
+        logger.info(f"Step 3.0: Found {len(priority_merge_nodes)} nodes for merging based on priority")
+        
+        # 3.1 同名实体合并（Bug 修复：get_similar_entity_pairs 不查同名副本）
         dupes = self.store.get_duplicate_entities(max_copies_per_name=50)
         if dupes:
-            logger.info(f"Step 3.0: Found {len(dupes)} duplicate entity groups.")
+            logger.info(f"Step 3.1: Found {len(dupes)} duplicate entity groups.")
             for dup_name, eid_list, mention_counts in dupes:
                 if len(eid_list) < 2:
                     continue
@@ -906,9 +963,23 @@ class MeditationEngine:
                 main_eid = eid_list[main_idx]
                 for i, alias_eid in enumerate(eid_list):
                     if i != main_idx and alias_eid != main_eid:
-                        if self.store.merge_entity_nodes(main_eid, alias_eid):
-                            result.entities_merged += 1
-            logger.info(f"Step 3.0 done: merged {result.entities_merged} duplicate entities.")
+                        # 检查节点优先级
+                        main_node = self.store.find_entity_by_eid(main_eid)
+                        alias_node = self.store.find_entity_by_eid(alias_eid)
+                        
+                        # Law 1 节点优先保留
+                        if main_node and main_node.get('law_priority') == 'law1_high':
+                            if self.store.merge_entity_nodes(main_eid, alias_eid):
+                                result.entities_merged += 1
+                        elif alias_node and alias_node.get('law_priority') == 'law1_high':
+                            # 反转合并方向，保留 Law 1 节点
+                            if self.store.merge_entity_nodes(alias_eid, main_eid):
+                                result.entities_merged += 1
+                        else:
+                            # 正常合并
+                            if self.store.merge_entity_nodes(main_eid, alias_eid):
+                                result.entities_merged += 1
+            logger.info(f"Step 3.1 done: merged {result.entities_merged} duplicate entities.")
 
         # 3.1 同义词合并
         pairs = self.store.get_similar_entity_pairs(limit=100)
