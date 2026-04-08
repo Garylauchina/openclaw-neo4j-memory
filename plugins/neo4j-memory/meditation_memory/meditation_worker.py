@@ -154,6 +154,14 @@ class MeditationRunResult:
             },
             "errors": self.errors,
             "suggestions": self.suggestions if self.dry_run else [],
+            "entropy_metrics": {
+                "initial_entropy": self.initial_entropy,
+                "final_entropy": self.final_entropy,
+                "entropy_reduction_percent": self.entropy_reduction_percent,
+                "step_operation_counts": self.step_operation_counts,
+            },
+            "pruning_stats": self.pruning_stats,
+            "evolution_params": self.evolution_params if hasattr(self, 'evolution_params') else None,
         }
 
 
