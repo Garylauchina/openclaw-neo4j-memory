@@ -42,6 +42,19 @@ class GraphEntropyMetrics:
     def __init__(self):
         self.logger = logging.getLogger(__name__)
     
+    def _shannon_entropy(self, counts: Dict, total: int, label: str = "") -> float:
+        """Compute Shannon entropy from a frequency distribution"""
+        if total == 0:
+            return 0.0
+        entropy = 0.0
+        for key, count in counts.items():
+            probability = count / total
+            if probability > 0:
+                entropy -= probability * math.log2(probability)
+        if label:
+            self.logger.info(f"{label} entropy: {entropy:.4f} bits (total: {total}, unique: {len(counts)})")
+        return entropy
+
     def compute_node_degree_entropy(self, degree_counts: Dict[int, int], total_nodes: int) -> float:
         """Compute Shannon entropy of node degree distribution
         

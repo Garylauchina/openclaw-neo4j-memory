@@ -423,17 +423,20 @@ class GraphTopologyAnalyzer:
         clusters = {}
         cluster_id = 0
         
-        def dfs(node, current_cluster):
-            visited.add(node)
-            current_cluster.append(node)
-            for neighbor in adjacency_lists.get(node, []):
-                if neighbor not in visited:
-                    dfs(neighbor, current_cluster)
+        from collections import deque
         
         for node in adjacency_lists:
             if node not in visited:
                 current_cluster = []
-                dfs(node, current_cluster)
+                queue = deque([node])
+                visited.add(node)
+                while queue:
+                    current = queue.popleft()
+                    current_cluster.append(current)
+                    for neighbor in adjacency_lists.get(current, []):
+                        if neighbor not in visited:
+                            visited.add(neighbor)
+                            queue.append(neighbor)
                 
                 if len(current_cluster) >= min_cluster_size:
                     clusters[f"cluster_{cluster_id}"] = current_cluster
