@@ -56,55 +56,11 @@ class GraphEntropyMetrics:
         return entropy
 
     def compute_node_degree_entropy(self, degree_counts: Dict[int, int], total_nodes: int) -> float:
-        """Compute Shannon entropy of node degree distribution
-        
-        Args:
-            degree_counts: dict mapping degree value to count
-            total_nodes: total number of nodes in graph
-            
-        Returns:
-            Entropy value in bits
-        """
-        if total_nodes == 0:
-            return 0.0
-        
-        entropy = 0.0
-        for degree, count in degree_counts.items():
-            probability = count / total_nodes
-            if probability > 0:
-                entropy -= probability * math.log2(probability)
-        
-        self.logger.info(f"Node degree entropy: {entropy:.4f} bits (nodes: {total_nodes}, unique degrees: {len(degree_counts)})")
-        return entropy
-    
+        return self._shannon_entropy(degree_counts, total_nodes, "Node degree")
     def compute_relation_type_entropy(self, relation_counts: Dict[str, int], total_relations: int) -> float:
-        """Compute Shannon entropy of relation type distribution"""
-        if total_relations == 0:
-            return 0.0
-        
-        entropy = 0.0
-        for rel_type, count in relation_counts.items():
-            probability = count / total_relations
-            if probability > 0:
-                entropy -= probability * math.log2(probability)
-        
-        self.logger.info(f"Relation type entropy: {entropy:.4f} bits (relations: {total_relations}, unique types: {len(relation_counts)})")
-        return entropy
-    
+        return self._shannon_entropy(relation_counts, total_relations, "Relation type")
     def compute_confidence_entropy(self, confidence_counts: Dict[str, int], total_items: int) -> float:
-        """Compute entropy of confidence score distribution (binned)"""
-        if total_items == 0:
-            return 0.0
-        
-        entropy = 0.0
-        for bin_range, count in confidence_counts.items():
-            probability = count / total_items
-            if probability > 0:
-                entropy -= probability * math.log2(probability)
-        
-        self.logger.info(f"Confidence entropy: {entropy:.4f} bits (items: {total_items}, bins: {len(confidence_counts)})")
-        return entropy
-    
+        return self._shannon_entropy(confidence_counts, total_items, "Confidence")
     def compute_composite_graph_entropy(self, graph_stats: Dict[str, Any]) -> Dict[str, float]:
         """Compute composite entropy metrics for a knowledge graph
         
