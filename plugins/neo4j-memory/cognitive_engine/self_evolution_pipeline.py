@@ -49,172 +49,259 @@ def build_system_state_from_meditation(
     # 写入率 = (合并 + 修复 + 关系重标注) / 总扫描
     applied = (
         stats.get("entities_merged", 0)
-        + stats.get("entities_repaired", 0)
-        + stats.get("relations_relabeled", 0)
+        + stats.get("nodes_archived", 0)
+        + stats.get("relations_reannotated", 0)
     )
-    write_ratio = applied / scanned
+    apply_rate = applied / scanned
 
-    return {
-        "total_nodes": total_nodes,
-        "total_edges": total_edges,
-        "total_applied_diffs": applied,
-        "total_patterns": stats.get("meta_knowledge_created", 0),
-        "avg_pattern_confidence": 1.0 - conflict_rate,
-        "write_ratio": round(write_ratio, 4),
-        "conflict_rate": round(conflict_rate, 4),
-        "error_count": len(errors),
-        "edges_per_round": total_edges / max(1, scanned),
-        "diffs_per_round": applied / max(1, scanned),
+    # 信息增益 = 元知识数量 - 归档节点数量
+    info_gain = stats.get("meta_knowledge_created", 0) - pruned
+
+    # 系统状态字典
+    state = {
+        "metrics": {
+            "conflict_rate": conflict_rate,
+            "apply_rate": apply_rate,
+            "info_gain": info_gain,
+            "error_rate": len(errors) / len(meditation_result.get("steps", [])),
+            "efficiency": stats.get("total_seconds", 0) / max(1, total_nodes),
+        },
+        "node_stats": {
+            "total": total_nodes,
+            "pruned": pruned,
+            "merged": stats.get("entities_merged", 0),
+            "created": stats.get("meta_knowledge_created", 0),
+        },
+        "edge_stats": {
+            "total": total_edges,
+            "replaced": stats.get("relations_reannotated", 0),
+        },
+        "success": not bool(errors),
+        "needs_adjustment": conflict_rate > 0.3 or apply_rate < 0.1,
+        "current_steps": meditation_result.get("steps", []),
     }
 
+    # 状态映射：从 Metrics 映射到 SystemStatus
+    if state["metrics"]["conflict_rate"] > 0.5:
+        state["status"] = "CRITICAL"
+    elif state["needs_adjustment"]:
+        state["status"] = "WARNING"
+    elif state["metrics"]["info_gain"] > 0:
+        state["status"] = "IMPROVED"
+    else:
+        state["status"] = "STABLE"
+
+    return state
 
 # ======================================================================
-# 2. 元学系统反馈：从冥思统计计算 feedback_signal
+# 元认知三定律优先级编码集成
+# ======================================================================
+
+def apply_three_laws_priority_to_state(state: Dict[str, Any]) -> Dict[str, Any]:
+    """
+    为系统状态应用元认知三定律优先级编码
+
+    Args:
+        state: 系统状态字典
+
+    Returns:
+        更新后的系统状态
+    """
+    priority_weights = {
+        'law1_high': 3.0,
+        'law2_medium': 2.0,
+        'law3_medium': 1.0,
+        'other_discard': 0.5
+    }
+
+    # 为不同类型的节点设置优先级
+    if 'node_stats' in state:
+        node_stats = state['node_stats']
+        total_nodes = node_stats.get('total', 0)
+
+        # 处理不同类型的节点
+        for node_type in ['cognitive', 'reflection', 'boundary', 'general']:
+            count = node_stats.get(f'{node_type}_count', 0)
+            if count > 0:
+                # 根据节点类型确定优先级
+                if node_type == 'cognitive':
+                    priority = 'law1_high'
+                elif node_type == 'reflection':
+                    priority = 'law2_medium'
+                elif node_type == 'boundary':
+                    priority = 'law3_medium'
+                else:
+                    priority = 'other_discard'
+
+                # 应用优先级权重
+                weight = priority_weights[priority]
+                state.setdefault('priority_weights', {})[node_type] = weight
+                state.setdefault('priority_assignments', {})[node_type] = priority
+
+                logger.info(f"Applied {priority} priority to {node_type} nodes (count: {count}, weight: {weight})")
+
+    # 为策略应用优先级
+    if 'strategy_performance' in state:
+        for strategy_name, performance in state['strategy_performance'].items():
+            # 根据策略性能和类型确定优先级
+            if performance.get('success_rate', 0) > 0.9:
+                priority = 'law1_high'
+            elif performance.get('type') in ['cognitive', 'reflection']:
+                priority = 'law2_medium'
+            elif performance.get('type') == 'boundary':
+                priority = 'law3_medium'
+            else:
+                priority = 'other_discard'
+
+            # 更新策略
+            performance['law_priority'] = priority
+            performance['compression_factor'] = calculate_compression_factor(priority)
+            logger.info(f"Set strategy {strategy_name} to {priority} priority")
+
+    return state
+
+
+def calculate_compression_factor(priority: str) -> float:
+    """
+    根据优先级计算压缩因子
+
+    Args:
+        priority: 优先级类型
+
+    Returns:
+        压缩因子 (0.0-1.0)
+    """
+    compression_map = {
+        'law1_high': 0.0,    # 不压缩
+        'law2_medium': 0.3,  # 保留70%
+        'law3_medium': 0.4,  # 保留60%
+        'other_discard': 0.8 # 保留20%
+    }
+    return compression_map.get(priority, 0.8)
+
+# ======================================================================
+# 2. 自适应学习 → 元学习反馈
 # ======================================================================
 
 def compute_metalearn_feedback(
-    meditation_result: Dict[str, Any],
-    previous_result: Optional[Dict[str, Any]] = None,
+    current_result: Dict[str, Any], previous_result: Optional[Dict[str, Any]] = None
 ) -> Dict[str, Any]:
     """
-    量化本次冥思的「学习成效」，反馈给元学习系统。
+    计算元学习反馈信号：质量增益、速度、稳定性等。
+
+    Args:
+        current_result: 本次冥思结果
+        previous_result: 上次冥思结果（可选，用于计算增量）
 
     Returns:
-        {
-            "success": True/False,
-            "quality_delta": -1.0 ~ +1.0,
-            "velocity": int (处理实体数),
-            "learning_velocity": float (边增长/轮),
-            "confidence": 0.0 ~ 1.0
-        }
+        包含反馈信号的字典
     """
-    stats = meditation_result.get("stats", {})
-    errors = meditation_result.get("errors", [])
+    stats = current_result.get("stats", {})
+    total_seconds = stats.get("total_seconds", 0)
 
-    # velocity = 本次实际处理的实体数量
-    velocity = (
-        stats.get("entities_merged", 0)
-        + stats.get("entities_repaired", 0)
-        + stats.get("relations_relabeled", 0)
-        + stats.get("meta_knowledge_created", 0)
-    )
-
-    # quality indicators
-    belief_conflicts = stats.get("belief_conflicts_detected", 0)
-    high_priority = stats.get("attention_high_priority", 0)
-    quality_flagged = stats.get("attention_quality_flagged", 0)
-
-    # quality_delta: +1 表示高质量运行，-1 表示大量问题
-    quality_delta = 0.0
-    if velocity > 0:
-        quality_delta += 0.3  # 有实际处理 → 基础加分
-    if high_priority > 0:
-        quality_delta += 0.1  # 处理了高优先级实体
-    if belief_conflicts > 5:
-        quality_delta -= 0.2  # 大量信念冲突 → 减分
-    if quality_flagged > 10:
-        quality_delta -= 0.1  # 大量质量标记 → 减分
-    if errors:
-        quality_delta -= 0.1 * len(errors)
-
-    quality_delta = max(-1.0, min(1.0, quality_delta))
-
-    # confidence
-    confidence = 1.0 - (len(errors) * 0.1) - (belief_conflicts * 0.02)
-    confidence = max(0.0, min(1.0, confidence))
-
-    # delta vs previous
-    delta_metrics = {}
-    if previous_result:
-        prev_stats = previous_result.get("stats", {})
-        for key in ["entities_merged", "relations_relabeled", "meta_knowledge_created"]:
-            curr = stats.get(key, 0)
-            prev = prev_stats.get(key, 0)
-            if prev > 0:
-                delta_metrics[key] = round((curr - prev) / prev, 4)
-
-    return {
-        "success": len(errors) == 0 and quality_delta >= 0,
-        "quality_delta": round(quality_delta, 4),
-        "velocity": velocity,
-        "confidence": round(confidence, 4),
-        "delta_metrics": delta_metrics,
+    feedback = {
+        "quality_delta": 0.0,
+        "velocity": stats.get("nodes_scanned", 0),
+        "stability": 1.0 - len(current_result.get("errors", [])) / 10.0,
+        "success": True,
+        "timestamp": stats.get("start_time"),
     }
 
+    # 如果有历史数据，计算增量
+    if previous_result:
+        prev_stats = previous_result.get("stats", {})
+        
+        # 质量增益 = (本次信息增益 - 上次信息增益) / max(1, 上次信息增益)
+        current_gain = stats.get("meta_knowledge_created", 0) - stats.get("nodes_pruned", 0)
+        prev_gain = prev_stats.get("meta_knowledge_created", 0) - prev_stats.get("nodes_pruned", 0)
+        if prev_gain != 0:
+            feedback["quality_delta"] = (current_gain - prev_gain) / abs(prev_gain)
+        else:
+            feedback["quality_delta"] = current_gain
+
+        # 速度比 = 本次扫描速度 / 上次扫描速度
+        prev_seconds = prev_stats.get("total_seconds", float("inf"))
+        if prev_seconds > 0 and total_seconds > 0:
+            current_speed = stats.get("nodes_scanned", 0) / total_seconds
+            prev_speed = prev_stats.get("nodes_scanned", 0) / prev_seconds
+            feedback["speed_ratio"] = current_speed / prev_speed
+
+        # 稳定性变化
+        feedback["stability_delta"] = feedback["stability"] - (1.0 - len(previous_result.get("errors", [])) / 10.0)
+
+    return feedback
 
 # ======================================================================
-# 3. 冥思配置自动调优建议
+# 3. 元学习反馈 → 配置自动调优
 # ======================================================================
 
 def suggest_config_adjustments(
-    meditation_result: Dict[str, Any],
-    current_config: Optional[Dict[str, Any]] = None,
+    current_result: Dict[str, Any], current_config: Optional[Dict[str, Any]] = None
 ) -> List[Dict[str, Any]]:
     """
-    根据冥思结果给出配置调整建议。
+    根据反馈信号生成冥思配置调优建议。
 
-    建议类型：
-        - increase_batch_size: 批处理量太小
-        - decrease_batch_size: 批处理量太大导致超时/错误
-        - increase_pruning_threshold: 修剪太多/太少
-        - enable_adaptive_learning: 系统进入稳定期应开启自适应
-        - increase_meta_nodes: 知识蒸馏产出不足
+    Args:
+        current_result: 本次冥思结果
+        current_config: 当前配置（可选，用于基线比较）
+
+    Returns:
+        调优建议列表
     """
-    suggestions: List[Dict[str, Any]] = []
-    stats = meditation_result.get("stats", {})
-    errors = meditation_result.get("errors", [])
+    suggestions = []
+    stats = current_result.get("stats", {})
+    errors = current_result.get("errors", [])
 
-    scanned = stats.get("nodes_scanned", 0)
-
-    # 规则1: 扫描量大但处理量小 → 增加批处理
-    if scanned > 200 and stats.get("entities_merged", 0) < 5:
+    # 冲突率过高 → 调整合并阈值
+    conflict_rate = (
+        (stats.get("belief_conflicts_detected", 0) + stats.get("nodes_pruned", 0))
+        / max(1, stats.get("nodes_scanned", 1))
+    )
+    if conflict_rate > 0.4:
         suggestions.append({
-            "action": "increase_merging_batch",
-            "reason": f"Scanned {scanned} nodes but only merged {stats.get('entities_merged', 0)}",
-            "param": "meditation.merging.similar_entity_batch",
+            "action": "increase_merge_threshold",
+            "reason": f"High conflict rate {conflict_rate:.2f}",
+            "current": current_config.get("merge_threshold", 0.7),
+            "suggested": 0.8,
         })
 
-    # 规则2: 有错误 → 减少批处理降低风险
+    # 没有合并任何实体 → 降低相似度阈值
+    if stats.get("entities_merged", 0) == 0:
+        suggestions.append({
+            "action": "decrease_similarity_threshold",
+            "reason": "No entities merged",
+            "current": current_config.get("similarity_threshold", 0.8),
+            "suggested": 0.6,
+        })
+
+    # 元知识创建过少 → 增加蒸馏阈值
+    meta_created = stats.get("meta_knowledge_created", 0)
+    if meta_created < 5:
+        suggestions.append({
+            "action": "lower_distillation_threshold",
+            "reason": f"Low meta-knowledge creation ({meta_created})",
+            "current": current_config.get("min_cluster_size", 5),
+            "suggested": 3,
+        })
+
+    # 有错误发生 → 建议分步调试
     if errors:
         suggestions.append({
-            "action": "reduce_batch_size",
-            "reason": f"{len(errors)} errors occurred, reducing batch for safety",
-            "param": "meditation.*_batch",
-        })
-
-    # 规则3: 高优先级实体被处理 → 系统稳定，可开启自适应学习
-    if stats.get("attention_high_priority", 0) > 20 and not errors:
-        suggestions.append({
-            "action": "enable_adaptive_learning",
-            "reason": "High priority nodes processed successfully — system is stable",
-            "param": "adaptive_learning.enabled",
-        })
-
-    # 规则4: 知识蒸馏产出不足 → 增加元知识节点上限
-    if scanned > 100 and stats.get("meta_knowledge_created", 0) < 3:
-        suggestions.append({
-            "action": "increase_meta_node_limit",
-            "reason": "Low meta-knowledge yield despite high scan count",
-            "param": "meditation.distillation.max_meta_nodes",
-        })
-
-    # 规则5: 信念冲突多 → 增加冲突检测权重
-    if stats.get("belief_conflicts_detected", 0) > 10:
-        suggestions.append({
-            "action": "increase_belief_conflict_threshold",
-            "reason": f"{stats['belief_conflicts_detected']} belief conflicts detected",
-            "param": "belief_integration.conflict_threshold",
+            "action": "enable_step_debugging",
+            "reason": f"{len(errors)} errors detected",
+            "suggested": True,
         })
 
     return suggestions
 
+# ======================================================================
+# 数据结构与完整管道
+# ======================================================================
 
-# ======================================================================
-# 4. 一键调用：完整进化管道
-# ======================================================================
 
 @dataclass
 class EvolutionPipelineResult:
+    """自我进化管道返回结果"""
     system_state: Dict[str, Any] = field(default_factory=dict)
     feedback: Dict[str, Any] = field(default_factory=dict)
     config_suggestions: List[Dict[str, Any]] = field(default_factory=list)
@@ -236,13 +323,17 @@ def run_evolution_pipeline(
            meditation_worker.run_meditation() 返回值处理。
     """
     system_state = build_system_state_from_meditation(meditation_result, graph_stats)
+    
+    # 应用元认知三定律优先级编码
+    system_state_with_priority = apply_three_laws_priority_to_state(system_state)
+
     feedback = compute_metalearn_feedback(meditation_result, previous_result)
     suggestions = suggest_config_adjustments(meditation_result, current_config)
 
     if feedback.get("success"):
         logger.info(
             "Evolution pipeline: quality_delta=%.3f velocity=%d confidence=%.3f",
-            feedback["quality_delta"], feedback["velocity"], feedback["confidence"],
+            feedback["quality_delta"], feedback["velocity"], feedback.get("confidence", 0.0),
         )
     else:
         logger.warning(
@@ -254,7 +345,7 @@ def run_evolution_pipeline(
         logger.info("Config suggestion: %s → %s", s["action"], s["reason"])
 
     return EvolutionPipelineResult(
-        system_state=system_state,
+        system_state=system_state_with_priority,
         feedback=feedback,
         config_suggestions=suggestions,
     )
