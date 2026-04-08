@@ -165,20 +165,37 @@ class MeditationWeightConfig:
         )
     )
 
-    # 三个维度的权重系数（总和为 1.0）
+    # 四个维度的权重系数（总和为 1.0）
     recency_weight: float = field(
         default_factory=lambda: float(
-            os.environ.get("MEDITATION_RECENCY_WEIGHT", "0.3")
+            os.environ.get("MEDITATION_RECENCY_WEIGHT", "0.25")
         )
     )
     semantic_weight: float = field(
         default_factory=lambda: float(
-            os.environ.get("MEDITATION_SEMANTIC_WEIGHT", "0.4")
+            os.environ.get("MEDITATION_SEMANTIC_WEIGHT", "0.35")
         )
     )
     centrality_weight: float = field(
         default_factory=lambda: float(
-            os.environ.get("MEDITATION_CENTRALITY_WEIGHT", "0.3")
+            os.environ.get("MEDITATION_CENTRALITY_WEIGHT", "0.25")
+        )
+    )
+    frequency_weight: float = field(
+        default_factory=lambda: float(
+            os.environ.get("MEDITATION_FREQUENCY_WEIGHT", "0.15")
+        )
+    )
+    
+    # 提及频次阈值
+    high_mention_threshold: int = field(
+        default_factory=lambda: int(
+            os.environ.get("MEDITATION_HIGH_MENTION_THRESHOLD", "10")
+        )
+    )
+    medium_mention_threshold: int = field(
+        default_factory=lambda: int(
+            os.environ.get("MEDITATION_MEDIUM_MENTION_THRESHOLD", "3")
         )
     )
 
