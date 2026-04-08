@@ -109,6 +109,13 @@ class MeditationRunResult:
 
     # Dry-run 模式下的建议操作
     suggestions: List[Dict[str, Any]] = field(default_factory=list)
+    
+    # Phase 2: 熵度量相关字段
+    initial_entropy: Dict[str, float] = field(default_factory=dict)
+    final_entropy: Dict[str, float] = field(default_factory=dict)
+    entropy_reduction_percent: float = 0.0
+    step_entropy_reduction: Dict[str, int] = field(default_factory=dict)
+    pruning_stats: Dict[str, Any] = field(default_factory=dict)
 
     def to_dict(self) -> Dict[str, Any]:
         return {
@@ -563,6 +570,13 @@ class MeditationEngine:
             except Exception as e:
                 logger.warning(f"Evolution analysis failed, continuing with normal meditation: {e}")
             
+            # Phase 2: 熵度量集成 - 冥思开始前计算初始熵
+            entropy_metrics = GraphEntropyMetrics()
+            initial_stats = self.store.get_graph_statistics()
+            initial_entropy = entropy_metrics.compute_composite_graph_entropy(initial_stats)
+            result.initial_entropy = initial_entropy
+            logger.info(f"Initial composite entropy: {initial_entropy.get('composite_entropy', 0.0):.4f} bits")
+            
             # 1. 数据快照与锁定
             nodes = await self._step_1_snapshot_and_lock(result, target_nodes)
             if not nodes:
@@ -625,6 +639,42 @@ class MeditationEngine:
             except Exception as e:
                 logger.error(f"Step 8 (Self-Reflection) failed, continuing: {e}")
                 result.errors.append(f"step_8_self_reflection: {e}")
+                
+            # Phase 2: 熵度量集成 - 冥思结束后计算最终熵
+            final_stats = self.store.get_graph_statistics()
+            final_entropy = entropy_metrics.compute_composite_graph_entropy(final_stats)
+            result.final_entropy = final_entropy
+            
+            # 计算熵减效果
+            entropy_reduction_analyzer = EntropyReductionAnalyzer()
+            if initial_entropy.get('composite_entropy', 0.0) > 0:
+                entropy_reduction_percent = ((initial_entropy.get('composite_entropy', 0.0) - final_entropy.get('composite_entropy', 0.0)) / 
+                                           initial_entropy.get('composite_entropy', 0.0)) * 100
+                result.entropy_reduction_percent = round(entropy_reduction_percent, 2)
+                logger.info(f"Final composite entropy: {final_entropy.get('composite_entropy', 0.0):.4f} bits (reduction: {result.entropy_reduction_percent:.2f}%)")
+                
+                # 记录每步熵减效果
+                result.step_entropy_reduction = {
+                    "pruning": result.nodes_pruned,
+                    "merging": result.entities_merged,
+                    "relabeling": result.relations_relabeled,
+                    "weighting": result.weights_updated,
+                    "distillation": result.meta_knowledge_created
+                }
+            else:
+                result.entropy_reduction_percent = 0.0
+                logger.info(f"Final composite entropy: {final_entropy.get('composite_entropy', 0.0):.4f} bits")
+                
+            # 更新策略性能统计
+            optimizer = MeditationOptimizer()
+            optimizer.update_strategy_performance({
+                "strategy_name": "Phase2_Evolution",
+                "initial_entropy": initial_entropy.get('composite_entropy', 0.0),
+                "final_entropy": final_entropy.get('composite_entropy', 0.0),
+                "reduction_percent": result.entropy_reduction_percent,
+                "step_stats": result.step_entropy_reduction,
+                "run_id": run_id
+            })
 
             result.status = "completed" if not dry_run else "dry_run"
             logger.info(f"Meditation run {run_id} completed successfully.")

@@ -2472,3 +2472,69 @@ class GraphStore:
                 "Failed to link strategy %s to chain %s: %s",
                 strategy_name, chain_id, e,
             )
+
+    def get_graph_statistics(self) -> Dict[str, Any]:
+        """
+        获取图谱统计信息，用于计算熵度量
+        
+        Returns:
+            包含各种图谱统计指标的字典
+        """
+        stats = {}
+        
+        try:
+            with self.driver.session(database=self._config.database) as session:
+                # 获取节点数量和度分布
+                node_query = """
+                MATCH (n)
+                WITH n, size((n)--()) AS degree
+                RETURN count(n) AS total_nodes,
+                       collect(degree) AS degrees
+                """
+                node_result = session.run(node_query).single()
+                if node_result:
+                    stats['total_nodes'] = node_result['total_nodes']
+                    degrees = node_result['degrees']
+                    degree_counts = Counter(degrees)
+                    stats['node_degree_counts'] = dict(degree_counts)
+                
+                # 获取关系类型分布
+                rel_query = """
+                MATCH ()-[r]->()
+                RETURN type(r) AS rel_type, count(r) AS count
+                """
+                rel_results = session.run(rel_query)
+                relation_counts = {}
+                total_relations = 0
+                for record in rel_results:
+                    rel_type = record['rel_type']
+                    count = record['count']
+                    relation_counts[rel_type] = count
+                    total_relations += count
+                stats['total_relations'] = total_relations
+                stats['relation_type_counts'] = relation_counts
+                
+                # 获取置信度分布
+                conf_query = """
+                MATCH ()-[r]->()
+                WHERE exists(r.confidence)
+                RETURN r.confidence AS confidence, count(r) AS count
+                """
+                conf_results = session.run(conf_query)
+                confidence_counts = {}
+                total_confidences = 0
+                for record in conf_results:
+                    conf = record['confidence']
+                    count = record['count']
+                    # 分桶统计
+                    if isinstance(conf, (int, float)):
+                        bin_key = f"{int(conf*10)/10.0:.1f}-{min(1.0, int(conf*10)/10.0+0.1):.1f}"
+                        confidence_counts[bin_key] = confidence_counts.get(bin_key, 0) + count
+                        total_confidences += count
+                stats['total_confidences'] = total_confidences
+                stats['confidence_bin_counts'] = confidence_counts
+                
+        except Exception as e:
+            logger.error("Failed to get graph statistics: %s", e)
+        
+        return stats
