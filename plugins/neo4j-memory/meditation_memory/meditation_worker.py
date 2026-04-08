@@ -178,21 +178,40 @@ class MeditationLLMClient:
             self._client = OpenAI(**kwargs)
         return self._client
 
-    def _call_llm(self, system_prompt: str, user_prompt: str) -> str:
+    def _call_llm(self, system_prompt: str, user_prompt: str, temperature: Optional[float] = None, max_tokens: Optional[int] = None) -> str:
         try:
+            temp = temperature if temperature is not None else self._config.temperature
+            max_t = max_tokens if max_tokens is not None else self._config.max_tokens
+            
             response = self.client.chat.completions.create(
                 model=self._config.model,
                 messages=[
                     {"role": "system", "content": system_prompt},
                     {"role": "user", "content": user_prompt},
                 ],
-                temperature=self._config.temperature,
+                temperature=temp,
+                max_tokens=max_t,
                 timeout=self._config.request_timeout,
             )
             return response.choices[0].message.content.strip()
         except Exception as e:
             logger.error("LLM call failed: %s", e)
             raise
+
+    def call_llm(self, prompt: str, temperature: Optional[float] = None, max_tokens: Optional[int] = None) -> str:
+        """
+        公开的 LLM 调用方法
+        
+        Args:
+            prompt: 用户提示词
+            temperature: 温度（可选，覆盖默认值）
+            max_tokens: 最大生成 tokens（可选，覆盖默认值）
+            
+        Returns:
+            LLM 响应文本
+        """
+        system_prompt = "你是一个知识蒸馏专家，擅长从图数据中提取精炼的元知识。"
+        return self._call_llm(system_prompt, prompt, temperature, max_tokens)
 
     def _parse_json_response(self, text: str) -> Any:
         """从 LLM 响应中解析 JSON"""
