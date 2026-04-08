@@ -783,7 +783,19 @@ class MeditationEngine:
         )
         generic_names = [g["name"] for g in generics]
 
-        to_archive = list(set(orphan_names + generic_names))
+        # 2.3 基于频次的噪声过滤（接入 rule_engine 的 FrequencyAnalyzer）
+        entity_counts = self.store.get_entity_mention_counts()
+        total_documents = self.store.get_total_documents()
+        
+        frequency_result = self.rule_engine.frequency_analyzer.filter_by_frequency(
+            entity_counts, total_documents
+        )
+        
+        filtered_out_names = list(frequency_result.get('filtered_out_entities', {}).keys())
+        logger.info(f"Step 2.3: Frequency filtering identified {len(filtered_out_names)} low-frequency entities to prune")
+
+        # 合并所有待归档节点
+        to_archive = list(set(orphan_names + generic_names + filtered_out_names))
         if not to_archive:
             return
 
@@ -792,12 +804,20 @@ class MeditationEngine:
                 "step": "pruning",
                 "action": "archive",
                 "nodes": to_archive,
-                "reason": "orphan or generic word"
+                "reason": "orphan, generic word, or low-frequency entity"
             })
         else:
             archived_count = self.store.archive_nodes(to_archive, reason="meditation_pruning")
             result.nodes_pruned = archived_count
-            logger.info(f"Pruned {archived_count} nodes.")
+            logger.info(f"Pruned {archived_count} nodes (orphans: {len(orphan_names)}, generics: {len(generic_names)}, low-frequency: {len(filtered_out_names)})")
+        
+        # 记录频次过滤的统计信息
+        result.pruning_stats = {
+            "total_entities": len(entity_counts),
+            "kept_entities": frequency_result.get('kept_count', 0),
+            "filtered_entities": frequency_result.get('filtered_count', 0),
+            "average_frequency": frequency_result.get('average_frequency', 0.0)
+        }
 
     # ---------- 步骤 3: 实体整合与修复 (Merging) ----------
 
@@ -916,28 +936,90 @@ class MeditationEngine:
         generic_rels = self.store.get_related_to_edges(limit=self.config.restructuring.relabel_batch_size)
         logger.info(f"Step 4.1: Found {len(generic_rels)} generic relations to relabel.")
         if generic_rels:
-            relabels = self.llm.relabel_relations(generic_rels, self.config.restructuring.relation_ontology)
-            for r in relabels:
-                idx = r.get("index")
-                new_type = r.get("new_relation_type")
-                if idx is not None and idx < len(generic_rels) and new_type and new_type != "related_to":
-                    edge = generic_rels[idx]
-                    if result.dry_run:
-                        result.suggestions.append({
-                            "step": "restructuring",
-                            "action": "relabel",
-                            "src": edge["source_name"],
-                            "tgt": edge["target_name"],
-                            "old": "related_to",
-                            "new": new_type
-                        })
-                    else:
-                        if self.store.update_relation_type(
-                            edge["source_name"], edge["target_name"], "related_to", new_type
-                        ):
-                            result.relations_relabeled += 1
-
-        logger.info(f"Step 4.1 done: relabeled {result.relations_relabeled} relations.")
+            # 批量获取节点上下文信息
+            all_node_names = set()
+            for rel in generic_rels:
+                all_node_names.add(rel["source_name"])
+                all_node_names.add(rel["target_name"])
+            
+            # 获取节点元数据
+            node_metadata = {}
+            for node_name in all_node_names:
+                node = self.store.get_node_by_name(node_name)
+                if node:
+                    node_metadata[node_name] = {
+                        "entity_type": node.get("entity_type", "unknown"),
+                        "mention_count": node.get("mention_count", 0),
+                        "degree": node.get("degree", 0)
+                    }
+            
+            # 批量获取共享邻居
+            shared_neighbors = {}
+            for rel in generic_rels:
+                src = rel["source_name"]
+                tgt = rel["target_name"]
+                shared = self.store.get_shared_neighbors(src, tgt, limit=5)
+                shared_neighbors[(src, tgt)] = len(shared)
+            
+            # 使用规则引擎进行关系重标注决策
+            relations_to_update = []
+            for idx, rel in enumerate(generic_rels):
+                src = rel["source_name"]
+                tgt = rel["target_name"]
+                
+                # 准备关系信息
+                relation_info = {
+                    "source": src,
+                    "target": tgt,
+                    "source_type": node_metadata.get(src, {}).get("entity_type", "unknown"),
+                    "target_type": node_metadata.get(tgt, {}).get("entity_type", "unknown"),
+                    "source_mentions": node_metadata.get(src, {}).get("mention_count", 0),
+                    "target_mentions": node_metadata.get(tgt, {}).get("mention_count", 0),
+                    "shared_neighbors": shared_neighbors.get((src, tgt), 0)
+                }
+                
+                # 准备图上下文
+                graph_context = {
+                    "total_nodes": len(all_node_names),
+                    "relation_ontology": self.config.restructuring.relation_ontology,
+                    "max_shared_neighbors": max(shared_neighbors.values()) if shared_neighbors else 0
+                }
+                
+                # 调用规则引擎决策
+                decision = self.rule_engine.decide_relation_relabeling(relation_info, graph_context)
+                new_type = decision.get("new_relation_type")
+                
+                # 只接受confidence >= 0.7的决策，否则保留related_to
+                if new_type and new_type != "related_to" and decision.get("confidence", 0) >= 0.7:
+                    relations_to_update.append({
+                        "index": idx,
+                        "relation": rel,
+                        "new_type": new_type
+                    })
+            
+            # 处理更新
+            updated_count = 0
+            for update in relations_to_update:
+                rel = update["relation"]
+                new_type = update["new_type"]
+                
+                if result.dry_run:
+                    result.suggestions.append({
+                        "step": "restructuring",
+                        "action": "relabel",
+                        "src": rel["source_name"],
+                        "tgt": rel["target_name"],
+                        "old": "related_to",
+                        "new": new_type
+                    })
+                else:
+                    if self.store.update_relation_type(
+                        rel["source_name"], rel["target_name"], "related_to", new_type
+                    ):
+                        result.relations_relabeled += 1
+                        updated_count += 1
+            
+            logger.info(f"Step 4.1 done: rule engine relabeled {updated_count} relations out of {len(generic_rels)} candidates")
 
         # 4.2 隐含关系推断（针对本次扫描的节点子图）
         node_names = [n["name"] for n in nodes[:20]] # 限制规模
@@ -967,19 +1049,36 @@ class MeditationEngine:
     # ---------- 步骤 5: 权重强化与衰减 (Weighting) ----------
 
     async def _step_5_weighting(self, result: MeditationRunResult, nodes: List[Dict[str, Any]]):
-        """计算记忆激活值：时间衰减 + 语义重要性 + 网络中心度。"""
+        """计算记忆激活值：时间衰减 + 使用频次统计 + 网络中心度。"""
         # 获取所有活跃节点进行权重重算
         active_nodes = self.store.get_all_active_nodes_for_weighting(limit=1000)
         if not active_nodes:
             return
 
-        # 批量获取语义评分（仅针对没有评分或需要重评的节点）
-        needs_eval = [n for n in active_nodes if n.get("semantic_score") is None][:20]
+        # 基于规则的语义评分，替代LLM评估
         semantic_scores = {}
-        if needs_eval:
-            evals = self.llm.evaluate_semantic_importance(needs_eval)
-            for ev in evals:
-                semantic_scores[ev["name"]] = ev.get("semantic_score", 0.5)
+        for n in active_nodes:
+            name = n["name"]
+            # 基于提及频次和网络中心度计算语义评分
+            mention_count = n.get("mention_count", 0)
+            degree = n.get("degree", 0)
+            
+            # 计算基础语义评分
+            freq_score = min(1.0, math.log1p(mention_count) / 5.0)  # 提及频次得分
+            centrality_score = min(1.0, math.log1p(degree) / 10.0)  # 网络中心度得分
+            
+            # 综合语义评分（考虑节点类型权重）
+            node_type = n.get("entity_type", "")
+            type_weight = 1.0
+            if node_type == "Meta_User":
+                type_weight = 1.5  # 用户相关节点权重更高
+            elif node_type == "Meta_Self":
+                type_weight = 1.2  # 自我认知节点权重较高
+            
+            semantic_score = (freq_score * 0.6 + centrality_score * 0.4) * type_weight
+            semantic_score = min(1.0, max(0.1, semantic_score))  # 限制范围
+            
+            semantic_scores[name] = semantic_score
 
         updates = []
         to_archive = []
@@ -987,34 +1086,42 @@ class MeditationEngine:
 
         for n in active_nodes:
             name = n["name"]
-            # 1. 语义分 (None 保护：LLM 可能返回 None，旧节点也可能缺少该属性)
-            s_score = semantic_scores.get(name, n.get("semantic_score"))
-            if s_score is None:
-                s_score = 0.5
+            # 1. 语义分 (基于规则计算)
+            s_score = semantic_scores.get(name, n.get("semantic_score", 0.5))
 
-            # 2. 时间衰减 (Ebbinghaus)
+            # 2. 时间衰减（改进的 Ebbinghaus 模型，考虑使用频次的影响）
             # 距离上次更新的天数
             last_update = n.get("updated_at") or now_ms
             days_passed = (now_ms - last_update) / (24 * 3600 * 1000)
-
-            # 衰减率受语义分影响：核心知识衰减慢
+            
+            # 基础衰减率
             decay_rate = self.config.weight.decay_factor
+            
+            # 根据提及频次调整衰减率：高频节点衰减慢
+            mention_count = n.get("mention_count", 0)
+            if mention_count > self.config.weight.high_mention_threshold:
+                decay_rate = 1.0 - (1.0 - decay_rate) * 0.7  # 高频节点衰减减少70%
+            elif mention_count > self.config.weight.medium_mention_threshold:
+                decay_rate = 1.0 - (1.0 - decay_rate) * 0.4  # 中频节点衰减减少40%
+            
+            # 根据语义评分调整衰减率：核心知识衰减慢
             if s_score >= self.config.weight.high_semantic_threshold:
                 decay_rate = 1.0 - (1.0 - decay_rate) * self.config.weight.core_decay_reduction
 
-            # 计算基础激活值（基于频率和时间）
-            # A = mention_count * (decay_rate ^ days_passed)
-            freq_factor = math.log1p(n.get("mention_count") or 1)
+            # 计算基础激活值
             recency_factor = math.pow(decay_rate, days_passed)
-
-            # 3. 网络中心度 (简单使用度数归一化)
-            centrality_factor = math.log1p(n.get("degree") or 0) / 10.0
-            centrality_factor = min(centrality_factor, 1.0)
+            
+            # 3. 使用频次因子
+            freq_factor = min(1.0, math.log1p(mention_count) / 10.0)
+            
+            # 4. 网络中心度因子
+            centrality_factor = min(1.0, math.log1p(n.get("degree", 0)) / 15.0)
 
             # 综合计算激活值
             activation = (
                 recency_factor * self.config.weight.recency_weight +
                 s_score * self.config.weight.semantic_weight +
+                freq_factor * self.config.weight.frequency_weight +
                 centrality_factor * self.config.weight.centrality_weight
             )
             activation = max(0.0, min(1.0, activation))
@@ -1061,8 +1168,11 @@ class MeditationEngine:
             neighbor_names = neighbor_names_full[:max_neighbors]
             
             edges = self.store.get_cluster_edges(center_name, neighbor_names_full[:max_neighbors*2])
-
-            summary = self.llm.distill_knowledge(center_name, cluster["neighbor_list"][:max_neighbors], edges)
+            
+            # 使用精准的蒸馏prompt生成
+            prompt = self._generate_llm_distillation_prompt(center_name, cluster["neighbor_list"][:max_neighbors], edges)
+            summary = self.llm.call_llm(prompt, temperature=0.3, max_tokens=300)
+            
             if summary:
                 if result.dry_run:
                     result.suggestions.append({
@@ -1079,6 +1189,41 @@ class MeditationEngine:
                         self.config.distillation.summarizes_relation_type
                     ):
                         result.meta_knowledge_created += 1
+    
+    def _generate_llm_distillation_prompt(self, center_name: str, neighbors: List[Dict[str, Any]], edges: List[Dict[str, Any]]) -> str:
+        """生成精准的知识蒸馏prompt"""
+        # 格式化邻居节点
+        neighbor_strs = []
+        for n in neighbors[:10]:  # 限制数量
+            entity_type = n.get("entity_type", "unknown")
+            mention_count = n.get("mention_count", 0)
+            neighbor_strs.append(f"- {n['name']} (类型: {entity_type}, 提及次数: {mention_count})")
+        
+        # 格式化关系
+        edge_strs = []
+        for e in edges[:15]:  # 限制数量
+            rel_type = e.get("relation_type", "related_to")
+            edge_strs.append(f"- {e['source']} -> {e['target']} [关系: {rel_type}]")
+        
+        prompt = f"""你是一个知识蒸馏专家，需要从以下图节点和关系中提取简洁的元知识。
+
+中心节点: {center_name}
+
+相关邻居节点（按重要性排序）:
+{chr(10).join(neighbor_strs)}
+
+连接关系:
+{chr(10).join(edge_strs)}
+
+请提炼出一个精炼的元知识摘要，要求:
+1. 简洁明了，不超过150字
+2. 聚焦核心概念和关键关系
+3. 避免冗余信息
+4. 使用中文，逻辑清晰
+
+元知识摘要:"""
+        
+        return prompt
 
     # ---------- 步骤 6.5: 策略蒸馏 (Strategy Distillation) — Phase 3 ----------
 
