@@ -992,6 +992,10 @@ class MeditationEngine:
                 if len(eid_list) < 2:
                     continue
                 # 保留 mention_count 最高的作为主节点
+                # Fix for Issue #32: 空列表检查
+                if not mention_counts or len(mention_counts) == 0:
+                    logger.warning(f"Step 3.2: Skipping duplicate group '{dup_name}' - empty mention_counts list")
+                    continue
                 main_idx = max(range(len(mention_counts)), key=lambda i: mention_counts[i] or 0)
                 main_eid = eid_list[main_idx]
                 for i, alias_eid in enumerate(eid_list):
@@ -1768,6 +1772,12 @@ async def main():
 
     print("\nMeditation Result:")
     print(json.dumps(result.to_dict(), indent=2, ensure_ascii=False))
+    
+    # 显示三定律优先级进化结果
+    if result.extra_data and 'three_laws_evolution' in result.extra_data:
+        evolution_data = result.extra_data['three_laws_evolution']
+        print("\n=== Three Laws Priority Evolution ===")
+        print(json.dumps(evolution_data.get('three_laws_integration', {}), indent=2, ensure_ascii=False))
 
     store.close()
 
