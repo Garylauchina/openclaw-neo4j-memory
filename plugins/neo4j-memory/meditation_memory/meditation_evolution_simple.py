@@ -190,3 +190,146 @@ def execute_meditation_with_evolution(store: Any, engine: Any, mode: str = "auto
 
 # 临时导入time用于日志
 import time
+
+
+class StrategyEvolutionManager:
+    """
+    策略进化管理器 - 集成元认知三定律优先级编码
+    """
+    def __init__(self, store: Any):
+        self.store = store
+        self.strategies = self._load_all_strategies()
+    
+    def _get_strategy(self, strategy_name: str) -> Optional[Dict[str, Any]]:
+        """获取单个策略"""
+        return self.strategies.get(strategy_name)
+    
+    def _load_all_strategies(self) -> Dict[str, Any]:
+        """加载所有策略（简化版）"""
+        # 从存储加载策略，这里返回模拟数据
+        return {
+            "priority_management": {
+                "name": "priority_management",
+                "type": "cognitive",
+                "priority": "high",
+                "description": "元认知优先级管理策略"
+            },
+            "belief_conflict": {
+                "name": "belief_conflict",
+                "type": "reflection",
+                "priority": "high",
+                "description": "信念冲突检测与解决策略"
+            },
+            "boundary_control": {
+                "name": "boundary_control", 
+                "type": "boundary",
+                "priority": "medium",
+                "description": "能力边界控制策略"
+            },
+            "noise_filtering": {
+                "name": "noise_filtering",
+                "type": "general",
+                "priority": "low",
+                "description": "通用噪声过滤策略"
+            }
+        }
+    
+    def _save_strategy(self, strategy: Dict[str, Any]):
+        """保存策略"""
+        if strategy.get('name'):
+            self.strategies[strategy['name']] = strategy
+    
+    def apply_three_laws_priority(self, strategy_name: str) -> Dict[str, Any]:
+        """
+        为策略应用元认知三定律优先级编码
+        
+        Args:
+            strategy_name: 策略名称
+            
+        Returns:
+            包含策略优先级和建议的字典
+        """
+        strategy = self._get_strategy(strategy_name)
+        if not strategy:
+            return {
+                "status": "error",
+                "message": f"Strategy {strategy_name} not found"
+            }
+            
+        priority = "other_discard"
+        compression_factor = 0.8
+        recommendations = []
+        
+        # 根据策略类型和重要性确定优先级
+        if strategy.get('priority', 'low') == 'high':
+            priority = 'law1_high'
+            compression_factor = 0.0
+            recommendations.append("高优先级策略：不压缩，保留所有细节")
+            recommendations.append("建议：定期监控策略性能")
+        elif strategy.get('type') in ['cognitive', 'reflection']:
+            priority = 'law2_medium'
+            compression_factor = 0.3
+            recommendations.append("认知/反思类策略：适度压缩（保留70%）")
+            recommendations.append("建议：定期回顾策略效果")
+        elif strategy.get('type') == 'boundary':
+            priority = 'law3_medium'
+            compression_factor = 0.4
+            recommendations.append("边界类策略：适度压缩（保留60%）")
+            recommendations.append("建议：监控策略边界是否需要调整")
+        else:
+            priority = 'other_discard'
+            compression_factor = 0.8
+            recommendations.append("通用策略：高度压缩（保留20%）")
+            recommendations.append("建议：定期评估是否需要保留")
+        
+        # 更新策略优先级
+        strategy['law_priority'] = priority
+        strategy['compression_factor'] = compression_factor
+        
+        # 保存更新
+        self._save_strategy(strategy)
+        
+        return {
+            "status": "success",
+            "strategy_name": strategy_name,
+            "priority": priority,
+            "compression_factor": compression_factor,
+            "recommendations": recommendations,
+            "next_review": "30 days"
+        }
+        
+    def get_strategies_by_priority(self, priority: Optional[str] = None) -> List[Dict[str, Any]]:
+        """
+        根据优先级获取策略列表
+        
+        Args:
+            priority: 优先级类型（可选，如 'law1_high', 'law2_medium'）
+            
+        Returns:
+            策略列表
+        """
+        all_strategies = self._load_all_strategies()
+        
+        if not priority:
+            return sorted(
+                all_strategies.values(),
+                key=lambda s: self._get_priority_weight(s.get('law_priority', 'other_discard')),
+                reverse=True
+            )
+            
+        return [
+            strategy for strategy in all_strategies.values()
+            if strategy.get('law_priority') == priority
+        ]
+        
+    def _get_priority_weight(self, priority: str) -> int:
+        """
+        获取优先级的权重（用于排序）
+        """
+        weights = {
+            'law1_high': 3,
+            'law2_medium': 2,
+            'law3_medium': 1,
+            'other_discard': 0
+        }
+        return weights.get(priority, 0)
