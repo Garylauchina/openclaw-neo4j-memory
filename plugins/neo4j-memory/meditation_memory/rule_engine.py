@@ -185,12 +185,7 @@ class FrequencyAnalyzer:
         self.logger.info(f"Frequency filtering: {kept_count} entities kept, {filtered_count} filtered out, "
                         f"avg frequency: {avg_frequency:.2f}")
         
-        return {
-            'filtered_entities': filtered,
-            'filtered_out_entities': filtered_out,
-            'kept_count': kept_count {avg_frequency:.2f}")
-        
-        return {
+
             'filtered_entities': filtered,
             'filtered_out_entities': filtered_out,
             'kept_count': kept_count,
@@ -474,7 +469,7 @@ class RuleEngine:
         
         self.config = config
         self.similarity = RuleBasedSimilarity()
-        self.frequency_analyzer = RuleBasedSimilarity()
+        self.frequency_analyzer = FrequencyAnalyzer()
         self.topology_analyzer = GraphTopologyAnalyzer()
         self.logger = logging.getLogger(__name__)
     
@@ -491,7 +486,7 @@ class RuleEngine:
         """
         # 1. String similarity analysis
         similarity_scores = self.similarity.composite_similarity(entity1, entity2)
-        composite_similarity = similarity_scores.get('composite_score', 0.0)
+        composite_similarity = similarity_scores.get('composite', 0.0)
         
         # 2. Mention frequency analysis
         mention_count1 = context.get('mention_counts', {}).get(entity1, 0)
