@@ -114,7 +114,7 @@ class MeditationRunResult:
     initial_entropy: Dict[str, float] = field(default_factory=dict)
     final_entropy: Dict[str, float] = field(default_factory=dict)
     entropy_reduction_percent: float = 0.0
-    step_entropy_reduction: Dict[str, int] = field(default_factory=dict)
+    step_operation_counts: Dict[str, int] = field(default_factory=dict)
     pruning_stats: Dict[str, Any] = field(default_factory=dict)
 
     def to_dict(self) -> Dict[str, Any]:
@@ -662,7 +662,7 @@ class MeditationEngine:
                 logger.info(f"Final composite entropy: {final_entropy.get('composite_entropy', 0.0):.4f} bits (reduction: {result.entropy_reduction_percent:.2f}%)")
                 
                 # 记录每步熵减效果
-                result.step_entropy_reduction = {
+                result.step_operation_counts = {
                     "pruning": result.nodes_pruned,
                     "merging": result.entities_merged,
                     "relabeling": result.relations_relabeled,
@@ -672,17 +672,11 @@ class MeditationEngine:
             else:
                 result.entropy_reduction_percent = 0.0
                 logger.info(f"Final composite entropy: {final_entropy.get('composite_entropy', 0.0):.4f} bits")
+                result.step_operation_counts = {}
                 
             # 更新策略性能统计
             optimizer = MeditationOptimizer()
-            optimizer.update_strategy_performance({
-                "strategy_name": "Phase2_Evolution",
-                "initial_entropy": initial_entropy.get('composite_entropy', 0.0),
-                "final_entropy": final_entropy.get('composite_entropy', 0.0),
-                "reduction_percent": result.entropy_reduction_percent,
-                "step_stats": result.step_entropy_reduction,
-                "run_id": run_id
-            })
+            optimizer.update_strategy_performance("Phase2_Evolution", result.entropy_reduction_percent)
 
             result.status = "completed" if not dry_run else "dry_run"
             logger.info(f"Meditation run {run_id} completed successfully.")
