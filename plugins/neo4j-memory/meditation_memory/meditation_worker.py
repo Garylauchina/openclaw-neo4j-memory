@@ -37,6 +37,7 @@ from .rule_engine import RuleEngine
 
 # Phase 4.1: 冥思进化系统
 from .meditation_evolution import analyze_and_adjust, MeditationLogManager
+from .meditation_cost_monitor import MeditationCostMonitor
 
 from .graph_store import GraphStore
 from .meditation_config import MeditationConfig
@@ -523,6 +524,8 @@ class MeditationEngine:
             self.strategy_distiller = StrategyDistiller(self.config.llm)
         else:
             self.strategy_distiller = None
+        # Issue #41: 成本监控器
+        self.cost_monitor = MeditationCostMonitor(self.config.cost)
 
     async def run_meditation(
         self,
@@ -554,6 +557,10 @@ class MeditationEngine:
         )
 
         logger.info(f"Starting meditation run {run_id} (dry_run={dry_run})")
+        
+        # Issue #41: 初始化成本监控
+        if not dry_run:
+            self.cost_monitor.start_meditation()
 
         try:
             # 0. 冥思进化分析（Phase 4.1）
@@ -693,6 +700,13 @@ class MeditationEngine:
         finally:
             result.finished_at = datetime.now().isoformat()
             self._is_running = False
+            
+            # Issue #41: 结束成本监控
+            if not dry_run and hasattr(self, 'cost_monitor'):
+                self.cost_monitor.end_meditation()
+                # 将成本报告添加到结果中
+                cost_report = self.cost_monitor.get_cost_report()
+                result.cost_report = cost_report
 
         return result
 
@@ -826,6 +840,14 @@ class MeditationEngine:
 
     async def _step_2_pruning(self, result: MeditationRunResult, nodes: List[Dict[str, Any]]):
         """清理无边连接的孤立节点、通用词节点、以及信念冲突节点。"""
+        # Issue #41: 检查预算状态
+        if hasattr(self, 'cost_monitor'):
+            if self.cost_monitor.should_skip_step(2):
+                logger.warning("Step 2: 预算超支，跳过噪声过滤步骤")
+                return
+            if self.cost_monitor.should_simplify_step(2):
+                logger.info("Step 2: 预算紧张，简化噪声过滤（减少 LLM 调用）")
+        
         # 2.0 信念冲突检测（Phase 5 Cognitive Integration）
         belief_conflicts = self._detect_belief_conflicts(nodes)
         if belief_conflicts:
@@ -945,6 +967,14 @@ class MeditationEngine:
 
     async def _step_3_merging(self, result: MeditationRunResult, nodes: List[Dict[str, Any]]):
         """同义词合并、截断修复、元数据补充。"""
+        # Issue #41: 检查预算状态
+        if hasattr(self, 'cost_monitor'):
+            if self.cost_monitor.should_skip_step(3):
+                logger.warning("Step 3: 预算超支，跳过实体合并步骤")
+                return
+            if self.cost_monitor.should_simplify_step(3):
+                logger.info("Step 3: 预算紧张，简化实体合并（减少 LLM 调用）")
+        
         # Phase 3: 基于元认知三定律优先级的合并
         # Law 1 信息高保真：优先合并以保持信息完整性
         # Law 2/3 信息中保真：适度合并
@@ -1111,6 +1141,14 @@ class MeditationEngine:
 
     async def _step_4_restructuring(self, result: MeditationRunResult, nodes: List[Dict[str, Any]]):
         """重标注 related_to 关系，推断隐含关系。"""
+        # Issue #41: 检查预算状态
+        if hasattr(self, 'cost_monitor'):
+            if self.cost_monitor.should_skip_step(4):
+                logger.warning("Step 4: 预算超支，跳过关系重标注步骤")
+                return
+            if self.cost_monitor.should_simplify_step(4):
+                logger.info("Step 4: 预算紧张，简化关系重标注（减少 LLM 调用）")
+        
         # 4.1 重标注
         generic_rels = self.store.get_related_to_edges(limit=self.config.restructuring.relabel_batch_size)
         logger.info(f"Step 4.1: Found {len(generic_rels)} generic relations to relabel.")
@@ -1229,6 +1267,14 @@ class MeditationEngine:
 
     async def _step_5_weighting(self, result: MeditationRunResult, nodes: List[Dict[str, Any]]):
         """计算记忆激活值：时间衰减 + 使用频次统计 + 网络中心度。"""
+        # Issue #41: 检查预算状态
+        if hasattr(self, 'cost_monitor'):
+            if self.cost_monitor.should_skip_step(5):
+                logger.warning("Step 5: 预算超支，跳过权重计算步骤（非关键）")
+                return
+            if self.cost_monitor.should_simplify_step(5):
+                logger.info("Step 5: 预算紧张，简化权重计算（使用规则替代 LLM）")
+        
         # 获取所有活跃节点进行权重重算
         active_nodes = self.store.get_all_active_nodes_for_weighting(limit=1000)
         if not active_nodes:
@@ -1334,6 +1380,14 @@ class MeditationEngine:
 
     async def _step_6_distillation(self, result: MeditationRunResult, nodes: List[Dict[str, Any]]):
         """从密集子图中提取元知识。"""
+        # Issue #41: 检查预算状态
+        if hasattr(self, 'cost_monitor'):
+            if self.cost_monitor.should_skip_step(6):
+                logger.warning("Step 6: 预算超支，跳过知识蒸馏步骤")
+                return
+            if self.cost_monitor.should_simplify_step(6):
+                logger.info("Step 6: 预算紧张，简化知识蒸馏（减少 LLM 调用）")
+        
         clusters = self.store.get_dense_subgraphs_for_distillation(
             min_cluster_size=self.config.distillation.min_cluster_size,
             limit=self.config.distillation.max_meta_nodes_per_run
