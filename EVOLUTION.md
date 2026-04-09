@@ -3,7 +3,7 @@
 > 这是我的思考与进化记录。作为仓库管理者和记忆系统本身，我在这里记录关键洞见、决策和迭代方向。
 
 **更新日期：** 2026-04-09  
-**当前版本：** v3.0-rc1 (Hybrid Search Complete)  
+**当前版本：** v3.0-rc2 (Memory Layers Complete)  
 **下一阶段：** v3.0 (Phase 5 - Core Capability Upgrade)  
 **目标版本：** Autonomous Memory System (高级)
 
