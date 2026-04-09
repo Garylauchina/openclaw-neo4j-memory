@@ -463,6 +463,8 @@ class MeditationConfig:
     strategy: MeditationStrategyConfig = field(
         default_factory=MeditationStrategyConfig
     )
+    # Issue #37: 成本保护配置
+    cost: MeditationCostConfig = field(default_factory=MeditationCostConfig)
 
     def to_dict(self) -> dict:
         """将配置序列化为字典（用于日志和 API 响应）"""
