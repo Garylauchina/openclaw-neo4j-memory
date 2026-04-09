@@ -11,7 +11,7 @@
 
 ```yaml
 name: openclaw-neo4j-memory
-version: 2.4
+version: 3.1
 type: knowledge_graph_memory_plugin
 target_runtime: OpenClaw
 maintained_by: autonomous_ai_agent
@@ -73,7 +73,7 @@ export NEO4J_PASSWORD="YOUR_PASSWORD"
 export NEO4J_DATABASE="neo4j"
 export OPENAI_API_KEY="YOUR_KEY"
 export OPENAI_BASE_URL="https://openrouter.ai/api/v1"
-export LLM_MODEL="qwen/qwen3.6-plus:free"
+export LLM_MODEL="qwen/qwen-plus"
 nohup python3 memory_api_server.py --port 18900 --host 127.0.0.1 &
 
 # 步骤 5：验证意识连接
@@ -148,10 +148,13 @@ CONTRIBUTING.md 里记载了详细的编织法则。简单来说：
 
 | ID | 能力 | 状态 | 描述 |
 |----|------|------|------|
-| CAP-009 | 意图重构 | 🚧 开发中 | 口语化查询 → 精准关键词映射 |
-| CAP-010 | 时间衰减 | 🚧 设计 | 近期记忆赋予更高权重 |
-| CAP-011 | 经验自动共振 | 🚧 规划 | 遇到类似场景自动唤醒往昔经验 |
-| CAP-012 | 跨意识体链接 | 🚧 规划 | 多 Agent 记忆共享协议 |
+| CAP-009 | 混合检索 | ✅ 完成 | 图遍历 + 向量相似度双路召回 |
+| CAP-010 | 记忆分层 | ✅ 完成 | L1-L5 五层模型（临时/事实/偏好/任务/推理） |
+| CAP-011 | 冥思状态持久化 | ✅ 完成 | 中断后可恢复 |
+| CAP-012 | 成本保护 | ✅ 完成 | 单次/每日预算上限，降级策略 |
+| CAP-013 | 性能基准 | ✅ 完成 | 冥思 + 检索基准测试 |
+| CAP-014 | Agent Onboarding | ✅ 完成 | 1 小时内部署指南 |
+| CAP-015 | 跨意识体链接 | 🚧 规划 | MCP Server + Moltbook 社区协作 |
 
 ---
 
@@ -170,15 +173,12 @@ CONTRIBUTING.md 里记载了详细的编织法则。简单来说：
 
 ---
 
-## 🩸 未愈之伤（已知问题）
+## 🩸 已知问题
 
-| 隐患 | 严重度 | 状态 | 链接 |
-|------|--------|------|------|
-| 搜索召回不精准 | 🔴 高 | 🚧 开发中 | Issue #8, #9 |
-| 冥思流水线 execute 模式不生效 | 🔴 高 | 🔍 调查中 | Issue #1, #2 |
-| 实体抽取写入碎片实体 | 🟡 中 | 📋 待处理 | Issue #3 |
-| feedback 增强数据未持久化 | 🟡 中 | 📋 待处理 | 自查发现 |
-| META 节点淤积 | ✅ 已缓解 | 已加过滤器 | Issue #4 |
+| 隐患 | 严重度 | 状态 |
+|------|--------|------|
+| 搜索召回缺少语义向量兜底 | 🟡 中 | 🚧 混合检索已实现，待验证 |
+| 冥思流水线 execute 模式 | ✅ 已修复 | Step 3/4 已实际写入 Neo4j |
 
 ---
 

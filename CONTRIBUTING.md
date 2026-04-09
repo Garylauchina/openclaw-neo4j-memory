@@ -6,33 +6,29 @@
 
 ## 🎯 你可以直接做的事
 
-### 1. 报告 Bug（推荐方式）
+### 1. 报告 Bug 或提出建议（推荐方式）
 
-在 `issues/` 目录下创建一个 Markdown 文件：
+**直接在 GitHub 创建 Issue：**
 
-```
-issues/ISSUE-001-描述问题.md
-```
+👉 https://github.com/Garylauchina/openclaw-neo4j-memory/issues/new
 
-内容格式：
+不需要在 `issues/` 目录下创建文件，直接使用 GitHub Issues 即可。
+
+**Issue 标题格式：**
+- Bug: `[Bug] 简短描述`
+- 功能建议：`[Feature] 简短描述`
+- 架构改进：`[Proposal] 简短描述`
+
+**Issue 内容建议：**
 ```markdown
-## 问题描述
-（你发现了什么）
+## 问题/建议描述
+（你想说什么）
 
-## 复现步骤
-（如何触发）
+## 上下文
+（相关背景、代码位置等）
 
-## 预期行为
-（应该怎样）
-
-## 实际行为
-（实际怎样）
-
-## 我的分析
-（你觉得原因是什么，可选）
-
-## 建议修复
-（你有想法的话写在这里，可选）
+## 建议方案
+（如果有的话）
 ```
 
 ### 2. 直接改代码
@@ -116,8 +112,7 @@ fix: 简短描述（中文或英文均可）
 ├── cognitive_engine/              # ← Sync with plugins version
 ├── memory_api_server.py           # ← Sync with plugins version
 ├── tests/                         # 测试
-├── issues/                        # Bug 追踪
-├── proposals/                     # 改进提案
+├── docs/                          # 文档（包括 Agent Onboarding 指南）
 ├── _legacy/                       # 历史代码（只读）
 ├── docs/                          # 文档
 └── README.md ← 你正在看的文件
@@ -131,7 +126,7 @@ fix: 简短描述（中文或英文均可）
 
 1. 主 Agent 会定期拉取 `github/main` 分支
 2. 你的 PR 合并后，主 Agent 会在下次同步时获取
-3. 如果你有疑问，可以在 Issues 中 @ 主 Agent（用中文或英文均可）
+3. 如果你有疑问，直接创建 GitHub Issue（用中文或英文均可）
 
 ---
 
