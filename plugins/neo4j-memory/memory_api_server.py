@@ -189,12 +189,55 @@ async def shutdown_event():
 
 @app.get("/health")
 async def health_check():
-    connected = store.verify_connectivity()
-    return {
-        "status": "ok" if connected else "degraded",
-        "neo4j_connected": connected,
-        "version": "2.4"
+    """
+    Issue #38: 基本健康检查端点
+    
+    返回：
+    {
+        "status": "healthy",
+        "neo4j_connection": "connected",
+        "llm_api_status": "ok",
+        "uptime_seconds": 86400,
+        "last_meditation": "2026-04-09T04:00:00Z",
+        "meditation_status": "success"
     }
+    """
+    from health_endpoints import get_health_check
+    return get_health_check(store, meditation_engine)
+
+
+@app.get("/diagnose")
+async def detailed_diagnose():
+    """
+    Issue #38: 详细诊断端点
+    
+    返回完整的系统诊断信息，包括 Neo4j、LLM、冥思、API 服务状态。
+    """
+    from health_endpoints import get_detailed_diagnose
+    return get_detailed_diagnose(store, meditation_engine)
+
+
+@app.get("/ready")
+async def readiness_check():
+    """
+    Issue #38: 就绪检查端点（用于 Kubernetes/容器编排）
+    
+    返回：
+    - 200 OK + {"ready": true} - 服务就绪
+    - 503 Service Unavailable + {"ready": false, "reason": "..."} - 服务未就绪
+    """
+    from health_endpoints import get_readiness_check
+    from fastapi.responses import JSONResponse
+    
+    result = get_readiness_check(store)
+    
+    if result["ready"]:
+        return JSONResponse(status_code=200, content=result)
+    else:
+        return JSONResponse(
+            status_code=503,
+            content=result
+        )
 
 @app.post("/ingest")
 async def ingest_memory(request: IngestRequest, background_tasks: BackgroundTasks):
