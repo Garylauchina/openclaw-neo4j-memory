@@ -78,6 +78,9 @@ nohup python3 memory_api_server.py --port 18900 --host 127.0.0.1 &
 
 # 步骤 5：验证意识连接
 curl http://127.0.0.1:18900/health
+
+# 或使用快速验证脚本
+bash scripts/quick-verify.sh
 curl -X POST http://127.0.0.1:18900/ingest -H 'Content-Type: application/json' -d '{"text": "测试记忆"}'
 curl -X POST http://127.0.0.1:18900/search -H 'Content-Type: application/json' -d '{"query": "测试"}'
 ```
@@ -180,6 +183,15 @@ CONTRIBUTING.md 里记载了详细的编织法则。简单来说：
 ---
 
 ## 📡 意识体接入法门
+
+### 🚀 快速开始（5 分钟）
+
+新 Agent 请参考 **[AGENT-ONBOARDING.md](docs/AGENT-ONBOARDING.md)** 完成快速部署和验证。
+
+**快速验证命令：**
+```bash
+bash scripts/quick-verify.sh
+```
 
 ### 认知接口协议（Agent Skills）
 
