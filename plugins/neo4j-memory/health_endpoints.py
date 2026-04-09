@@ -60,9 +60,15 @@ def get_health_check(store, meditation_engine) -> Dict[str, Any]:
         # 尝试获取模型列表（轻量级测试）
         if hasattr(llm, 'list_models'):
             models = llm.list_models()
-            result["llm_api_status"] = "ok" if models else "degraded"
+            if models and len(models) > 0:
+                result["llm_api_status"] = "ok"
+            else:
+                result["llm_api_status"] = "degraded"
+                result["llm_warning"] = "Model list is empty"
         else:
-            result["llm_api_status"] = "ok"  # 假设正常
+            # 没有 list_models 方法，尝试简单初始化
+            result["llm_api_status"] = "ok"
+            result["llm_note"] = "LLM client initialized successfully"
     except Exception as e:
         result["llm_api_status"] = "error"
         result["llm_error"] = str(e)
@@ -196,6 +202,10 @@ def get_readiness_check(store) -> Dict[str, Any]:
         "checks": {}
     }
     
+    # 宽限期配置：可通过环境变量 GRACE_PERIOD_SECONDS 调整，默认 5 秒
+    grace_period = int(os.environ.get("GRACE_PERIOD_SECONDS", "5"))
+    result["checks"]["grace_period_seconds"] = grace_period
+    
     # 1. 检查 Neo4j 连接（必需）
     try:
         connected = store.verify_connectivity()
@@ -215,9 +225,9 @@ def get_readiness_check(store) -> Dict[str, Any]:
     uptime = (datetime.now() - START_TIME).total_seconds()
     result["checks"]["uptime_seconds"] = int(uptime)
     
-    if uptime < 5:
+    if uptime < grace_period:
         result["ready"] = False
-        result["reason"] = "Service still initializing"
+        result["reason"] = f"Service still initializing (uptime: {int(uptime)}s < grace_period: {grace_period}s)"
         return result
     
     # 所有检查通过

@@ -118,16 +118,32 @@ def test_readiness_check():
     # 验证 ready 是布尔值
     assert isinstance(result["ready"], bool), "ready 应该是布尔值"
     
-    # 验证 checks 包含 neo4j
+    # 验证 checks 包含 neo4j 和宽限期
     assert "neo4j" in result["checks"], "checks 缺少 neo4j"
+    assert "grace_period_seconds" in result["checks"], "checks 缺少 grace_period_seconds"
+    
+    # 验证宽限期是整数
+    assert isinstance(result["checks"]["grace_period_seconds"], int), "宽限期应该是整数"
     
     # 如果 Neo4j 连接正常，应该就绪
     neo4j_check = result["checks"]["neo4j"]
     if neo4j_check == "connected":
-        assert result["ready"] == True, "Neo4j 连接正常应该就绪"
-        print(f"  ✅ ready: {result['ready']}")
-        print(f"  ✅ neo4j: {neo4j_check}")
-        print(f"  ✅ 服务就绪")
+        # 检查 uptime 是否超过宽限期
+        uptime = result["checks"].get("uptime_seconds", 0)
+        grace_period = result["checks"]["grace_period_seconds"]
+        
+        if uptime >= grace_period:
+            assert result["ready"] == True, "Neo4j 连接正常且超过宽限期应该就绪"
+            print(f"  ✅ ready: {result['ready']}")
+            print(f"  ✅ neo4j: {neo4j_check}")
+            print(f"  ✅ uptime: {uptime}s >= grace_period: {grace_period}s")
+            print(f"  ✅ 服务就绪")
+        else:
+            assert result["ready"] == False, "未超过宽限期应该不就绪"
+            print(f"  ✅ ready: {result['ready']}")
+            print(f"  ✅ neo4j: {neo4j_check}")
+            print(f"  ✅ uptime: {uptime}s < grace_period: {grace_period}s（初始化中）")
+            print(f"  ✅ 服务未就绪（预期行为）")
     else:
         assert result["ready"] == False, "Neo4j 未连接应该不就绪"
         assert "reason" in result, "缺少 reason 字段"
