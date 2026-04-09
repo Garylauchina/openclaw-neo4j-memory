@@ -239,6 +239,10 @@ class HybridSearch:
         """
         start_time = time.time()
         
+        # 超时控制：在查询前检查
+        if time.time() - start_time > self.config.vector_timeout_seconds:
+            raise TimeoutError(f"向量检索超时（>{self.config.vector_timeout_seconds}s）")
+        
         # 向量相似度查询
         vector_query = f"""
         CALL db.index.vector.queryNodes(
@@ -249,18 +253,20 @@ class HybridSearch:
         YIELD node, score
         RETURN node.name as name, node.entity_type as entity_type, 
                node.description as description, node.mention_count as mention_count,
-               score as vector_score
+               node.degree as degree, score as vector_score
         """
         
         try:
-            # 超时控制
-            if time.time() - start_time > self.config.vector_timeout_seconds:
-                raise TimeoutError(f"向量检索超时（>{self.config.vector_timeout_seconds}s）")
-            
+            # 执行查询
             result = self.store.execute_cypher(vector_query, {
                 "query_embedding": query_embedding,
                 "limit": limit
             })
+            
+            # 查询后检查超时
+            elapsed = time.time() - start_time
+            if elapsed > self.config.vector_timeout_seconds:
+                logger.warning(f"向量检索耗时 {elapsed:.3f}s，超过阈值 {self.config.vector_timeout_seconds}s")
             
             if not result:
                 return []
@@ -277,7 +283,10 @@ class HybridSearch:
                     graph_score=0.0,
                     vector_score=vector_score,
                     source="vector",
-                    metadata={"mention_count": r.get("mention_count", 0)}
+                    metadata={
+                        "mention_count": r.get("mention_count", 0),
+                        "degree": r.get("degree", 0)
+                    }
                 ))
             
             return results
