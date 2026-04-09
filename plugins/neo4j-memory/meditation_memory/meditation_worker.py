@@ -37,6 +37,7 @@ from .rule_engine import RuleEngine
 
 # Phase 4.1: 冥思进化系统
 from .meditation_evolution import analyze_and_adjust, MeditationLogManager
+from .meditation_cost_monitor import MeditationCostMonitor
 
 from .graph_store import GraphStore
 from .meditation_config import MeditationConfig
@@ -523,6 +524,8 @@ class MeditationEngine:
             self.strategy_distiller = StrategyDistiller(self.config.llm)
         else:
             self.strategy_distiller = None
+        # Issue #41: 成本监控器
+        self.cost_monitor = MeditationCostMonitor(self.config.cost)
 
     async def run_meditation(
         self,
@@ -554,6 +557,10 @@ class MeditationEngine:
         )
 
         logger.info(f"Starting meditation run {run_id} (dry_run={dry_run})")
+        
+        # Issue #41: 初始化成本监控
+        if not dry_run:
+            self.cost_monitor.start_meditation()
 
         try:
             # 0. 冥思进化分析（Phase 4.1）
@@ -693,6 +700,13 @@ class MeditationEngine:
         finally:
             result.finished_at = datetime.now().isoformat()
             self._is_running = False
+            
+            # Issue #41: 结束成本监控
+            if not dry_run and hasattr(self, 'cost_monitor'):
+                self.cost_monitor.end_meditation()
+                # 将成本报告添加到结果中
+                cost_report = self.cost_monitor.get_cost_report()
+                result.cost_report = cost_report
 
         return result
 
@@ -826,6 +840,14 @@ class MeditationEngine:
 
     async def _step_2_pruning(self, result: MeditationRunResult, nodes: List[Dict[str, Any]]):
         """清理无边连接的孤立节点、通用词节点、以及信念冲突节点。"""
+        # Issue #41: 检查预算状态
+        if hasattr(self, 'cost_monitor'):
+            if self.cost_monitor.should_skip_step(2):
+                logger.warning("Step 2: 预算超支，跳过噪声过滤步骤")
+                return
+            if self.cost_monitor.should_simplify_step(2):
+                logger.info("Step 2: 预算紧张，简化噪声过滤（减少 LLM 调用）")
+        
         # 2.0 信念冲突检测（Phase 5 Cognitive Integration）
         belief_conflicts = self._detect_belief_conflicts(nodes)
         if belief_conflicts:
