@@ -1,0 +1,13 @@
+{
+  "turn": 50,
+  "timestamp": "2026-03-26T00:18:10.223922",
+  "graph": {
+    "nodes": 102,
+    "edges": 51
+  },
+  "reflection": {
+    "patterns": 1,
+    "diffs_generated": 1,
+    "diffs_applied": 1
+  }
+}

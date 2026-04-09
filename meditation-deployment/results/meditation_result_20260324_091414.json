@@ -1,0 +1,156 @@
+{
+  "sync_result": {
+    "sync_result": {
+      "nodes": [
+        {
+          "id": "error_1",
+          "content": "错误：未知错误",
+          "type": "error",
+          "importance": 0.85,
+          "timestamp": "2026-03-20T13:21:10.497837",
+          "vector": [
+            0.5,
+            0.413,
+            0.3,
+            0.4,
+            0.5
+          ],
+          "metadata": {
+            "source": "self-improving",
+            "category": "error",
+            "original_data": {
+              "type": "error",
+              "timestamp": "2026-03-20T13:21:10.497837",
+              "command": "测试命令",
+              "error": "测试错误",
+              "fix": "测试修复方法",
+              "priority": "medium",
+              "status": "pending"
+            }
+          }
+        },
+        {
+          "id": "correction_1",
+          "content": "纠正：未知纠正",
+          "type": "correction",
+          "importance": 0.77,
+          "timestamp": "2026-03-23T11:43:36.061263",
+          "vector": [
+            0.5,
+            0.286,
+            0.4,
+            0.5,
+            0.6
+          ],
+          "metadata": {
+            "source": "self-improving",
+            "category": "correction",
+            "original_data": {
+              "type": "correction",
+              "timestamp": "2026-03-23T11:43:36.061263",
+              "topic": "信息准确性原则",
+              "wrong": "编造未验证的内容",
+              "correct": "基于实际检查报告，注明信息来源，请求用户确认",
+              "context": "INTEGRITY_RULES.md 诚实执行规则",
+              "count": 1
+            }
+          }
+        },
+        {
+          "id": "practice_1",
+          "content": "最佳实践：未知实践",
+          "type": "best_practice",
+          "importance": 0.6799999999999999,
+          "timestamp": "2026-03-23T11:43:36.085447",
+          "vector": [
+            0.5,
+            0.97,
+            0.5,
+            0.6,
+            0.7
+          ],
+          "metadata": {
+            "source": "self-improving",
+            "category": "best_practice",
+            "original_data": {
+              "type": "best_practice",
+              "timestamp": "2026-03-23T11:43:36.085447",
+              "category": "工作流程优化",
+              "practice": "制定《诚实执行规则》，建立验证和确认流程",
+              "reason": "防止编造内容，确保信息准确性",
+              "usage_count": 0
+            }
+          }
+        }
+      ],
+      "edges": [
+        {
+          "source": "error_1",
+          "target": "correction_1",
+          "type": "similar_to",
+          "weight": 0.9811378768426297,
+          "timestamp": "2026-03-24T01:14:14.977618Z"
+        },
+        {
+          "source": "error_1",
+          "target": "practice_1",
+          "type": "similar_to",
+          "weight": 0.9575778880606511,
+          "timestamp": "2026-03-24T01:14:14.977627Z"
+        },
+        {
+          "source": "correction_1",
+          "target": "error_1",
+          "type": "similar_to",
+          "weight": 0.9811378768426297,
+          "timestamp": "2026-03-24T01:14:14.977634Z"
+        },
+        {
+          "source": "correction_1",
+          "target": "practice_1",
+          "type": "similar_to",
+          "weight": 0.9110472624619005,
+          "timestamp": "2026-03-24T01:14:14.977638Z"
+        },
+        {
+          "source": "practice_1",
+          "target": "error_1",
+          "type": "similar_to",
+          "weight": 0.9575778880606511,
+          "timestamp": "2026-03-24T01:14:14.977643Z"
+        },
+        {
+          "source": "practice_1",
+          "target": "correction_1",
+          "type": "similar_to",
+          "weight": 0.9110472624619005,
+          "timestamp": "2026-03-24T01:14:14.977647Z"
+        }
+      ]
+    },
+    "new_nodes_count": 3,
+    "new_edges_count": 6,
+    "result_file": "/Users/liugang/.openclaw/workspace/meditation_results/sync_result_20260324_091414.json"
+  },
+  "meditation_result": {
+    "initial_state": {
+      "nodes": 0,
+      "edges": 0
+    },
+    "final_state": {
+      "nodes": 0,
+      "edges": 0
+    },
+    "optimization_effect": {
+      "nodes_reduced": 0,
+      "edges_reduced": 0,
+      "reduction_rate_nodes": 0,
+      "reduction_rate_edges": 0
+    },
+    "rule1_result": {
+      "merged_count": 0,
+      "details": []
+    }
+  },
+  "timestamp": "2026-03-24T09:14:14.978125"
+}

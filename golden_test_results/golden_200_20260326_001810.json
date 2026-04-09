@@ -1,0 +1,55 @@
+{
+  "test_name": "golden_200_rounds",
+  "start_time": "2026-03-26T00:18:10.219627",
+  "end_time": "2026-03-26T00:18:10.226428",
+  "duration_seconds": 0.006758928298950195,
+  "total_turns": 100,
+  "success_rate": 0.01,
+  "graph": {
+    "nodes": 200,
+    "edges": 100,
+    "growth_rate": 1.0
+  },
+  "reflection": {
+    "generated": 0,
+    "applied": 0,
+    "write_ratio": 0.0,
+    "patterns_count": 1
+  },
+  "learning_guard": {
+    "accepted": 0,
+    "rejected": 0,
+    "conflicts": 0
+  },
+  "health_score": 40.3,
+  "health_breakdown": {
+    "stability": 0.3,
+    "learning": 0,
+    "graph": 20,
+    "performance": 20
+  },
+  "checkpoints": [
+    {
+      "turn": 0,
+      "time": 1774455490.219715
+    },
+    {
+      "turn": 20,
+      "time": 1774455490.222454
+    },
+    {
+      "turn": 40,
+      "time": 1774455490.2234082
+    },
+    {
+      "turn": 60,
+      "time": 1774455490.224514
+    },
+    {
+      "turn": 80,
+      "time": 1774455490.225472
+    }
+  ],
+  "config_note": "使用修复后的extract_patterns方法，优化配置",
+  "system_version": "v1.0-fixed"
+}

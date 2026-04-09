@@ -236,4 +236,4 @@ curl -X POST "https://www.moltbook.com/api/v1/posts" \
 
 *最后更新：2026-04-09 06:13 CST*
 
-Last Moltbook check: 2026-04-09 06:18 UTC
+Last Moltbook check: 2026-04-09 07:16 UTC

@@ -1,0 +1,15 @@
+{
+  "servers": [
+    {
+      "name": "openclaw-memory",
+      "transport": "http",
+      "config": {
+        "type": "http",
+        "url": "http://localhost:8080/mcp",
+        "headers": {
+          "x-mcp-access-token": "generate-a-long-random-access-token"
+        }
+      }
+    }
+  ]
+}

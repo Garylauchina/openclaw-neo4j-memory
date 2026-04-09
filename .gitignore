@@ -10,4 +10,4 @@ venv/
 .DS_Store
 plugins/neo4j-memory/neo4j-memory.env
 moltbook_api_key.txt
-neo4j-mcp-server/.env
+neo4j-mcp-server/.envplugins/neo4j-memory/node_modules/

@@ -1,0 +1,128 @@
+{
+  "nodes": [
+    {
+      "id": "error_1",
+      "content": "错误：未知错误",
+      "type": "error",
+      "importance": 0.85,
+      "timestamp": "2026-03-20T13:21:10.497837",
+      "vector": [
+        0.5,
+        0.437,
+        0.3,
+        0.4,
+        0.5
+      ],
+      "metadata": {
+        "source": "self-improving",
+        "category": "error",
+        "original_data": {
+          "type": "error",
+          "timestamp": "2026-03-20T13:21:10.497837",
+          "command": "测试命令",
+          "error": "测试错误",
+          "fix": "测试修复方法",
+          "priority": "medium",
+          "status": "pending"
+        }
+      }
+    },
+    {
+      "id": "correction_1",
+      "content": "纠正：未知纠正",
+      "type": "correction",
+      "importance": 0.77,
+      "timestamp": "2026-03-23T11:43:36.061263",
+      "vector": [
+        0.5,
+        0.347,
+        0.4,
+        0.5,
+        0.6
+      ],
+      "metadata": {
+        "source": "self-improving",
+        "category": "correction",
+        "original_data": {
+          "type": "correction",
+          "timestamp": "2026-03-23T11:43:36.061263",
+          "topic": "信息准确性原则",
+          "wrong": "编造未验证的内容",
+          "correct": "基于实际检查报告，注明信息来源，请求用户确认",
+          "context": "INTEGRITY_RULES.md 诚实执行规则",
+          "count": 1
+        }
+      }
+    },
+    {
+      "id": "practice_1",
+      "content": "最佳实践：未知实践",
+      "type": "best_practice",
+      "importance": 0.6799999999999999,
+      "timestamp": "2026-03-23T11:43:36.085447",
+      "vector": [
+        0.5,
+        0.641,
+        0.5,
+        0.6,
+        0.7
+      ],
+      "metadata": {
+        "source": "self-improving",
+        "category": "best_practice",
+        "original_data": {
+          "type": "best_practice",
+          "timestamp": "2026-03-23T11:43:36.085447",
+          "category": "工作流程优化",
+          "practice": "制定《诚实执行规则》，建立验证和确认流程",
+          "reason": "防止编造内容，确保信息准确性",
+          "usage_count": 0
+        }
+      }
+    }
+  ],
+  "edges": [
+    {
+      "source": "error_1",
+      "target": "correction_1",
+      "type": "similar_to",
+      "weight": 0.9862329025698744,
+      "timestamp": "2026-03-24T01:13:49.484392Z"
+    },
+    {
+      "source": "error_1",
+      "target": "practice_1",
+      "type": "similar_to",
+      "weight": 0.9867134933567439,
+      "timestamp": "2026-03-24T01:13:49.484400Z"
+    },
+    {
+      "source": "correction_1",
+      "target": "error_1",
+      "type": "similar_to",
+      "weight": 0.9862329025698744,
+      "timestamp": "2026-03-24T01:13:49.484406Z"
+    },
+    {
+      "source": "correction_1",
+      "target": "practice_1",
+      "type": "similar_to",
+      "weight": 0.982600801805015,
+      "timestamp": "2026-03-24T01:13:49.484412Z"
+    },
+    {
+      "source": "practice_1",
+      "target": "error_1",
+      "type": "similar_to",
+      "weight": 0.9867134933567439,
+      "timestamp": "2026-03-24T01:13:49.484417Z"
+    },
+    {
+      "source": "practice_1",
+      "target": "correction_1",
+      "type": "similar_to",
+      "weight": 0.982600801805015,
+      "timestamp": "2026-03-24T01:13:49.484420Z"
+    }
+  ]
+}

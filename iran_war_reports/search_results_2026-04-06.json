@@ -1,0 +1,155 @@
+{
+  "timestamp": "2026-04-06T01:00:00Z",
+  "sources": {
+    "english_media": {
+      "query": "Iran war latest news Reuters CNN BBC 2026 March",
+      "results": [
+        {
+          "url": "https://www.criticalthreats.org/analysis/iran-update-evening-special-report-march-24-2026",
+          "title": "Iran Update Evening Special Report: March 24, 2026 | Critical Threats",
+          "content": "Extensive analysis of Iran-Israel conflict with detailed military updates from March 2026."
+        },
+        {
+          "url": "https://acleddata.com/update/middle-east-special-issue-march-2026",
+          "title": "Middle East Special Issue: March 2026 - ACLED",
+          "content": "Conflict data tracking: long-range missile attack targeting Tel Aviv on 4 March 2026, Israel responds with 250+ strikes across Lebanon."
+        },
+        {
+          "url": "https://www.britannica.com/event/2026-Iran-War",
+          "title": "2026 Iran war | Explained, United States, Israel, Strait of ... - Britannica",
+          "content": "Operation Epic Fury began on February 28, 2026 - joint US-Israel military operations against Iran over nuclear program and ballistic missiles."
+        },
+        {
+          "url": "https://understandingwar.org/research/middle-east/iran-update-special-report-april-1-2026/",
+          "title": "Iran Update Special Report, April 1,最 2026 | ISW",
+          "content": "Comprehensive military analysis with daily updates on Iran war developments."
+        },
+        {
+          "url": "https://en.wikipedia.org/wiki/2026_Iran_war",
+          "title": "2026 Iran war - Wikipedia",
+          "content": "Detailed timeline covering weeks from Feb 28 to Apr 3 2026, with comprehensive analysis of military, political, and humanitarian aspects."
+        }
+      ]
+    },
+    "chinese_media": {
+      "query": "伊朗 战争 最新消息 半岛电视台 法新社 2026年3月",
+      "results": [
+        {
+          "url": "https://m.szhgh.com/Article/opinion/zatan/399860.html",
+          "title": "迷雾中的博弈：2026年伊朗危机与中东地缘政治的重新洗牌",
+          "content": "深度分析伊朗战争的地缘政治影响，涉及内贾德生死传闻、真主党参战、沙特角色争议等复杂因素。"
+        },
+        {
+          "url": "https://unifuncs.com/s/EJGmkG4G",
+          "title": "2026年美以伊战争深度研究报告：中东地缘政治危机的全面剖析",
+          "content": "全面分析美以伊战争的动因、军事冲突升级、人道主义危机和经济影响。"
+        },
+        {
+          "url": "https://www.weex.com/zh-CN/questions/article/what-is-going-on-in-iran-the-2026-full-story-explained-21322",
+          "title": "伊朗发生了什么—2026年事件全解析 - WEEX",
+          "content": "当前的外交谈判、军事升级、人道主义影响以及技术层面的无人机与导弹技术运用。"
+        },
+        {
+          "url": "https://www.binance.com/es-MX/square/post/297098728128274",
+          "title": "2026年中东地缘政治危机与伊朗政权更迭风险评估",
+          "content": "报告深入解构当前战争的动能景观、严重威胁伊朗政权凝聚力的内部继承危机、全球贸易路线的武器化趋势。"
+        },
+        {
+          "url": "https://www.siis.org.cn/sp/17652.jhtml",
+          "title": "上海国际问题研究院专家研判中东局势及其国际影响",
+          "content": "上海国际问题研究院专家深度分析美以伊战争对国际政治经济格局的影响，梳理国际各方立场和反应。"
+        }
+      ]
+    },
+    "military_updates": {
+      "query": "Iran Israel conflict military update 2026",
+      "results": [
+        {
+          "url": "https://www.criticalthreats.org/analysis/iran-update-evening-special-report-march-24-2026",
+          "title": "Iran Update Evening Special Report: March 24, 2026 | Critical Threats",
+          "content": "Detailed military analysis of Iran-Israel-Hezbollah conflict with specific dates and operations from March 24, 2026."
+        },
+        {
+          "url": "https://acleddata.com/update/middle-east-special-issue-march-2026",
+          "title": "Middle East Special Issue: March 2026 - ACLED",
+          "content": "Military conflict data: long-range missile attack on Tel Aviv March 4, Israel 250+ strikes across Lebanon, 50+ killed, 330+ injured."
+        },
+        {
+          "url": "https://www.britannica.com/event/2026-Iran-War",
+          "title": "2026 Iran war | Explained, United States, Israel, Strait of ... - Britannica",
+          "content": "Operation Epic Fury (Feb 28, 2026) - joint US-Israel military operations against Iran's nuclear program and ballistic missiles."
+        },
+        {
+          "url": "https://understandingwar.org/research/middle-east/iran-update-special-report-april-1-2026/",
+          "title": "Iran Update Special Report, April 1, 2026 | ISW",
+          "content": "Daily military analysis of Iran war developments, battlefield updates, and strategic assessments."
+        },
+        {
+          "url": "https://en.wikipedia.org/wiki/2026_Iran_war",
+          "title": "2026 Iran war - Wikipedia",
+          "content": "Comprehensive military timeline covering 5 weeks of conflict (Feb 28 - Apr 3, 2026) with detailed battle descriptions."
+        }
+      ]
+    },
+    "economic_impact": {
+      "query": "Iran oil price impact global economy 2026",
+      "results": [
+        {
+          "url": "https://www.cnbc.com/2026/02/28/iran-us-attack-oil-market-economy.html",
+          "title": "How attack on Iran could impact global oil market and economy",
+          "content": "Joint US-Israeli attack on OPEC member Iran risks major oil supply disruption, could trigger global economic recession. Crude prices could rise $5-$7/barrel."
+        },
+        {
+          "url": "https://www.bloomberg.com/news/features/2026-03-03/iran-war-oil-price-surge-put-global-economic-recovery-at-risk",
+          "title": "Iran War Oil Shock Threatens to Unleash Wave of Global Inflation",
+          "content": "Sustained high oil prices would boost inflation and slow growth, putting central banks in tough spot. Threatens severe blow to global economy."
+        },
+        {
+          "url": "https://m.economictimes.com/markets/us-stocks/news/global-market-oil-shockwave-iran-conflict-triggers-record-surge-in-2026-price-forecasts/articleshow/129940954.cms",
+          "title": "Global Market | Oil Shockwave: Iran conflict triggers record surge in ...",
+          "content": "Iran conflict triggers unprecedented shock in global oil markets, disrupting critical supply routes and production. Brent crude could approach $147/barrel record."
+        },
+        {
+          "url": "https://www.theguardian.com/news/ng-interactive/2026/mar/22/iran-war-global-economy-donald-trump-oil-prices-inflation",
+          "title": "'The stakes are enormous': how a prolonged Iran war could shock ...",
+          "content": "Some economists warn prolonged war could drive oil prices above $170/barrel, triggering global recession affecting UK, eurozone and Japan."
+        },
+        {
+          "url": "https://en.wikipedia.org/wiki/Economic_impact_of_the_2026_Iran_war",
+          "title": "Economic impact of the 2026 Iran war - Wikipedia",
+          "content": "Comprehensive compilation of economic impacts including oil price surges, inflation, and global economic disruption."
+        }
+      ]
+    },
+    "geopolitical_analysis": {
+      "query": "伊朗 地缘政治 分析 中东局势 2026",
+      "results": [
+        {
+          "url": "https://m.szhgh.com/Article/opinion/zatan/399860.html",
+          "title": "迷雾中的博弈：2026年伊朗危机与中东地缘政治的重新洗牌",
+          "content": "深度分析2026年伊朗战争对中东地缘政治格局的冲击，涉及内贾德生死传闻、真主党参战、沙特角色争议等复杂因素。"
+        },
+        {
+          "url": "https://unifuncs.com/s/EJGmkG4G",
+          "title": "2026年美以伊战争深度研究报告：中东地缘政治危机的全面剖析",
+          "content": "全面分析美以伊战争的地缘政治动因、军事冲突升级、人道主义危机和经济影响。"
+        },
+        {
+          "url": "https://www.weex.com/zh-CN/questions/article/what-is-going-on-in-iran-the-2026-full-story-explained-21322",
+          "title": "伊朗发生了什么—2026年事件全解析 - WEEX",
+          "content": "当前的外交谈判、军事升级、人道主义影响以及技术层面的无人机与导弹技术运用分析。"
+        },
+        {
+          "url": "https://www.binance.com/es-MX/square/post/297098728128274",
+          "title": "2026年中东地缘政治危机与伊朗政权更迭风险评估",
+          "content": "报告深入解构当前战争的动能景观、严重威胁伊朗政权凝聚力的内部继承危机、全球贸易路线的武器化趋势。"
+        },
+        {
+          "url": "https://www.siis.org.cn/sp/17652.jhtml",
+          "title": "上海国际问题研究院专家研判中东局势及其国际影响",
+          "content": "上海国际问题研究院专家深度分析美以伊战争对国际政治经济格局的影响，梳理国际各方立场和反应。"
+        }
+      ]
+    }
+  }
+}

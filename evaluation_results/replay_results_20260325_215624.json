@@ -1,0 +1,1206 @@
+{
+  "turn_metrics": [],
+  "error_log": [
+    {
+      "turn_id": 0,
+      "error_type": "step_error",
+      "error_msg": "ReflectionEngine.reflect() takes 2 positional arguments but 3 were given",
+      "timestamp": 1774446984.49422
+    },
+    {
+      "turn_id": 0,
+      "error_type": "step_error",
+      "error_msg": "ReflectionEngine.reflect() takes 2 positional arguments but 3 were given",
+      "timestamp": 1774446984.494272
+    },
+    {
+      "turn_id": 0,
+      "error_type": "step_error",
+      "error_msg": "ReflectionEngine.reflect() takes 2 positional arguments but 3 were given",
+      "timestamp": 1774446984.4942982
+    },
+    {
+      "turn_id": 0,
+      "error_type": "step_error",
+      "error_msg": "ReflectionEngine.reflect() takes 2 positional arguments but 3 were given",
+      "timestamp": 1774446984.494323
+    },
+    {
+      "turn_id": 0,
+      "error_type": "step_error",
+      "error_msg": "ReflectionEngine.reflect() takes 2 positional arguments but 3 were given",
+      "timestamp": 1774446984.4943428
+    },
+    {
+      "turn_id": 0,
+      "error_type": "step_error",
+      "error_msg": "ReflectionEngine.reflect() takes 2 positional arguments but 3 were given",
+      "timestamp": 1774446984.494364
+    },
+    {
+      "turn_id": 0,
+      "error_type": "step_error",
+      "error_msg": "ReflectionEngine.reflect() takes 2 positional arguments but 3 were given",
+      "timestamp": 1774446984.4943821
+    },
+    {
+      "turn_id": 0,
+      "error_type": "step_error",
+      "error_msg": "ReflectionEngine.reflect() takes 2 positional arguments but 3 were given",
+      "timestamp": 1774446984.4944031
+    },
+    {
+      "turn_id": 0,
+      "error_type": "step_error",
+      "error_msg": "ReflectionEngine.reflect() takes 2 positional arguments but 3 were given",
+      "timestamp": 1774446984.4944232
+    },
+    {
+      "turn_id": 0,
+      "error_type": "step_error",
+      "error_msg": "ReflectionEngine.reflect() takes 2 positional arguments but 3 were given",
+      "timestamp": 1774446984.4944441
+    },
+    {
+      "turn_id": 0,
+      "error_type": "step_error",
+      "error_msg": "ReflectionEngine.reflect() takes 2 positional arguments but 3 were given",
+      "timestamp": 1774446984.494463
+    },
+    {
+      "turn_id": 0,
+      "error_type": "step_error",
+      "error_msg": "ReflectionEngine.reflect() takes 2 positional arguments but 3 were given",
+      "timestamp": 1774446984.4944792
+    },
+    {
+      "turn_id": 0,
+      "error_type": "step_error",
+      "error_msg": "ReflectionEngine.reflect() takes 2 positional arguments but 3 were given",
+      "timestamp": 1774446984.494495
+    },
+    {
+      "turn_id": 0,
+      "error_type": "step_error",
+      "error_msg": "ReflectionEngine.reflect() takes 2 positional arguments but 3 were given",
+      "timestamp": 1774446984.4945111
+    },
+    {
+      "turn_id": 0,
+      "error_type": "step_error",
+      "error_msg": "ReflectionEngine.reflect() takes 2 positional arguments but 3 were given",
+      "timestamp": 1774446984.494526
+    },
+    {
+      "turn_id": 0,
+      "error_type": "step_error",
+      "error_msg": "ReflectionEngine.reflect() takes 2 positional arguments but 3 were given",
+      "timestamp": 1774446984.4945421
+    },
+    {
+      "turn_id": 0,
+      "error_type": "step_error",
+      "error_msg": "ReflectionEngine.reflect() takes 2 positional arguments but 3 were given",
+      "timestamp": 1774446984.494557
+    },
+    {
+      "turn_id": 0,
+      "error_type": "step_error",
+      "error_msg": "ReflectionEngine.reflect() takes 2 positional arguments but 3 were given",
+      "timestamp": 1774446984.494574
+    },
+    {
+      "turn_id": 0,
+      "error_type": "step_error",
+      "error_msg": "ReflectionEngine.reflect() takes 2 positional arguments but 3 were given",
+      "timestamp": 1774446984.49459
+    },
+    {
+      "turn_id": 0,
+      "error_type": "step_error",
+      "error_msg": "ReflectionEngine.reflect() takes 2 positional arguments but 3 were given",
+      "timestamp": 1774446984.494606
+    },
+    {
+      "turn_id": 0,
+      "error_type": "step_error",
+      "error_msg": "ReflectionEngine.reflect() takes 2 positional arguments but 3 were given",
+      "timestamp": 1774446984.494622
+    },
+    {
+      "turn_id": 0,
+      "error_type": "step_error",
+      "error_msg": "ReflectionEngine.reflect() takes 2 positional arguments but 3 were given",
+      "timestamp": 1774446984.494636
+    },
+    {
+      "turn_id": 0,
+      "error_type": "step_error",
+      "error_msg": "ReflectionEngine.reflect() takes 2 positional arguments but 3 were given",
+      "timestamp": 1774446984.4946508
+    },
+    {
+      "turn_id": 0,
+      "error_type": "step_error",
+      "error_msg": "ReflectionEngine.reflect() takes 2 positional arguments but 3 were given",
+      "timestamp": 1774446984.494666
+    },
+    {
+      "turn_id": 0,
+      "error_type": "step_error",
+      "error_msg": "ReflectionEngine.reflect() takes 2 positional arguments but 3 were given",
+      "timestamp": 1774446984.4946811
+    },
+    {
+      "turn_id": 0,
+      "error_type": "step_error",
+      "error_msg": "ReflectionEngine.reflect() takes 2 positional arguments but 3 were given",
+      "timestamp": 1774446984.4946969
+    },
+    {
+      "turn_id": 0,
+      "error_type": "step_error",
+      "error_msg": "ReflectionEngine.reflect() takes 2 positional arguments but 3 were given",
+      "timestamp": 1774446984.494712
+    },
+    {
+      "turn_id": 0,
+      "error_type": "step_error",
+      "error_msg": "ReflectionEngine.reflect() takes 2 positional arguments but 3 were given",
+      "timestamp": 1774446984.49473
+    },
+    {
+      "turn_id": 0,
+      "error_type": "step_error",
+      "error_msg": "ReflectionEngine.reflect() takes 2 positional arguments but 3 were given",
+      "timestamp": 1774446984.4947462
+    },
+    {
+      "turn_id": 0,
+      "error_type": "step_error",
+      "error_msg": "ReflectionEngine.reflect() takes 2 positional arguments but 3 were given",
+      "timestamp": 1774446984.494761
+    },
+    {
+      "turn_id": 0,
+      "error_type": "step_error",
+      "error_msg": "ReflectionEngine.reflect() takes 2 positional arguments but 3 were given",
+      "timestamp": 1774446984.4947772
+    },
+    {
+      "turn_id": 0,
+      "error_type": "step_error",
+      "error_msg": "ReflectionEngine.reflect() takes 2 positional arguments but 3 were given",
+      "timestamp": 1774446984.494791
+    },
+    {
+      "turn_id": 0,
+      "error_type": "step_error",
+      "error_msg": "ReflectionEngine.reflect() takes 2 positional arguments but 3 were given",
+      "timestamp": 1774446984.494806
+    },
+    {
+      "turn_id": 0,
+      "error_type": "step_error",
+      "error_msg": "ReflectionEngine.reflect() takes 2 positional arguments but 3 were given",
+      "timestamp": 1774446984.494821
+    },
+    {
+      "turn_id": 0,
+      "error_type": "step_error",
+      "error_msg": "ReflectionEngine.reflect() takes 2 positional arguments but 3 were given",
+      "timestamp": 1774446984.4948359
+    },
+    {
+      "turn_id": 0,
+      "error_type": "step_error",
+      "error_msg": "ReflectionEngine.reflect() takes 2 positional arguments but 3 were given",
+      "timestamp": 1774446984.494851
+    },
+    {
+      "turn_id": 0,
+      "error_type": "step_error",
+      "error_msg": "ReflectionEngine.reflect() takes 2 positional arguments but 3 were given",
+      "timestamp": 1774446984.494866
+    },
+    {
+      "turn_id": 0,
+      "error_type": "step_error",
+      "error_msg": "ReflectionEngine.reflect() takes 2 positional arguments but 3 were given",
+      "timestamp": 1774446984.494883
+    },
+    {
+      "turn_id": 0,
+      "error_type": "step_error",
+      "error_msg": "ReflectionEngine.reflect() takes 2 positional arguments but 3 were given",
+      "timestamp": 1774446984.494899
+    },
+    {
+      "turn_id": 0,
+      "error_type": "step_error",
+      "error_msg": "ReflectionEngine.reflect() takes 2 positional arguments but 3 were given",
+      "timestamp": 1774446984.494914
+    },
+    {
+      "turn_id": 0,
+      "error_type": "step_error",
+      "error_msg": "ReflectionEngine.reflect() takes 2 positional arguments but 3 were given",
+      "timestamp": 1774446984.49493
+    },
+    {
+      "turn_id": 0,
+      "error_type": "step_error",
+      "error_msg": "ReflectionEngine.reflect() takes 2 positional arguments but 3 were given",
+      "timestamp": 1774446984.494944
+    },
+    {
+      "turn_id": 0,
+      "error_type": "step_error",
+      "error_msg": "ReflectionEngine.reflect() takes 2 positional arguments but 3 were given",
+      "timestamp": 1774446984.494959
+    },
+    {
+      "turn_id": 0,
+      "error_type": "step_error",
+      "error_msg": "ReflectionEngine.reflect() takes 2 positional arguments but 3 were given",
+      "timestamp": 1774446984.494974
+    },
+    {
+      "turn_id": 0,
+      "error_type": "step_error",
+      "error_msg": "ReflectionEngine.reflect() takes 2 positional arguments but 3 were given",
+      "timestamp": 1774446984.494988
+    },
+    {
+      "turn_id": 0,
+      "error_type": "step_error",
+      "error_msg": "ReflectionEngine.reflect() takes 2 positional arguments but 3 were given",
+      "timestamp": 1774446984.495004
+    },
+    {
+      "turn_id": 0,
+      "error_type": "step_error",
+      "error_msg": "ReflectionEngine.reflect() takes 2 positional arguments but 3 were given",
+      "timestamp": 1774446984.495019
+    },
+    {
+      "turn_id": 0,
+      "error_type": "step_error",
+      "error_msg": "ReflectionEngine.reflect() takes 2 positional arguments but 3 were given",
+      "timestamp": 1774446984.495035
+    },
+    {
+      "turn_id": 0,
+      "error_type": "step_error",
+      "error_msg": "ReflectionEngine.reflect() takes 2 positional arguments but 3 were given",
+      "timestamp": 1774446984.49505
+    },
+    {
+      "turn_id": 0,
+      "error_type": "step_error",
+      "error_msg": "ReflectionEngine.reflect() takes 2 positional arguments but 3 were given",
+      "timestamp": 1774446984.4950662
+    },
+    {
+      "turn_id": 0,
+      "error_type": "step_error",
+      "error_msg": "ReflectionEngine.reflect() takes 2 positional arguments but 3 were given",
+      "timestamp": 1774446984.495082
+    },
+    {
+      "turn_id": 0,
+      "error_type": "step_error",
+      "error_msg": "ReflectionEngine.reflect() takes 2 positional arguments but 3 were given",
+      "timestamp": 1774446984.4950972
+    },
+    {
+      "turn_id": 0,
+      "error_type": "step_error",
+      "error_msg": "ReflectionEngine.reflect() takes 2 positional arguments but 3 were given",
+      "timestamp": 1774446984.495112
+    },
+    {
+      "turn_id": 0,
+      "error_type": "step_error",
+      "error_msg": "ReflectionEngine.reflect() takes 2 positional arguments but 3 were given",
+      "timestamp": 1774446984.495127
+    },
+    {
+      "turn_id": 0,
+      "error_type": "step_error",
+      "error_msg": "ReflectionEngine.reflect() takes 2 positional arguments but 3 were given",
+      "timestamp": 1774446984.495142
+    },
+    {
+      "turn_id": 0,
+      "error_type": "step_error",
+      "error_msg": "ReflectionEngine.reflect() takes 2 positional arguments but 3 were given",
+      "timestamp": 1774446984.495158
+    },
+    {
+      "turn_id": 0,
+      "error_type": "step_error",
+      "error_msg": "ReflectionEngine.reflect() takes 2 positional arguments but 3 were given",
+      "timestamp": 1774446984.4951732
+    },
+    {
+      "turn_id": 0,
+      "error_type": "step_error",
+      "error_msg": "ReflectionEngine.reflect() takes 2 positional arguments but 3 were given",
+      "timestamp": 1774446984.495189
+    },
+    {
+      "turn_id": 0,
+      "error_type": "step_error",
+      "error_msg": "ReflectionEngine.reflect() takes 2 positional arguments but 3 were given",
+      "timestamp": 1774446984.4952042
+    },
+    {
+      "turn_id": 0,
+      "error_type": "step_error",
+      "error_msg": "ReflectionEngine.reflect() takes 2 positional arguments but 3 were given",
+      "timestamp": 1774446984.49522
+    },
+    {
+      "turn_id": 0,
+      "error_type": "step_error",
+      "error_msg": "ReflectionEngine.reflect() takes 2 positional arguments but 3 were given",
+      "timestamp": 1774446984.4952362
+    },
+    {
+      "turn_id": 0,
+      "error_type": "step_error",
+      "error_msg": "ReflectionEngine.reflect() takes 2 positional arguments but 3 were given",
+      "timestamp": 1774446984.49525
+    },
+    {
+      "turn_id": 0,
+      "error_type": "step_error",
+      "error_msg": "ReflectionEngine.reflect() takes 2 positional arguments but 3 were given",
+      "timestamp": 1774446984.495264
+    },
+    {
+      "turn_id": 0,
+      "error_type": "step_error",
+      "error_msg": "ReflectionEngine.reflect() takes 2 positional arguments but 3 were given",
+      "timestamp": 1774446984.495281
+    },
+    {
+      "turn_id": 0,
+      "error_type": "step_error",
+      "error_msg": "ReflectionEngine.reflect() takes 2 positional arguments but 3 were given",
+      "timestamp": 1774446984.495296
+    },
+    {
+      "turn_id": 0,
+      "error_type": "step_error",
+      "error_msg": "ReflectionEngine.reflect() takes 2 positional arguments but 3 were given",
+      "timestamp": 1774446984.495312
+    },
+    {
+      "turn_id": 0,
+      "error_type": "step_error",
+      "error_msg": "ReflectionEngine.reflect() takes 2 positional arguments but 3 were given",
+      "timestamp": 1774446984.495327
+    },
+    {
+      "turn_id": 0,
+      "error_type": "step_error",
+      "error_msg": "ReflectionEngine.reflect() takes 2 positional arguments but 3 were given",
+      "timestamp": 1774446984.4953432
+    },
+    {
+      "turn_id": 0,
+      "error_type": "step_error",
+      "error_msg": "ReflectionEngine.reflect() takes 2 positional arguments but 3 were given",
+      "timestamp": 1774446984.495359
+    },
+    {
+      "turn_id": 0,
+      "error_type": "step_error",
+      "error_msg": "ReflectionEngine.reflect() takes 2 positional arguments but 3 were given",
+      "timestamp": 1774446984.495374
+    },
+    {
+      "turn_id": 0,
+      "error_type": "step_error",
+      "error_msg": "ReflectionEngine.reflect() takes 2 positional arguments but 3 were given",
+      "timestamp": 1774446984.49539
+    },
+    {
+      "turn_id": 0,
+      "error_type": "step_error",
+      "error_msg": "ReflectionEngine.reflect() takes 2 positional arguments but 3 were given",
+      "timestamp": 1774446984.495404
+    },
+    {
+      "turn_id": 0,
+      "error_type": "step_error",
+      "error_msg": "ReflectionEngine.reflect() takes 2 positional arguments but 3 were given",
+      "timestamp": 1774446984.495418
+    },
+    {
+      "turn_id": 0,
+      "error_type": "step_error",
+      "error_msg": "ReflectionEngine.reflect() takes 2 positional arguments but 3 were given",
+      "timestamp": 1774446984.495434
+    },
+    {
+      "turn_id": 0,
+      "error_type": "step_error",
+      "error_msg": "ReflectionEngine.reflect() takes 2 positional arguments but 3 were given",
+      "timestamp": 1774446984.495448
+    },
+    {
+      "turn_id": 0,
+      "error_type": "step_error",
+      "error_msg": "ReflectionEngine.reflect() takes 2 positional arguments but 3 were given",
+      "timestamp": 1774446984.4954638
+    },
+    {
+      "turn_id": 0,
+      "error_type": "step_error",
+      "error_msg": "ReflectionEngine.reflect() takes 2 positional arguments but 3 were given",
+      "timestamp": 1774446984.495479
+    },
+    {
+      "turn_id": 0,
+      "error_type": "step_error",
+      "error_msg": "ReflectionEngine.reflect() takes 2 positional arguments but 3 were given",
+      "timestamp": 1774446984.4955
+    },
+    {
+      "turn_id": 0,
+      "error_type": "step_error",
+      "error_msg": "ReflectionEngine.reflect() takes 2 positional arguments but 3 were given",
+      "timestamp": 1774446984.4955158
+    },
+    {
+      "turn_id": 0,
+      "error_type": "step_error",
+      "error_msg": "ReflectionEngine.reflect() takes 2 positional arguments but 3 were given",
+      "timestamp": 1774446984.495532
+    },
+    {
+      "turn_id": 0,
+      "error_type": "step_error",
+      "error_msg": "ReflectionEngine.reflect() takes 2 positional arguments but 3 were given",
+      "timestamp": 1774446984.495548
+    },
+    {
+      "turn_id": 0,
+      "error_type": "step_error",
+      "error_msg": "ReflectionEngine.reflect() takes 2 positional arguments but 3 were given",
+      "timestamp": 1774446984.495562
+    },
+    {
+      "turn_id": 0,
+      "error_type": "step_error",
+      "error_msg": "ReflectionEngine.reflect() takes 2 positional arguments but 3 were given",
+      "timestamp": 1774446984.495577
+    },
+    {
+      "turn_id": 0,
+      "error_type": "step_error",
+      "error_msg": "ReflectionEngine.reflect() takes 2 positional arguments but 3 were given",
+      "timestamp": 1774446984.4955919
+    },
+    {
+      "turn_id": 0,
+      "error_type": "step_error",
+      "error_msg": "ReflectionEngine.reflect() takes 2 positional arguments but 3 were given",
+      "timestamp": 1774446984.4956071
+    },
+    {
+      "turn_id": 0,
+      "error_type": "step_error",
+      "error_msg": "ReflectionEngine.reflect() takes 2 positional arguments but 3 were given",
+      "timestamp": 1774446984.495622
+    },
+    {
+      "turn_id": 0,
+      "error_type": "step_error",
+      "error_msg": "ReflectionEngine.reflect() takes 2 positional arguments but 3 were given",
+      "timestamp": 1774446984.495637
+    },
+    {
+      "turn_id": 0,
+      "error_type": "step_error",
+      "error_msg": "ReflectionEngine.reflect() takes 2 positional arguments but 3 were given",
+      "timestamp": 1774446984.4956532
+    },
+    {
+      "turn_id": 0,
+      "error_type": "step_error",
+      "error_msg": "ReflectionEngine.reflect() takes 2 positional arguments but 3 were given",
+      "timestamp": 1774446984.495668
+    },
+    {
+      "turn_id": 0,
+      "error_type": "step_error",
+      "error_msg": "ReflectionEngine.reflect() takes 2 positional arguments but 3 were given",
+      "timestamp": 1774446984.4956841
+    },
+    {
+      "turn_id": 0,
+      "error_type": "step_error",
+      "error_msg": "ReflectionEngine.reflect() takes 2 positional arguments but 3 were given",
+      "timestamp": 1774446984.495699
+    },
+    {
+      "turn_id": 0,
+      "error_type": "step_error",
+      "error_msg": "ReflectionEngine.reflect() takes 2 positional arguments but 3 were given",
+      "timestamp": 1774446984.495713
+    },
+    {
+      "turn_id": 0,
+      "error_type": "step_error",
+      "error_msg": "ReflectionEngine.reflect() takes 2 positional arguments but 3 were given",
+      "timestamp": 1774446984.495728
+    },
+    {
+      "turn_id": 0,
+      "error_type": "step_error",
+      "error_msg": "ReflectionEngine.reflect() takes 2 positional arguments but 3 were given",
+      "timestamp": 1774446984.495743
+    },
+    {
+      "turn_id": 0,
+      "error_type": "step_error",
+      "error_msg": "ReflectionEngine.reflect() takes 2 positional arguments but 3 were given",
+      "timestamp": 1774446984.495758
+    },
+    {
+      "turn_id": 0,
+      "error_type": "step_error",
+      "error_msg": "ReflectionEngine.reflect() takes 2 positional arguments but 3 were given",
+      "timestamp": 1774446984.4957728
+    },
+    {
+      "turn_id": 0,
+      "error_type": "step_error",
+      "error_msg": "ReflectionEngine.reflect() takes 2 positional arguments but 3 were given",
+      "timestamp": 1774446984.495788
+    },
+    {
+      "turn_id": 0,
+      "error_type": "step_error",
+      "error_msg": "ReflectionEngine.reflect() takes 2 positional arguments but 3 were given",
+      "timestamp": 1774446984.4958029
+    },
+    {
+      "turn_id": 0,
+      "error_type": "step_error",
+      "error_msg": "ReflectionEngine.reflect() takes 2 positional arguments but 3 were given",
+      "timestamp": 1774446984.495819
+    },
+    {
+      "turn_id": 0,
+      "error_type": "step_error",
+      "error_msg": "ReflectionEngine.reflect() takes 2 positional arguments but 3 were given",
+      "timestamp": 1774446984.495834
+    },
+    {
+      "turn_id": 0,
+      "error_type": "step_error",
+      "error_msg": "ReflectionEngine.reflect() takes 2 positional arguments but 3 were given",
+      "timestamp": 1774446984.49585
+    },
+    {
+      "turn_id": 0,
+      "error_type": "step_error",
+      "error_msg": "ReflectionEngine.reflect() takes 2 positional arguments but 3 were given",
+      "timestamp": 1774446984.495865
+    },
+    {
+      "turn_id": 0,
+      "error_type": "step_error",
+      "error_msg": "ReflectionEngine.reflect() takes 2 positional arguments but 3 were given",
+      "timestamp": 1774446984.495879
+    },
+    {
+      "turn_id": 0,
+      "error_type": "step_error",
+      "error_msg": "ReflectionEngine.reflect() takes 2 positional arguments but 3 were given",
+      "timestamp": 1774446984.4958951
+    },
+    {
+      "turn_id": 0,
+      "error_type": "step_error",
+      "error_msg": "ReflectionEngine.reflect() takes 2 positional arguments but 3 were given",
+      "timestamp": 1774446984.49591
+    },
+    {
+      "turn_id": 0,
+      "error_type": "step_error",
+      "error_msg": "ReflectionEngine.reflect() takes 2 positional arguments but 3 were given",
+      "timestamp": 1774446984.495925
+    },
+    {
+      "turn_id": 0,
+      "error_type": "step_error",
+      "error_msg": "ReflectionEngine.reflect() takes 2 positional arguments but 3 were given",
+      "timestamp": 1774446984.4959402
+    },
+    {
+      "turn_id": 0,
+      "error_type": "step_error",
+      "error_msg": "ReflectionEngine.reflect() takes 2 positional arguments but 3 were given",
+      "timestamp": 1774446984.495956
+    },
+    {
+      "turn_id": 0,
+      "error_type": "step_error",
+      "error_msg": "ReflectionEngine.reflect() takes 2 positional arguments but 3 were given",
+      "timestamp": 1774446984.495971
+    },
+    {
+      "turn_id": 0,
+      "error_type": "step_error",
+      "error_msg": "ReflectionEngine.reflect() takes 2 positional arguments but 3 were given",
+      "timestamp": 1774446984.495987
+    },
+    {
+      "turn_id": 0,
+      "error_type": "step_error",
+      "error_msg": "ReflectionEngine.reflect() takes 2 positional arguments but 3 were given",
+      "timestamp": 1774446984.4960032
+    },
+    {
+      "turn_id": 0,
+      "error_type": "step_error",
+      "error_msg": "ReflectionEngine.reflect() takes 2 positional arguments but 3 were given",
+      "timestamp": 1774446984.496017
+    },
+    {
+      "turn_id": 0,
+      "error_type": "step_error",
+      "error_msg": "ReflectionEngine.reflect() takes 2 positional arguments but 3 were given",
+      "timestamp": 1774446984.496032
+    },
+    {
+      "turn_id": 0,
+      "error_type": "step_error",
+      "error_msg": "ReflectionEngine.reflect() takes 2 positional arguments but 3 were given",
+      "timestamp": 1774446984.4960482
+    },
+    {
+      "turn_id": 0,
+      "error_type": "step_error",
+      "error_msg": "ReflectionEngine.reflect() takes 2 positional arguments but 3 were given",
+      "timestamp": 1774446984.496062
+    },
+    {
+      "turn_id": 0,
+      "error_type": "step_error",
+      "error_msg": "ReflectionEngine.reflect() takes 2 positional arguments but 3 were given",
+      "timestamp": 1774446984.496078
+    },
+    {
+      "turn_id": 0,
+      "error_type": "step_error",
+      "error_msg": "ReflectionEngine.reflect() takes 2 positional arguments but 3 were given",
+      "timestamp": 1774446984.496093
+    },
+    {
+      "turn_id": 0,
+      "error_type": "step_error",
+      "error_msg": "ReflectionEngine.reflect() takes 2 positional arguments but 3 were given",
+      "timestamp": 1774446984.496108
+    },
+    {
+      "turn_id": 0,
+      "error_type": "step_error",
+      "error_msg": "ReflectionEngine.reflect() takes 2 positional arguments but 3 were given",
+      "timestamp": 1774446984.4961238
+    },
+    {
+      "turn_id": 0,
+      "error_type": "step_error",
+      "error_msg": "ReflectionEngine.reflect() takes 2 positional arguments but 3 were given",
+      "timestamp": 1774446984.496139
+    },
+    {
+      "turn_id": 0,
+      "error_type": "step_error",
+      "error_msg": "ReflectionEngine.reflect() takes 2 positional arguments but 3 were given",
+      "timestamp": 1774446984.4961548
+    },
+    {
+      "turn_id": 0,
+      "error_type": "step_error",
+      "error_msg": "ReflectionEngine.reflect() takes 2 positional arguments but 3 were given",
+      "timestamp": 1774446984.49617
+    },
+    {
+      "turn_id": 0,
+      "error_type": "step_error",
+      "error_msg": "ReflectionEngine.reflect() takes 2 positional arguments but 3 were given",
+      "timestamp": 1774446984.496184
+    },
+    {
+      "turn_id": 0,
+      "error_type": "step_error",
+      "error_msg": "ReflectionEngine.reflect() takes 2 positional arguments but 3 were given",
+      "timestamp": 1774446984.4961998
+    },
+    {
+      "turn_id": 0,
+      "error_type": "step_error",
+      "error_msg": "ReflectionEngine.reflect() takes 2 positional arguments but 3 were given",
+      "timestamp": 1774446984.496214
+    },
+    {
+      "turn_id": 0,
+      "error_type": "step_error",
+      "error_msg": "ReflectionEngine.reflect() takes 2 positional arguments but 3 were given",
+      "timestamp": 1774446984.49623
+    },
+    {
+      "turn_id": 0,
+      "error_type": "step_error",
+      "error_msg": "ReflectionEngine.reflect() takes 2 positional arguments but 3 were given",
+      "timestamp": 1774446984.496245
+    },
+    {
+      "turn_id": 0,
+      "error_type": "step_error",
+      "error_msg": "ReflectionEngine.reflect() takes 2 positional arguments but 3 were given",
+      "timestamp": 1774446984.4962611
+    },
+    {
+      "turn_id": 0,
+      "error_type": "step_error",
+      "error_msg": "ReflectionEngine.reflect() takes 2 positional arguments but 3 were given",
+      "timestamp": 1774446984.496276
+    },
+    {
+      "turn_id": 0,
+      "error_type": "step_error",
+      "error_msg": "ReflectionEngine.reflect() takes 2 positional arguments but 3 were given",
+      "timestamp": 1774446984.496292
+    },
+    {
+      "turn_id": 0,
+      "error_type": "step_error",
+      "error_msg": "ReflectionEngine.reflect() takes 2 positional arguments but 3 were given",
+      "timestamp": 1774446984.496307
+    },
+    {
+      "turn_id": 0,
+      "error_type": "step_error",
+      "error_msg": "ReflectionEngine.reflect() takes 2 positional arguments but 3 were given",
+      "timestamp": 1774446984.4963222
+    },
+    {
+      "turn_id": 0,
+      "error_type": "step_error",
+      "error_msg": "ReflectionEngine.reflect() takes 2 positional arguments but 3 were given",
+      "timestamp": 1774446984.49634
+    },
+    {
+      "turn_id": 0,
+      "error_type": "step_error",
+      "error_msg": "ReflectionEngine.reflect() takes 2 positional arguments but 3 were given",
+      "timestamp": 1774446984.496356
+    },
+    {
+      "turn_id": 0,
+      "error_type": "step_error",
+      "error_msg": "ReflectionEngine.reflect() takes 2 positional arguments but 3 were given",
+      "timestamp": 1774446984.4963698
+    },
+    {
+      "turn_id": 0,
+      "error_type": "step_error",
+      "error_msg": "ReflectionEngine.reflect() takes 2 positional arguments but 3 were given",
+      "timestamp": 1774446984.496386
+    },
+    {
+      "turn_id": 0,
+      "error_type": "step_error",
+      "error_msg": "ReflectionEngine.reflect() takes 2 positional arguments but 3 were given",
+      "timestamp": 1774446984.4964008
+    },
+    {
+      "turn_id": 0,
+      "error_type": "step_error",
+      "error_msg": "ReflectionEngine.reflect() takes 2 positional arguments but 3 were given",
+      "timestamp": 1774446984.496416
+    },
+    {
+      "turn_id": 0,
+      "error_type": "step_error",
+      "error_msg": "ReflectionEngine.reflect() takes 2 positional arguments but 3 were given",
+      "timestamp": 1774446984.496432
+    },
+    {
+      "turn_id": 0,
+      "error_type": "step_error",
+      "error_msg": "ReflectionEngine.reflect() takes 2 positional arguments but 3 were given",
+      "timestamp": 1774446984.496447
+    },
+    {
+      "turn_id": 0,
+      "error_type": "step_error",
+      "error_msg": "ReflectionEngine.reflect() takes 2 positional arguments but 3 were given",
+      "timestamp": 1774446984.496463
+    },
+    {
+      "turn_id": 0,
+      "error_type": "step_error",
+      "error_msg": "ReflectionEngine.reflect() takes 2 positional arguments but 3 were given",
+      "timestamp": 1774446984.496477
+    },
+    {
+      "turn_id": 0,
+      "error_type": "step_error",
+      "error_msg": "ReflectionEngine.reflect() takes 2 positional arguments but 3 were given",
+      "timestamp": 1774446984.4964921
+    },
+    {
+      "turn_id": 0,
+      "error_type": "step_error",
+      "error_msg": "ReflectionEngine.reflect() takes 2 positional arguments but 3 were given",
+      "timestamp": 1774446984.496507
+    },
+    {
+      "turn_id": 0,
+      "error_type": "step_error",
+      "error_msg": "ReflectionEngine.reflect() takes 2 positional arguments but 3 were given",
+      "timestamp": 1774446984.496522
+    },
+    {
+      "turn_id": 0,
+      "error_type": "step_error",
+      "error_msg": "ReflectionEngine.reflect() takes 2 positional arguments but 3 were given",
+      "timestamp": 1774446984.496537
+    },
+    {
+      "turn_id": 0,
+      "error_type": "step_error",
+      "error_msg": "ReflectionEngine.reflect() takes 2 positional arguments but 3 were given",
+      "timestamp": 1774446984.496552
+    },
+    {
+      "turn_id": 0,
+      "error_type": "step_error",
+      "error_msg": "ReflectionEngine.reflect() takes 2 positional arguments but 3 were given",
+      "timestamp": 1774446984.496568
+    },
+    {
+      "turn_id": 0,
+      "error_type": "step_error",
+      "error_msg": "ReflectionEngine.reflect() takes 2 positional arguments but 3 were given",
+      "timestamp": 1774446984.496584
+    },
+    {
+      "turn_id": 0,
+      "error_type": "step_error",
+      "error_msg": "ReflectionEngine.reflect() takes 2 positional arguments but 3 were given",
+      "timestamp": 1774446984.496599
+    },
+    {
+      "turn_id": 0,
+      "error_type": "step_error",
+      "error_msg": "ReflectionEngine.reflect() takes 2 positional arguments but 3 were given",
+      "timestamp": 1774446984.496615
+    },
+    {
+      "turn_id": 0,
+      "error_type": "step_error",
+      "error_msg": "ReflectionEngine.reflect() takes 2 positional arguments but 3 were given",
+      "timestamp": 1774446984.496629
+    },
+    {
+      "turn_id": 0,
+      "error_type": "step_error",
+      "error_msg": "ReflectionEngine.reflect() takes 2 positional arguments but 3 were given",
+      "timestamp": 1774446984.496644
+    },
+    {
+      "turn_id": 0,
+      "error_type": "step_error",
+      "error_msg": "ReflectionEngine.reflect() takes 2 positional arguments but 3 were given",
+      "timestamp": 1774446984.49666
+    },
+    {
+      "turn_id": 0,
+      "error_type": "step_error",
+      "error_msg": "ReflectionEngine.reflect() takes 2 positional arguments but 3 were given",
+      "timestamp": 1774446984.496674
+    },
+    {
+      "turn_id": 0,
+      "error_type": "step_error",
+      "error_msg": "ReflectionEngine.reflect() takes 2 positional arguments but 3 were given",
+      "timestamp": 1774446984.49669
+    },
+    {
+      "turn_id": 0,
+      "error_type": "step_error",
+      "error_msg": "ReflectionEngine.reflect() takes 2 positional arguments but 3 were given",
+      "timestamp": 1774446984.496705
+    },
+    {
+      "turn_id": 0,
+      "error_type": "step_error",
+      "error_msg": "ReflectionEngine.reflect() takes 2 positional arguments but 3 were given",
+      "timestamp": 1774446984.4967208
+    },
+    {
+      "turn_id": 0,
+      "error_type": "step_error",
+      "error_msg": "ReflectionEngine.reflect() takes 2 positional arguments but 3 were given",
+      "timestamp": 1774446984.496737
+    },
+    {
+      "turn_id": 0,
+      "error_type": "step_error",
+      "error_msg": "ReflectionEngine.reflect() takes 2 positional arguments but 3 were given",
+      "timestamp": 1774446984.496755
+    },
+    {
+      "turn_id": 0,
+      "error_type": "step_error",
+      "error_msg": "ReflectionEngine.reflect() takes 2 positional arguments but 3 were given",
+      "timestamp": 1774446984.496771
+    },
+    {
+      "turn_id": 0,
+      "error_type": "step_error",
+      "error_msg": "ReflectionEngine.reflect() takes 2 positional arguments but 3 were given",
+      "timestamp": 1774446984.4967859
+    },
+    {
+      "turn_id": 0,
+      "error_type": "step_error",
+      "error_msg": "ReflectionEngine.reflect() takes 2 positional arguments but 3 were given",
+      "timestamp": 1774446984.4968011
+    },
+    {
+      "turn_id": 0,
+      "error_type": "step_error",
+      "error_msg": "ReflectionEngine.reflect() takes 2 positional arguments but 3 were given",
+      "timestamp": 1774446984.4968162
+    },
+    {
+      "turn_id": 0,
+      "error_type": "step_error",
+      "error_msg": "ReflectionEngine.reflect() takes 2 positional arguments but 3 were given",
+      "timestamp": 1774446984.496831
+    },
+    {
+      "turn_id": 0,
+      "error_type": "step_error",
+      "error_msg": "ReflectionEngine.reflect() takes 2 positional arguments but 3 were given",
+      "timestamp": 1774446984.4968462
+    },
+    {
+      "turn_id": 0,
+      "error_type": "step_error",
+      "error_msg": "ReflectionEngine.reflect() takes 2 positional arguments but 3 were given",
+      "timestamp": 1774446984.496862
+    },
+    {
+      "turn_id": 0,
+      "error_type": "step_error",
+      "error_msg": "ReflectionEngine.reflect() takes 2 positional arguments but 3 were given",
+      "timestamp": 1774446984.496877
+    },
+    {
+      "turn_id": 0,
+      "error_type": "step_error",
+      "error_msg": "ReflectionEngine.reflect() takes 2 positional arguments but 3 were given",
+      "timestamp": 1774446984.496893
+    },
+    {
+      "turn_id": 0,
+      "error_type": "step_error",
+      "error_msg": "ReflectionEngine.reflect() takes 2 positional arguments but 3 were given",
+      "timestamp": 1774446984.496908
+    },
+    {
+      "turn_id": 0,
+      "error_type": "step_error",
+      "error_msg": "ReflectionEngine.reflect() takes 2 positional arguments but 3 were given",
+      "timestamp": 1774446984.496924
+    },
+    {
+      "turn_id": 0,
+      "error_type": "step_error",
+      "error_msg": "ReflectionEngine.reflect() takes 2 positional arguments but 3 were given",
+      "timestamp": 1774446984.496939
+    },
+    {
+      "turn_id": 0,
+      "error_type": "step_error",
+      "error_msg": "ReflectionEngine.reflect() takes 2 positional arguments but 3 were given",
+      "timestamp": 1774446984.4969542
+    },
+    {
+      "turn_id": 0,
+      "error_type": "step_error",
+      "error_msg": "ReflectionEngine.reflect() takes 2 positional arguments but 3 were given",
+      "timestamp": 1774446984.496969
+    },
+    {
+      "turn_id": 0,
+      "error_type": "step_error",
+      "error_msg": "ReflectionEngine.reflect() takes 2 positional arguments but 3 were given",
+      "timestamp": 1774446984.496984
+    },
+    {
+      "turn_id": 0,
+      "error_type": "step_error",
+      "error_msg": "ReflectionEngine.reflect() takes 2 positional arguments but 3 were given",
+      "timestamp": 1774446984.497
+    },
+    {
+      "turn_id": 0,
+      "error_type": "step_error",
+      "error_msg": "ReflectionEngine.reflect() takes 2 positional arguments but 3 were given",
+      "timestamp": 1774446984.497015
+    },
+    {
+      "turn_id": 0,
+      "error_type": "step_error",
+      "error_msg": "ReflectionEngine.reflect() takes 2 positional arguments but 3 were given",
+      "timestamp": 1774446984.497031
+    },
+    {
+      "turn_id": 0,
+      "error_type": "step_error",
+      "error_msg": "ReflectionEngine.reflect() takes 2 positional arguments but 3 were given",
+      "timestamp": 1774446984.497046
+    },
+    {
+      "turn_id": 0,
+      "error_type": "step_error",
+      "error_msg": "ReflectionEngine.reflect() takes 2 positional arguments but 3 were given",
+      "timestamp": 1774446984.497062
+    },
+    {
+      "turn_id": 0,
+      "error_type": "step_error",
+      "error_msg": "ReflectionEngine.reflect() takes 2 positional arguments but 3 were given",
+      "timestamp": 1774446984.497077
+    },
+    {
+      "turn_id": 0,
+      "error_type": "step_error",
+      "error_msg": "ReflectionEngine.reflect() takes 2 positional arguments but 3 were given",
+      "timestamp": 1774446984.497092
+    },
+    {
+      "turn_id": 0,
+      "error_type": "step_error",
+      "error_msg": "ReflectionEngine.reflect() takes 2 positional arguments but 3 were given",
+      "timestamp": 1774446984.4971058
+    },
+    {
+      "turn_id": 0,
+      "error_type": "step_error",
+      "error_msg": "ReflectionEngine.reflect() takes 2 positional arguments but 3 were given",
+      "timestamp": 1774446984.497122
+    },
+    {
+      "turn_id": 0,
+      "error_type": "step_error",
+      "error_msg": "ReflectionEngine.reflect() takes 2 positional arguments but 3 were given",
+      "timestamp": 1774446984.497136
+    },
+    {
+      "turn_id": 0,
+      "error_type": "step_error",
+      "error_msg": "ReflectionEngine.reflect() takes 2 positional arguments but 3 were given",
+      "timestamp": 1774446984.497152
+    },
+    {
+      "turn_id": 0,
+      "error_type": "step_error",
+      "error_msg": "ReflectionEngine.reflect() takes 2 positional arguments but 3 were given",
+      "timestamp": 1774446984.497167
+    },
+    {
+      "turn_id": 0,
+      "error_type": "step_error",
+      "error_msg": "ReflectionEngine.reflect() takes 2 positional arguments but 3 were given",
+      "timestamp": 1774446984.497183
+    },
+    {
+      "turn_id": 0,
+      "error_type": "step_error",
+      "error_msg": "ReflectionEngine.reflect() takes 2 positional arguments but 3 were given",
+      "timestamp": 1774446984.497198
+    },
+    {
+      "turn_id": 0,
+      "error_type": "step_error",
+      "error_msg": "ReflectionEngine.reflect() takes 2 positional arguments but 3 were given",
+      "timestamp": 1774446984.4972138
+    },
+    {
+      "turn_id": 0,
+      "error_type": "step_error",
+      "error_msg": "ReflectionEngine.reflect() takes 2 positional arguments but 3 were given",
+      "timestamp": 1774446984.49723
+    },
+    {
+      "turn_id": 0,
+      "error_type": "step_error",
+      "error_msg": "ReflectionEngine.reflect() takes 2 positional arguments but 3 were given",
+      "timestamp": 1774446984.497244
+    },
+    {
+      "turn_id": 0,
+      "error_type": "step_error",
+      "error_msg": "ReflectionEngine.reflect() takes 2 positional arguments but 3 were given",
+      "timestamp": 1774446984.497259
+    },
+    {
+      "turn_id": 0,
+      "error_type": "step_error",
+      "error_msg": "ReflectionEngine.reflect() takes 2 positional arguments but 3 were given",
+      "timestamp": 1774446984.497282
+    },
+    {
+      "turn_id": 0,
+      "error_type": "step_error",
+      "error_msg": "ReflectionEngine.reflect() takes 2 positional arguments but 3 were given",
+      "timestamp": 1774446984.4972959
+    },
+    {
+      "turn_id": 0,
+      "error_type": "step_error",
+      "error_msg": "ReflectionEngine.reflect() takes 2 positional arguments but 3 were given",
+      "timestamp": 1774446984.4973178
+    },
+    {
+      "turn_id": 0,
+      "error_type": "step_error",
+      "error_msg": "ReflectionEngine.reflect() takes 2 positional arguments but 3 were given",
+      "timestamp": 1774446984.497333
+    },
+    {
+      "turn_id": 0,
+      "error_type": "step_error",
+      "error_msg": "ReflectionEngine.reflect() takes 2 positional arguments but 3 were given",
+      "timestamp": 1774446984.497349
+    },
+    {
+      "turn_id": 0,
+      "error_type": "step_error",
+      "error_msg": "ReflectionEngine.reflect() takes 2 positional arguments but 3 were given",
+      "timestamp": 1774446984.497365
+    },
+    {
+      "turn_id": 0,
+      "error_type": "step_error",
+      "error_msg": "ReflectionEngine.reflect() takes 2 positional arguments but 3 were given",
+      "timestamp": 1774446984.49738
+    }
+  ],
+  "summary": {}
+}
