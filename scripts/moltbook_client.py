@@ -120,7 +120,7 @@ class MoltbookClient:
                     elapsed = time.time() - start_time
                     logger.info(f"{method} {endpoint} 完成，耗时 {elapsed:.2f}s，状态码 {resp.status_code}")
                     
-                    if resp.status_code == 200:
+                    if resp.status_code in (200, 201):
                         return resp.json()
                     else:
                         logger.warning(f"API 返回错误状态码：{resp.status_code}")

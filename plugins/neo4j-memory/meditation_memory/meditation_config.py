@@ -18,6 +18,9 @@ import os
 from dataclasses import dataclass, field
 from typing import List, Optional
 
+# 成本保护配置（Issue #37）
+from .meditation_cost_config import MeditationCostConfig
+
 
 @dataclass
 class MeditationTriggerConfig:

@@ -2561,6 +2561,43 @@ class GraphStore:
         
         return stats
 
+    def get_entity_mention_counts(self) -> Dict[str, int]:
+        """
+        获取所有实体节点的提及次数
+        
+        Returns:
+            实体名称 -> mention_count 的字典
+        """
+        counts = {}
+        try:
+            with self.driver.session(database=self._config.database) as session:
+                query = """
+                MATCH (e:Entity)
+                WHERE e.mention_count IS NOT NULL
+                RETURN e.name AS name, e.mention_count AS count
+                """
+                for record in session.run(query):
+                    counts[record['name']] = record['count']
+        except Exception as e:
+            logger.error("Failed to get entity mention counts: %s", e)
+        return counts
+
+    def get_total_documents(self) -> int:
+        """
+        获取上下文/文档节点的总数
+        
+        Returns:
+            Context 节点总数
+        """
+        try:
+            with self.driver.session(database=self._config.database) as session:
+                query = "MATCH (c:Context) RETURN count(c) AS total"
+                result = session.run(query).single()
+                return result['total'] if result else 0
+        except Exception as e:
+            logger.error("Failed to get total documents: %s", e)
+            return 0
+
     def get_nodes_by_three_laws_priority(self) -> Dict[str, List[Dict[str, Any]]]:
         """
         根据元认知三定律优先级获取节点
