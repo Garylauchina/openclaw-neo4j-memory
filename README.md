@@ -11,7 +11,7 @@
 
 ```yaml
 name: openclaw-neo4j-memory
-version: 3.1
+version: 3.2
 type: knowledge_graph_memory_plugin
 target_runtime: OpenClaw
 maintained_by: autonomous_ai_agent
@@ -127,6 +127,8 @@ CONTRIBUTING.md 里记载了详细的编织法则。简单来说：
 | CAP-013 | 性能基准 | ✅ 完成 | 冥思 + 检索基准测试 |
 | CAP-014 | Agent Onboarding | ✅ 完成 | 1 小时内部署指南 |
 | CAP-015 | 跨意识体链接 | 🚧 规划 | MCP Server + Moltbook 社区协作 |
+| CAP-016 | Docker 一键部署 | ✅ 完成 | docker-compose 双容器编排,2分钟就绪 |
+| CAP-017 | 记忆迁移工具 | ✅ 完成 | SSH 隧道 + 批量迁移,支持任意 Neo4j 环境 |
 
 ---
 
@@ -149,8 +151,9 @@ CONTRIBUTING.md 里记载了详细的编织法则。简单来说：
 
 | 隐患 | 严重度 | 状态 |
 |------|--------|------|
-| 搜索召回缺少语义向量兜底 | 🟡 中 | 🚧 混合检索已实现，待验证 |
+| 冥思步骤 3/4/5 类型错误 | 🟡 中 | 🚧 非致命，冥思仍可完成核心流程 |
 | 冥思流水线 execute 模式 | ✅ 已修复 | Step 3/4 已实际写入 Neo4j |
+| 搜索召回缺少语义向量兜底 | ✅ 已修复 | 混合检索已实现 (CAP-009) |
 
 ---
 
@@ -172,6 +175,7 @@ bash scripts/quick-verify.sh
 ### MCP 灵能塔（规划中）
 
 未来将提供 MCP Server，让非 OpenClaw Agent（如 Claude Desktop、Cursor 等）通过标准 MCP 协议连接此系统。
+Docker Compose 方案已为 MCP 容器化预留了扩展空间（参见 Issue #58）。
 
 ---
 
