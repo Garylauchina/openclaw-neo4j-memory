@@ -1,0 +1,6 @@
+neo4j>=5.0
+fastapi>=0.100
+uvicorn[standard]>=0.23
+httpx>=0.24
+openai>=1.0
+pydantic>=2.0

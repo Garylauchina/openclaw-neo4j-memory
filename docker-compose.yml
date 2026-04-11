@@ -1,0 +1,65 @@
+services:
+  # ========== Neo4j 图数据库 ==========
+  neo4j:
+    image: neo4j:5.26-community
+    container_name: neo4j-memory
+    ports:
+      - "${NEO4J_HTTP_PORT:-7474}:7474"   # Web UI
+      - "${NEO4J_BOLT_PORT:-7687}:7687"   # Bolt 协议
+    environment:
+      - NEO4J_AUTH=${NEO4J_USER:-neo4j}/${NEO4J_PASSWORD:-reflection123}
+      - NEO4J_PLUGINS=["apoc"]
+      - NEO4J_dbms_security_procedures_unrestricted=apoc.*
+      - NEO4J_dbms_memory_pagecache_size=512M
+      - NEO4J_dbms_memory_heap_max__size=1G
+    volumes:
+      - neo4j_data:/data
+      - neo4j_logs:/logs
+      - neo4j_import:/var/lib/neo4j/import
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:7474 || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+    deploy:
+      resources:
+        limits:
+          memory: 2G
+
+  # ========== 记忆 API 服务 ==========
+  memory-api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: neo4j-memory-api
+    ports:
+      - "${API_PORT:-18900}:18900"
+    environment:
+      - NEO4J_URI=bolt://neo4j:7687
+      - NEO4J_USER=${NEO4J_USER:-neo4j}
+      - NEO4J_PASSWORD=${NEO4J_PASSWORD:-reflection123}
+      - NEO4J_DATABASE=${NEO4J_DATABASE:-neo4j}
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - OPENAI_BASE_URL=${OPENAI_BASE_URL:-https://openrouter.ai/api/v1}
+      - LLM_MODEL=${LLM_MODEL:-qwen/qwen-plus}
+      - COGNITIVE_STRATEGY_ENABLED=${COGNITIVE_STRATEGY_ENABLED:-true}
+      - COGNITIVE_FEEDBACK_ENABLED=${COGNITIVE_FEEDBACK_ENABLED:-true}
+    depends_on:
+      neo4j:
+        condition: service_healthy
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:18900/health || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+
+# ========== 持久化卷 ==========
+volumes:
+  neo4j_data:
+    driver: local
+  neo4j_logs:
+    driver: local
+  neo4j_import:
+    driver: local
