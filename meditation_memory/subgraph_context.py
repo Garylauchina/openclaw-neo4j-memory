@@ -352,6 +352,76 @@ class SubgraphContext:
             self._session.update_with_extraction(extraction, new_subgraph=None)
             return result
 
+    def _format_subgraph_as_context(self, subgraph: Dict[str, Any]) -> str:
+        """将子图数据格式化为自然语言上下文"""
+        nodes = subgraph.get("nodes", [])
+        edges = subgraph.get("edges", [])
+
+        if not nodes and not edges:
+            return ""
+
+        # 过滤噪声：META 元知识节点和占位符
+        nodes = [
+            n for n in nodes
+            if n.get("entity_type") != "meta_knowledge"
+            and not n.get("name", "").startswith("[META]")
+            and n.get("name", "")
+        ]
+        edges = [
+            e for e in edges
+            if "[META]" not in e.get("source", "")
+            and "[META]" not in e.get("target", "")
+        ]
+
+        lines: List[str] = []
+
+        # 格式化实体信息
+        if nodes:
+            lines.append("### 已知实体")
+            # 按类型分组
+            type_groups: Dict[str, List[str]] = {}
+            for node in nodes:
+                t = node.get("entity_type", "其他")
+                type_groups.setdefault(t, []).append(node.get("name", ""))
+
+            type_labels = {
+                "person": "人物",
+                "place": "地点",
+                "concept": "概念",
+                "event": "事件",
+                "object": "物品",
+                "organization": "组织",
+            }
+            for etype, names in type_groups.items():
+                label = type_labels.get(etype, etype)
+                lines.append(f"- {label}：{', '.join(names)}")
+
+        # 格式化关系信息
+        if edges:
+            lines.append("")
+            lines.append("### 已知关系")
+            for edge in edges:
+                src = edge.get("source", "?")
+                tgt = edge.get("target", "?")
+                rtype = edge.get("relation_type", "related_to")
+                # 将关系类型转为可读描述
+                readable = self._relation_to_readable(rtype)
+                lines.append(f"- {src} {readable} {tgt}")
+
+        return "\n".join(lines)
+
+    @staticmethod
+    def _relation_to_readable(relation_type: str) -> str:
+        """将关系类型转为中文可读描述"""
+        mapping = {
+            "related_to": "与…相关",
+            "works_at": "工作于",
+            "located_in": "位于",
+            "part_of": "属于",
+            "causes": "导致",
+        }
+        return mapping.get(relation_type, relation_type.replace("_", " "))
+
     def end_session(self) -> List[ExtractionResult]:
         """
         结束会话，返回会话中收集的所有抽取结果。

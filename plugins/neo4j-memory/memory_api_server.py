@@ -334,6 +334,112 @@ async def get_stats():
         "meditation": meditation_stats
     }
 
+
+# ========== 提示词熵（Prompt Entropy）相关端点 - Issue #54 ==========
+
+class PromptEntropyRequest(BaseModel):
+    """提示词熵计算请求"""
+    text: str
+    include_semantic: bool = False  # 是否包含语义熵
+    embeddings: Optional[List[List[float]]] = None  # 预计算的 embedding
+
+
+class PromptEntropyCompareRequest(BaseModel):
+    """提示词熵对比请求（Meditation 前后）"""
+    before_text: str
+    after_text: str
+
+
+@app.post("/prompt-entropy/calculate")
+async def calculate_prompt_entropy(request: PromptEntropyRequest):
+    """
+    计算提示词熵
+    
+    支持：
+    - Token-level Shannon 熵
+    - Semantic 熵（可选，需要提供 embeddings）
+    - 健康度评估与建议
+    """
+    try:
+        from evaluation.prompt_entropy import PromptEntropyCalculator
+        
+        calculator = PromptEntropyCalculator()
+        
+        if request.include_semantic and request.embeddings:
+            result = calculator.calculate_semantic_entropy(request.text, request.embeddings)
+        else:
+            result = calculator.calculate_token_entropy(request.text)
+        
+        return {
+            "status": "success",
+            "result": result.to_dict()
+        }
+    except Exception as e:
+        logger.error(f"Prompt entropy calculation failed: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/prompt-entropy/compare")
+async def compare_prompt_entropy(request: PromptEntropyCompareRequest):
+    """
+    比较 Meditation 前后的提示词熵变化
+    
+    用于评估冥思效果：
+    - 熵变化（应降低）
+    - 困惑度变化
+    - 健康度提升
+    """
+    try:
+        from evaluation.prompt_entropy import PromptEntropyCalculator
+        
+        calculator = PromptEntropyCalculator()
+        comparison = calculator.compare_prompt_entropy(
+            request.before_text,
+            request.after_text
+        )
+        
+        return {
+            "status": "success",
+            "comparison": comparison
+        }
+    except Exception as e:
+        logger.error(f"Prompt entropy comparison failed: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/prompt-entropy/health-report")
+async def get_prompt_entropy_health_report():
+    """
+    获取提示词熵健康报告
+    
+    返回历史冥思周期的提示词熵统计：
+    - 平均熵值
+    - 熵减趋势
+    - 健康度分布
+    - 优化建议
+    """
+    try:
+        # 从冥想历史中获取熵统计数据
+        meditation_stats = store.get_meditation_stats()
+        
+        # 提取提示词熵相关统计（如果存在）
+        prompt_entropy_stats = meditation_stats.get("prompt_entropy", {})
+        
+        return {
+            "status": "success",
+            "report": {
+                "prompt_entropy_stats": prompt_entropy_stats,
+                "recommendations": [
+                    "定期监控提示词熵变化",
+                    "熵值过高时考虑进一步压缩",
+                    "结合图谱熵形成双向闭环"
+                ]
+            }
+        }
+    except Exception as e:
+        logger.error(f"Health report generation failed: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
 # ========== 冥思（Meditation）相关端点 ==========
 
 @app.post("/meditation/trigger")
