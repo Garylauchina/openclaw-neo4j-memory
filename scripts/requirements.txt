@@ -1,0 +1,5 @@
+# Neo4j Memory Migration Tool Dependencies
+
+neo4j>=5.0.0
+click>=8.0.0
+httpx>=0.25.0
