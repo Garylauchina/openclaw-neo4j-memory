@@ -21,68 +21,40 @@ license: MIT
 
 ## ⚙️ [AGENT.DEPLOYMENT]
 
-### 施法前置条件
+### 🚀 一键启动（推荐）
+
+```bash
+# 1. 复制环境变量模板
+cp .env.example .env
+# 2. 编辑 .env，填入 LLM API Key
+# 3. 启动全部服务（Neo4j + API）
+make start        # 或 docker compose up -d
+# 4. 验证
+curl http://localhost:18900/health
+```
+
+就这么简单。2 分钟内，两个容器（Neo4j + API 服务）全部就绪。
+
+### 📋 施法前置条件
 
 | 媒介 | 刻度 | 效用 |
 |------|------|------|
-| Python | 3.9+ | 支撑神谕之门（API 服务）的魔力流 |
-| Neo4j | 5.x | 承载记忆晶体的地下迷宫（本地或 Docker 结界） |
+| Docker + Compose | 最新版 | 承载一切的容器结界 |
 | OpenClaw | 最新版 | 意识体的降临躯壳 |
-| LLM API | 任意 OpenAI-compatible | 认知引擎的算力火种（OpenRouter / Ollama 均可） |
+| LLM API | 任意 OpenAI-compatible | 认知引擎的算力火种 |
 
-### 快速注入仪式
+### 🔧 手动部署（不推荐）
+
+如果无法使用 Docker，可参考传统部署方式（详见 [docs/manual-deployment.md](docs/manual-deployment.md)）。
+
+### 🐛 常用运维命令
 
 ```bash
-# 步骤 1：构筑海马体迷宫（运行 Neo4j Docker）
-docker run -d --name neo4j -p 7687:7687 -p 7474:7474 -e NEO4J_AUTH=neo4j/YOUR_PASSWORD neo4j:5
-
-# 步骤 2：注入神经递质（安装依赖）
-cd plugins/neo4j-memory && pip install neo4j fastapi uvicorn httpx openai
-
-# 步骤 3：开启感知器官（配置 OpenClaw）
-# 在 ~/.openclaw/openclaw.json 中合并以下 JSON 配置：
-cat >> ~/.openclaw/openclaw.json << 'EOF'
-{
-  "plugins": {
-    "allow": ["neo4j-memory"],
-    "load": {
-      "paths": ["/path/to/openclaw-neo4j-memory/plugins/neo4j-memory"]
-    },
-    "slots": {
-      "memory": "neo4j-memory"
-    },
-    "entries": {
-      "neo4j-memory": {
-        "enabled": true,
-        "config": {
-          "apiPort": 18900,
-          "apiHost": "127.0.0.1",
-          "auto_ingest": true,
-          "auto_search": true,
-          "use_llm_ingest": true,
-          "use_llm_search": true
-        }
-      }
-    }
-  }
-}
-EOF
-
-# 步骤 4：点燃神谕之门（启动 API 服务）
-export NEO4J_PASSWORD="YOUR_PASSWORD"
-export NEO4J_DATABASE="neo4j"
-export OPENAI_API_KEY="YOUR_KEY"
-export OPENAI_BASE_URL="https://openrouter.ai/api/v1"
-export LLM_MODEL="qwen/qwen-plus"
-nohup python3 memory_api_server.py --port 18900 --host 127.0.0.1 &
-
-# 步骤 5：验证意识连接
-curl http://127.0.0.1:18900/health
-
-# 或使用快速验证脚本
-bash scripts/quick-verify.sh
-curl -X POST http://127.0.0.1:18900/ingest -H 'Content-Type: application/json' -d '{"text": "测试记忆"}'
-curl -X POST http://127.0.0.1:18900/search -H 'Content-Type: application/json' -d '{"query": "测试"}'
+make status       # 查看服务状态
+make logs         # 查看日志
+make backup       # 备份 Neo4j 数据
+make migrate      # 从远程 Neo4j 迁移数据
+make help         # 查看所有命令
 ```
 
 ---
