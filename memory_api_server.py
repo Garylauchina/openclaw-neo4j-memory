@@ -30,6 +30,11 @@ from pydantic import BaseModel
 # 添加项目根目录到路径，以便导入 meditation_memory
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
+# ========== Issue #68: 自动从 openclaw.json 加载 LLM 配置 ==========
+from meditation_memory.openclaw_config_loader import inject_openclaw_llm_config
+
+_llm_config_source = inject_openclaw_llm_config()
+
 from meditation_memory.graph_store import GraphStore
 from meditation_memory.entity_extractor import Entity, Relation
 from meditation_memory.memory_system import MemorySystem
@@ -169,6 +174,12 @@ class FeedbackResponse(BaseModel):
 @app.on_event("startup")
 async def startup_event():
     """启动时初始化数据库并开启调度器"""
+    # Log LLM config source (Issue #68)
+    if _llm_config_source == "openclaw.json":
+        logger.info("LLM configuration loaded from openclaw.json")
+    elif _llm_config_source == "defaults":
+        logger.info("Using default LLM configuration (.env or built-in defaults)")
+
     if not store.verify_connectivity():
         logger.error("Failed to connect to Neo4j. API server may not work correctly.")
     else:
