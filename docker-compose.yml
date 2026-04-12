@@ -48,6 +48,13 @@ services:
     depends_on:
       neo4j:
         condition: service_healthy
+    # 可选：挂载 openclaw.json 让记忆系统自动读取 LLM 配置（Issue #68）
+    # 取消注释下面两行即可自动继承 OpenClaw 的 LLM 配置
+    # Linux: /home/user/.openclaw/openclaw.json
+    # macOS: /Users/user/.openclaw/openclaw.json
+    # 也可通过环境变量指定: OPENCLAW_CONFIG_PATH=/path/to/openclaw.json
+    # volumes:
+    #   - ${HOME}/.openclaw/openclaw.json:/app/.openclaw/openclaw.json:ro
     restart: unless-stopped
     healthcheck:
       test: ["CMD-SHELL", "curl -f http://localhost:18900/health || exit 1"]
