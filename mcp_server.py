@@ -169,19 +169,29 @@ def get_meditation_status() -> str:
 
 
 if __name__ == "__main__":
+    import uvicorn
+
     transport = os.environ.get("MCP_TRANSPORT", "stdio")
-    host = os.environ.get("MCP_HOST", "127.0.0.1")
+    host = os.environ.get("MCP_HOST", "0.0.0.0")
     port = int(os.environ.get("MCP_PORT", "8000"))
 
     logger.info(
-        "Starting Neo4j Memory MCP Server (API: %s, transport: %s)",
+        "Starting Neo4j Memory MCP Server (API: %s, transport: %s, host=%s, port=%d)",
         MEMORY_API_URL,
-        transport
+        transport,
+        host,
+        port
     )
     if transport == "stdio":
         mcp.run(transport="stdio")
     elif transport in ("streamable-http", "http"):
-        mcp.run(transport="streamable-http")
+        # 使用 uvicorn 直接运行 ASGI app，可自定义 host/port
+        uvicorn.run(
+            mcp.streamable_http_app,
+            host=host,
+            port=port,
+            log_level="info"
+        )
     else:
         logger.error("Unknown MCP_TRANSPORT=%s, falling back to stdio", transport)
         mcp.run(transport="stdio")
