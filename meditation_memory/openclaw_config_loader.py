@@ -27,10 +27,14 @@ def find_openclaw_config() -> Optional[Path]:
         "/app/.openclaw/openclaw.json",
     ]
 
+    seen: set = set()
     for path_str in search_paths:
         if not path_str:
             continue
-        config_path = Path(path_str)
+        config_path = Path(path_str).resolve()
+        if config_path in seen:
+            continue
+        seen.add(config_path)
         if config_path.exists() and config_path.is_file():
             return config_path
 
@@ -87,6 +91,7 @@ def parse_openclaw_config(config: Dict[str, Any]) -> Optional[Dict[str, str]]:
         "base_url": base_url,
         "api_key": api_key,
         "model": model_name,
+        "provider": provider_name,
     }
 
 
@@ -96,7 +101,7 @@ def inject_openclaw_llm_config() -> str:
     仅对未设置的环境变量生效（os.environ.setdefault），
     确保 .env 文件中的显式配置优先级更高。
 
-    返回: "openclaw.json" | ".env" | "defaults"
+    返回: "openclaw.json" | "env" | "defaults"
     """
     config_path = find_openclaw_config()
     if not config_path:
@@ -115,20 +120,32 @@ def inject_openclaw_llm_config() -> str:
         logger.info("Could not extract LLM config from %s", config_path)
         return "defaults"
 
-    # 注入环境变量（仅当未显式设置时）
-    os.environ.setdefault("OPENAI_BASE_URL", llm["base_url"])
-    os.environ.setdefault("OPENAI_API_KEY", llm["api_key"])
-    os.environ.setdefault("LLM_MODEL", llm["model"])
-
-    logger.info(
-        "LLM config loaded from %s: base_url=%s, model=%s",
-        config_path,
-        llm["base_url"],
-        llm["model"],
-    )
-
-    # 判断实际来源
-    if os.environ.get("OPENAI_API_KEY"):
-        return "openclaw.json"
-    else:
+    # 校验 base_url
+    if not llm["base_url"]:
+        logger.warning(
+            "No baseUrl found for provider %s, skipping openclaw.json", llm["provider"]
+        )
         return "defaults"
+
+    # 注入环境变量（仅当未显式设置时），追踪是否真正注入了值
+    injected = False
+    for env_var, value in [
+        ("OPENAI_BASE_URL", llm["base_url"]),
+        ("OPENAI_API_KEY", llm["api_key"]),
+        ("LLM_MODEL", llm["model"]),
+    ]:
+        if env_var not in os.environ:
+            os.environ[env_var] = value
+            injected = True
+
+    if injected:
+        logger.info(
+            "LLM config loaded from %s: base_url=%s, model=%s",
+            config_path,
+            llm["base_url"],
+            llm["model"],
+        )
+        return "openclaw.json"
+
+    logger.info("LLM config already set via .env, skipping openclaw.json")
+    return "env"

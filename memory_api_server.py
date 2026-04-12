@@ -177,7 +177,9 @@ async def startup_event():
     # Log LLM config source (Issue #68)
     if _llm_config_source == "openclaw.json":
         logger.info("LLM configuration loaded from openclaw.json")
-    elif _llm_config_source == "defaults":
+    elif _llm_config_source == "env":
+        logger.info("LLM configuration sourced from .env (openclaw.json detected but not overriding)")
+    else:
         logger.info("Using default LLM configuration (.env or built-in defaults)")
 
     if not store.verify_connectivity():
