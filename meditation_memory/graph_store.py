@@ -1758,6 +1758,48 @@ class GraphStore:
             result = session.run(query, names=all_names)
             return [dict(record) for record in result]
 
+    def _text_jaccard(self, a: str, b: str) -> float:
+        """计算两段文本的 Jaccard 相似度（基于字符 bigram）。"""
+        if not a or not b:
+            return 0.0
+        def ngrams(s, n=2):
+            return set(s[i:i+n] for i in range(len(s) - n + 1))
+        sa, sb = ngrams(a), ngrams(b)
+        if not sa or not sb:
+            return 0.0
+        return len(sa & sb) / len(sa | sb)
+
+    def _find_similar_meta_knowledge(
+        self,
+        summary: str,
+        similarity_threshold: float = 0.85,
+    ) -> Optional[str]:
+        """
+        查找与给定摘要语义相似的已有元知识节点。
+
+        使用 Jaccard bigram 相似度，超过阈值则认为重复。
+
+        Returns:
+            相似节点的名称，或 None
+        """
+        query = """
+        MATCH (m:Entity {entity_type: "meta_knowledge"})
+        WHERE m.description IS NOT NULL
+        RETURN m.name AS name, m.description AS description
+        LIMIT 200
+        """
+        try:
+            with self.driver.session(database=self._config.database) as session:
+                result = session.run(query)
+                for record in result:
+                    desc = record["description"]
+                    sim = self._text_jaccard(summary, desc)
+                    if sim >= similarity_threshold:
+                        return record["name"]
+        except Exception as e:
+            logger.warning("Failed to find similar meta knowledge: %s", e)
+        return None
+
     def create_meta_knowledge_node(
         self,
         summary: str,
@@ -1768,6 +1810,9 @@ class GraphStore:
         """
         创建元知识节点并建立到底层事实节点的 SUMMARIZES 关系。
 
+        创建前会检查是否存在语义相似的已有元知识节点（Jaccard 相似度 > 0.85），
+        若存在则复用该节点并更新描述和关系，避免产生大量重复的 META 节点。
+
         Args:
             summary: 元知识摘要文本
             related_entity_names: 相关底层实体名称列表
@@ -1777,7 +1822,52 @@ class GraphStore:
         Returns:
             是否成功
         """
-        # 使用摘要的前 50 字符作为名称
+        # 去重：查找语义相似的已有元知识节点
+        existing_name = self._find_similar_meta_knowledge(summary, similarity_threshold=0.85)
+        if existing_name:
+            # 复用已有节点：更新描述并建立新关系
+            reuse_query = """
+            MATCH (m:Entity {name: $name, entity_type: $entity_type})
+            SET m.description = $summary,
+                m.updated_at = timestamp(),
+                m.mention_count = coalesce(m.mention_count, 0) + 1
+            RETURN elementId(m) AS eid
+            """
+            link_query = """
+            MATCH (m:Entity {name: $meta_name, entity_type: $entity_type})
+            MATCH (e:Entity {name: $entity_name})
+            WHERE NOT e:Archived
+            MERGE (m)-[r:RELATES_TO {relation_type: $rel_type}]->(e)
+            ON CREATE SET
+                r.created_at = timestamp(),
+                r.updated_at = timestamp(),
+                r.mention_count = 1,
+                r.properties = "{}"
+            RETURN type(r) AS rel_type
+            """
+            try:
+                with self.driver.session(database=self._config.database) as session:
+                    session.run(
+                        reuse_query,
+                        name=existing_name,
+                        entity_type=meta_entity_type,
+                        summary=summary,
+                    )
+                    for entity_name in related_entity_names:
+                        session.run(
+                            link_query,
+                            meta_name=existing_name,
+                            entity_type=meta_entity_type,
+                            entity_name=entity_name,
+                            rel_type=summarizes_rel_type,
+                        )
+                logger.info("Reused similar meta knowledge node: %s", existing_name)
+                return True
+            except Exception as e:
+                logger.error("Failed to reuse meta knowledge node: %s", e)
+                return False
+
+        # 无相似节点，创建新节点
         meta_name = f"[META] {summary[:50]}..." if len(summary) > 50 else f"[META] {summary}"
 
         create_query = """
