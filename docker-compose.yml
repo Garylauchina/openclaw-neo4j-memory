@@ -62,6 +62,31 @@ services:
       timeout: 5s
       retries: 3
 
+  # ========== MCP Server（Issue #70） ==========
+  mcp-server:
+    build:
+      context: .
+      dockerfile: Dockerfile.mcp
+    container_name: neo4j-memory-mcp
+    environment:
+      - MEMORY_API_URL=http://memory-api:18900
+      # MCP 传输模式：stdio（默认，适合 subprocess 调用）或 streamable-http（适合独立部署）
+      - MCP_TRANSPORT=streamable-http
+      - MCP_HOST=0.0.0.0
+      - MCP_PORT=8000
+    ports:
+      - "${MCP_PORT:-8000}:8000"
+    depends_on:
+      memory-api:
+        condition: service_healthy
+    restart: unless-stopped
+    healthcheck:
+      # MCP /mcp 端点需要 POST 请求，用 Python 做最小初始化握手
+      test: ["CMD-SHELL", "python -c \"import urllib.request,json; r=urllib.request.urlopen(urllib.request.Request('http://localhost:8000/mcp', data=json.dumps({'jsonrpc':'2.0','method':'initialize','params':{'protocolVersion':'2024-11-05','capabilities':{},'clientInfo':{'name':'health','version':'1.0'}},'id':1}).encode(), headers={'Content-Type':'application/json'})); print('ok')\" || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+
 # ========== 持久化卷 ==========
 volumes:
   neo4j_data:
