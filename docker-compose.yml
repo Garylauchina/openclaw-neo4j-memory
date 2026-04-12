@@ -17,7 +17,7 @@ services:
       - neo4j_logs:/logs
       - neo4j_import:/var/lib/neo4j/import
     healthcheck:
-      test: ["CMD-SHELL", "curl -f http://localhost:7474 || exit 1"]
+      test: ["CMD-SHELL", "wget -q --spider http://localhost:7474 || exit 1"]
       interval: 10s
       timeout: 5s
       retries: 10
