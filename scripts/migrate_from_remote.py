@@ -86,7 +86,7 @@ def main():
     try:
         remote = GraphDatabase.driver(REMOTE_URI, auth=REMOTE_AUTH)
         remote.verify_connectivity()
-        local = GraphDatabase.driver(LOCAL_URI, auth=LOCAL_AUTH)
+        local = GraphDatabase.driver(LOCAL_NEO4J_URI, auth=LOCAL_AUTH)
         local.verify_connectivity()
         log.info("双端连接成功")
 
