@@ -26,15 +26,15 @@ license: MIT
 ```bash
 # 1. 复制环境变量模板
 cp .env.example .env
-# 2. 编辑 .env，填入 LLM API Key
-# 3. 启动全部服务（Neo4j + API + MCP Server）
+# 2. 编辑 .env,填入 LLM API Key
+# 3. 启动全部服务(Neo4j + API + MCP Server)
 make start        # 或 docker compose up -d
 # 4. 验证
 curl http://localhost:18900/health   # 记忆 API
 curl http://localhost:8000/docs      # MCP Server
 ```
 
-就这么简单。2 分钟内，三个容器（Neo4j + API + MCP Server）全部就绪。
+就这么简单。2 分钟内,三个容器(Neo4j + API + MCP Server)全部就绪。
 
 ### 📋 施法前置条件
 
@@ -154,9 +154,10 @@ CONTRIBUTING.md 里记载了详细的编织法则。简单来说:
 
 | 隐患 | 严重度 | 状态 |
 |------|--------|------|
-| 冥思步骤 3/4/5 类型错误 | 🟡 中 | 🚧 非致命,冥思仍可完成核心流程 |
+| 冥思步骤 3/4/5 类型错误 | 🟡 中 | 🚧 非致命，冥思仍可完成核心流程 |
 | 冥思流水线 execute 模式 | ✅ 已修复 | Step 3/4 已实际写入 Neo4j |
 | 搜索召回缺少语义向量兜底 | ✅ 已修复 | 混合检索已实现 (CAP-009) |
+| MCP healthcheck 406 | ✅ 已修复 | 添加 Accept 头 (cf71584) |
 
 ---
 
