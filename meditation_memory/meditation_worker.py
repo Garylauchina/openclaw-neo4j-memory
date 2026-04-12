@@ -796,6 +796,9 @@ class MeditationEngine:
         if pairs:
             judgments = self.llm.judge_synonym_entities(pairs)
             for j in judgments:
+                if not isinstance(j, dict):
+                    logger.warning("Step 3.1: Skipping non-dict judgment item: %s", j)
+                    continue
                 idx = j.get("pair_index")
                 if idx is not None and idx < len(pairs) and j.get("is_same"):
                     pair = pairs[idx]
@@ -854,6 +857,9 @@ class MeditationEngine:
         if missing_meta:
             enriched = self.llm.infer_entity_metadata(missing_meta)
             for item in enriched:
+                if not isinstance(item, dict):
+                    logger.warning("Step 3.3: Skipping non-dict metadata item: %s", item)
+                    continue
                 name = item.get("name")
                 if not name: continue
                 if result.dry_run:
@@ -885,6 +891,9 @@ class MeditationEngine:
         if generic_rels:
             relabels = self.llm.relabel_relations(generic_rels, self.config.restructuring.relation_ontology)
             for r in relabels:
+                if not isinstance(r, dict):
+                    logger.warning("Step 4.1: Skipping non-dict relabel item: %s", r)
+                    continue
                 idx = r.get("index")
                 new_type = r.get("new_relation_type")
                 if idx is not None and idx < len(generic_rels) and new_type and new_type != "related_to":
@@ -915,6 +924,9 @@ class MeditationEngine:
 
         inferred = self.llm.infer_implicit_relations(edges, node_names)
         for inf in inferred:
+            if not isinstance(inf, dict):
+                logger.warning("Step 4.2: Skipping non-dict inferred relation: %s", inf)
+                continue
             if result.dry_run:
                 result.suggestions.append({
                     "step": "restructuring",
@@ -947,6 +959,9 @@ class MeditationEngine:
         if needs_eval:
             evals = self.llm.evaluate_semantic_importance(needs_eval)
             for ev in evals:
+                if not isinstance(ev, dict):
+                    logger.warning("Step 5: Skipping non-dict eval item: %s", ev)
+                    continue
                 semantic_scores[ev["name"]] = ev.get("semantic_score", 0.5)
 
         updates = []
