@@ -1,0 +1,19 @@
+FROM python:3.11-slim
+
+WORKDIR /app
+
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends curl && \
+    rm -rf /var/lib/apt/lists/*
+
+COPY requirements-mcp.txt .
+RUN pip install --no-cache-dir -r requirements-mcp.txt
+
+COPY mcp_server.py .
+
+HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
+  CMD python -c "import mcp_server; print('MCP tools loaded')"
+
+# MCP Server 默认使用 stdio 传输
+# 如需 HTTP (SSE) 模式，可通过环境变量切换
+CMD ["python", "mcp_server.py"]
