@@ -267,6 +267,7 @@ def ingest_to_neo4j(driver, parsed: list[dict], dry_run: bool) -> MigrateStats:
                 sec_set = ", ".join(f"s.`{k}` = $s_{k}" for k in sec_props)
                 sec_cypher = (
                     f"MATCH (n:{label} {{content_hash: $main_hash}}) "
+                    f"WITH n LIMIT 1 "
                     f"CREATE (n)-[r:{p['default_rel']}]->(s:Section) "
                     f"SET {sec_set}"
                 )
@@ -284,6 +285,7 @@ def ingest_to_neo4j(driver, parsed: list[dict], dry_run: bool) -> MigrateStats:
                 item_set = ", ".join(f"d.`{k}` = $d_{k}" for k in item_props)
                 item_cypher = (
                     f"MATCH (n:{label} {{content_hash: $main_hash}}) "
+                    f"WITH n LIMIT 1 "
                     f"CREATE (n)-[r:has_detail]->(d:Detail) "
                     f"SET {item_set}"
                 )
@@ -295,11 +297,13 @@ def ingest_to_neo4j(driver, parsed: list[dict], dry_run: bool) -> MigrateStats:
             for blk in p["code_blocks"]:
                 blk_props = {
                     "lang": blk["lang"],
+                    "code": blk["code"],
                     "source_path": p["file"],
                 }
                 blk_set = ", ".join(f"c.`{k}` = $c_{k}" for k in blk_props)
                 blk_cypher = (
                     f"MATCH (n:{label} {{content_hash: $main_hash}}) "
+                    f"WITH n LIMIT 1 "
                     f"CREATE (n)-[r:has_code]->(c:CodeBlock) "
                     f"SET {blk_set}"
                 )
@@ -367,6 +371,14 @@ def main():
     try:
         driver.verify_connectivity()
         log.info("✅ Neo4j 连接成功")
+
+        # 创建 content_hash 唯一约束（防止主节点重复）
+        with driver.session() as session:
+            session.run(
+                "CREATE CONSTRAINT unique_content_hash IF NOT EXISTS "
+                "FOR (n) REQUIRE n.content_hash IS UNIQUE"
+            )
+            log.info("✅ 唯一约束 unique_content_hash 已确保")
 
         stats = ingest_to_neo4j(driver, parsed, dry_run=args.dry_run)
 

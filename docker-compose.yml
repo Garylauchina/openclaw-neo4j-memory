@@ -81,7 +81,8 @@ services:
         condition: service_healthy
     restart: unless-stopped
     healthcheck:
-      test: ["CMD-SHELL", "curl -f http://localhost:8000/mcp || exit 1"]
+      # MCP /mcp 端点需要 POST 请求，用 Python 做最小初始化握手
+      test: ["CMD-SHELL", "python -c \"import urllib.request,json; r=urllib.request.urlopen(urllib.request.Request('http://localhost:8000/mcp', data=json.dumps({'jsonrpc':'2.0','method':'initialize','params':{'protocolVersion':'2024-11-05','capabilities':{},'clientInfo':{'name':'health','version':'1.0'}},'id':1}).encode(), headers={'Content-Type':'application/json'})); print('ok')\" || exit 1"]
       interval: 30s
       timeout: 5s
       retries: 3
