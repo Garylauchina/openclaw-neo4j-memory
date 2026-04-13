@@ -23,6 +23,17 @@ license: MIT
 
 ### 🚀 一键启动(推荐)
 
+**⚠️ 先检查运行环境**
+
+在执行下面命令前，请先确认：
+
+```bash
+docker --version
+docker compose version
+```
+
+如果以上任一命令不可用，请先安装并启动 Docker Desktop（或可用的 Docker Engine + Compose），否则本项目无法启动。
+
 ```bash
 # 1. 复制环境变量模板
 cp .env.example .env
@@ -40,7 +51,7 @@ curl http://localhost:8000/docs      # MCP Server
 
 | 媒介 | 刻度 | 效用 |
 |------|------|------|
-| Docker + Compose | 最新版 | 承载一切的容器结界 |
+| Docker + Compose | 最新版，且命令可用 | 承载一切的容器结界 |
 | OpenClaw | 最新版 | 意识体的降临躯壳 |
 | LLM API | 任意 OpenAI-compatible | 认知引擎的算力火种 |
 
