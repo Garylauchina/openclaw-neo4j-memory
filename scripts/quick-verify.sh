@@ -51,16 +51,19 @@ fi
 # 测试记忆写入
 echo ""
 echo -e "${COLOR_YELLOW}🔍 测试记忆写入...${COLOR_NC}"
+TEST_ID="quick_verify_$(date +%s)"
 INGEST_RESPONSE=$(curl -s -X POST "${API_URL}/ingest" \
   -H "Content-Type: application/json" \
-  -d '{"text": "快速验证测试记忆", "use_llm": false}')
+  -d "{\"text\": \"张三在${TEST_ID}项目中使用OpenClaw管理Neo4j记忆\", \"use_llm\": true}")
 
-ENTITIES_WRITTEN=$(echo "$INGEST_RESPONSE" | python3 -c "import sys, json; print(json.load(sys.stdin).get('entities_written', 0))" 2>/dev/null || echo "0")
+INGEST_STATUS=$(echo "$INGEST_RESPONSE" | python3 -c "import sys, json; print(json.load(sys.stdin).get('status', 'error'))" 2>/dev/null || echo "error")
+ENTITIES_WRITTEN=$(echo "$INGEST_RESPONSE" | python3 -c "import sys, json; d=json.load(sys.stdin); print(d.get('data', {}).get('entities_written', 0))" 2>/dev/null || echo "0")
+EXTRACTION_MODE=$(echo "$INGEST_RESPONSE" | python3 -c "import sys, json; d=json.load(sys.stdin); print(d.get('data', {}).get('extraction_mode', 'unknown'))" 2>/dev/null || echo "unknown")
 
-if [ "$ENTITIES_WRITTEN" -gt 0 ]; then
-    echo -e "${COLOR_GREEN}✅ 记忆写入成功 (entities=$ENTITIES_WRITTEN)${COLOR_NC}"
+if [ "$INGEST_STATUS" = "success" ] && [ "$ENTITIES_WRITTEN" -gt 0 ]; then
+    echo -e "${COLOR_GREEN}✅ 记忆写入成功 (entities=$ENTITIES_WRITTEN, mode=$EXTRACTION_MODE)${COLOR_NC}"
 else
-    echo -e "${COLOR_RED}❌ 记忆写入失败${COLOR_NC}"
+    echo -e "${COLOR_RED}❌ 记忆写入失败或未产出实体${COLOR_NC}"
     echo "响应：$INGEST_RESPONSE"
     exit 1
 fi
@@ -70,14 +73,15 @@ echo ""
 echo -e "${COLOR_YELLOW}🔍 测试记忆检索...${COLOR_NC}"
 SEARCH_RESPONSE=$(curl -s -X POST "${API_URL}/search" \
   -H "Content-Type: application/json" \
-  -d '{"query": "快速验证", "limit": 5}')
+  -d "{\"query\": \"${TEST_ID}\", \"limit\": 5}")
 
 ENTITY_COUNT=$(echo "$SEARCH_RESPONSE" | python3 -c "import sys, json; print(json.load(sys.stdin).get('entity_count', 0))" 2>/dev/null || echo "0")
 
-if [ "$ENTITY_COUNT" -ge 0 ]; then
+if [ "$ENTITY_COUNT" -gt 0 ]; then
     echo -e "${COLOR_GREEN}✅ 记忆检索成功 (entities=$ENTITY_COUNT)${COLOR_NC}"
 else
     echo -e "${COLOR_RED}❌ 记忆检索失败${COLOR_NC}"
+    echo "响应：$SEARCH_RESPONSE"
     exit 1
 fi
 

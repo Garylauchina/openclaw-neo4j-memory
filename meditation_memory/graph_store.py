@@ -317,6 +317,7 @@ class GraphStore:
                 "name": e.name,
                 "entity_type": e.entity_type,
                 "properties": json.dumps(e.properties, ensure_ascii=False),
+                "mention_count": 1,
                 "attention": attention,
                 "belief_type": belief_type,
                 "belief_strength": belief_strength,

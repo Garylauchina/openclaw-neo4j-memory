@@ -233,7 +233,12 @@ class EntityExtractor:
         if not text or not text.strip():
             return ExtractionResult(raw_text=text)
 
-        if not use_llm or not self._llm_config.api_key:
+        if not use_llm:
+            return self._extract_with_rules(text)
+
+        # 兼容本地 OpenAI-compatible 服务（如 Ollama/LiteLLM）
+        # 这类服务通常只需要 base_url，不一定需要真实 api_key。
+        if not self._llm_config.api_key and not self._llm_config.base_url:
             return self._extract_with_rules(text)
 
         # LLM 模式：先尝试主模型
@@ -325,24 +330,30 @@ class EntityExtractor:
 
         entities = []
         for e in data.get("entities", [])[:15]:
-            if not isinstance(e, dict) or "name" not in e:
+            if not isinstance(e, dict):
                 continue
-            name = e["name"].strip()
-            if not _is_valid_name(name):
+            name = (e.get("name") or e.get("entity") or "").strip()
+            if not name or not _is_valid_name(name):
                 continue
+            entity_type = (e.get("entity_type") or e.get("type") or "concept").strip().lower()
             entities.append(Entity(
                 name=name,
-                entity_type=e.get("entity_type", "concept"),
+                entity_type=entity_type,
                 properties=e.get("properties", {}),
             ))
 
         relations = []
         for r in data.get("relations", []):
-            if isinstance(r, dict) and "source" in r and "target" in r:
+            if not isinstance(r, dict):
+                continue
+            source = (r.get("source") or "").strip()
+            target = (r.get("target") or "").strip()
+            relation_type = (r.get("relation_type") or r.get("relation") or "related_to").strip()
+            if source and target:
                 relations.append(Relation(
-                    source=r["source"],
-                    target=r["target"],
-                    relation_type=r.get("relation_type", "related_to"),
+                    source=source,
+                    target=target,
+                    relation_type=relation_type,
                     properties=r.get("properties", {}),
                 ))
 
