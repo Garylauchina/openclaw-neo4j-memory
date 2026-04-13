@@ -324,7 +324,11 @@ async def get_meditation_status():
     """查看状态"""
     if not current_run:
         return {"status": "idle", "last_run": meditation_history[-1] if meditation_history else None}
-    return current_run.to_dict()
+    data = current_run.to_dict()
+    heartbeat_at = data.get("heartbeat_at") or 0
+    if heartbeat_at:
+        data["heartbeat_age_sec"] = max(0.0, time.time() - heartbeat_at)
+    return data
 
 @app.get("/meditation/history")
 async def get_meditation_history(limit: int = 10):

@@ -91,6 +91,10 @@ class MeditationRunResult:
     evolution_feedback: Dict[str, Any] = field(default_factory=dict)
     evolution_suggestions: List[Dict[str, Any]] = field(default_factory=list)
 
+    # 运行时状态
+    current_step: str = "pending"
+    heartbeat_at: float = 0.0
+
     # 错误信息
     errors: List[str] = field(default_factory=list)
 
@@ -104,6 +108,8 @@ class MeditationRunResult:
             "finished_at": self.finished_at,
             "status": self.status,
             "dry_run": self.dry_run,
+            "current_step": self.current_step,
+            "heartbeat_at": self.heartbeat_at,
             "stats": {
                 "nodes_scanned": self.nodes_scanned,
                 "nodes_pruned": self.nodes_pruned,
@@ -492,6 +498,8 @@ class MeditationEngine:
             started_at=datetime.now().isoformat(),
             status="running",
             dry_run=dry_run,
+            current_step="initializing",
+            heartbeat_at=time.time(),
         )
 
         logger.info(f"Starting meditation run {run_id} (dry_run={dry_run})")
@@ -520,6 +528,8 @@ class MeditationEngine:
                 logger.warning(f"Evolution analysis failed, continuing with normal meditation: {e}")
             
             # 1. 数据快照与锁定
+            result.current_step = "step_1_snapshot_and_lock"
+            result.heartbeat_at = time.time()
             nodes = await self._step_1_snapshot_and_lock(result, target_nodes)
             if not nodes:
                 result.status = "completed"
@@ -528,9 +538,13 @@ class MeditationEngine:
                 return result
 
             # 2. 孤立节点清理 (Pruning)
+            result.current_step = "step_2_pruning"
+            result.heartbeat_at = time.time()
             await self._step_2_pruning(result, nodes)
 
             # 3. 实体整合与修复 (Merging)
+            result.current_step = "step_3_merging"
+            result.heartbeat_at = time.time()
             try:
                 await self._step_3_merging(result, nodes)
             except Exception as e:
@@ -538,6 +552,8 @@ class MeditationEngine:
                 result.errors.append(f"step_3_merging: {e}")
 
             # 4. 关系推理与重标注 (Restructuring)
+            result.current_step = "step_4_restructuring"
+            result.heartbeat_at = time.time()
             try:
                 await self._step_4_restructuring(result, nodes)
             except Exception as e:
@@ -545,6 +561,8 @@ class MeditationEngine:
                 result.errors.append(f"step_4_restructuring: {e}")
 
             # 5. 权重强化与衰减 (Weighting)
+            result.current_step = "step_5_weighting"
+            result.heartbeat_at = time.time()
             try:
                 await self._step_5_weighting(result, nodes)
             except Exception as e:
@@ -552,6 +570,8 @@ class MeditationEngine:
                 result.errors.append(f"step_5_weighting: {e}")
 
             # 6. 知识蒸馏 (Distillation)
+            result.current_step = "step_6_distillation"
+            result.heartbeat_at = time.time()
             try:
                 await self._step_6_distillation(result, nodes)
             except Exception as e:
@@ -559,6 +579,8 @@ class MeditationEngine:
                 result.errors.append(f"step_6_distillation: {e}")
 
             # 6.5 策略蒸馏 (Strategy Distillation) — Phase 3
+            result.current_step = "step_6_5_strategy_distillation"
+            result.heartbeat_at = time.time()
             try:
                 await self._step_6_5_strategy_distillation(result)
             except Exception as e:
@@ -566,6 +588,8 @@ class MeditationEngine:
                 result.errors.append(f"step_6_5_strategy_distillation: {e}")
 
             # 6.6 策略进化 (Strategy Evolution) — Phase 3
+            result.current_step = "step_6_6_strategy_evolution"
+            result.heartbeat_at = time.time()
             try:
                 await self._step_6_6_strategy_evolution(result)
             except Exception as e:
@@ -573,13 +597,19 @@ class MeditationEngine:
                 result.errors.append(f"step_6_6_strategy_evolution: {e}")
 
             # 7. 事务提交与解锁
+            result.current_step = "step_7_finalize"
+            result.heartbeat_at = time.time()
             await self._step_7_finalize(result)
 
+            result.current_step = "completed"
+            result.heartbeat_at = time.time()
             result.status = "completed" if not dry_run else "dry_run"
             logger.info(f"Meditation run {run_id} completed successfully.")
 
         except Exception as e:
             logger.error(f"Meditation run {run_id} failed: {e}", exc_info=True)
+            result.current_step = "failed"
+            result.heartbeat_at = time.time()
             result.status = "failed"
             result.errors.append(str(e))
             # 尝试解锁
@@ -791,7 +821,10 @@ class MeditationEngine:
             logger.info(f"Step 3.0 done: merged {result.entities_merged} duplicate entities.")
 
         # 3.1 同义词合并
-        pairs = self.store.get_similar_entity_pairs(limit=100)
+        result.current_step = "step_3_1_synonym_judgement"
+        result.heartbeat_at = time.time()
+        synonym_limit = int(os.environ.get("MEDITATION_SYNONYM_PAIR_LIMIT", "20"))
+        pairs = self.store.get_similar_entity_pairs(limit=synonym_limit)
         logger.info(f"Step 3.1: Found {len(pairs)} candidate synonym pairs.")
         if pairs:
             judgments = self.llm.judge_synonym_entities(pairs)
@@ -831,6 +864,8 @@ class MeditationEngine:
         logger.info(f"Step 3.1 done: merged {result.entities_merged} entities.")
 
         # 3.2 截断修复
+        result.current_step = "step_3_2_truncated_repair"
+        result.heartbeat_at = time.time()
         short_nodes = self.store.get_short_name_entities(
             max_name_length=self.config.merging.truncation_name_length
         )
@@ -853,7 +888,10 @@ class MeditationEngine:
         logger.info(f"Step 3.2 done: repaired {result.entities_repaired} truncated entities.")
 
         # 3.3 元数据补充
-        missing_meta = self.store.get_entities_missing_metadata(limit=100)
+        result.current_step = "step_3_3_metadata_enrichment"
+        result.heartbeat_at = time.time()
+        metadata_limit = int(os.environ.get("MEDITATION_METADATA_LIMIT", "20"))
+        missing_meta = self.store.get_entities_missing_metadata(limit=metadata_limit)
         if missing_meta:
             enriched = self.llm.infer_entity_metadata(missing_meta)
             for item in enriched:
@@ -886,6 +924,8 @@ class MeditationEngine:
     async def _step_4_restructuring(self, result: MeditationRunResult, nodes: List[Dict[str, Any]]):
         """重标注 related_to 关系，推断隐含关系。"""
         # 4.1 重标注
+        result.current_step = "step_4_1_relation_relabel"
+        result.heartbeat_at = time.time()
         generic_rels = self.store.get_related_to_edges(limit=self.config.restructuring.relabel_batch_size)
         logger.info(f"Step 4.1: Found {len(generic_rels)} generic relations to relabel.")
         if generic_rels:
@@ -917,6 +957,8 @@ class MeditationEngine:
         logger.info(f"Step 4.1 done: relabeled {result.relations_relabeled} relations.")
 
         # 4.2 隐含关系推断（针对本次扫描的节点子图）
+        result.current_step = "step_4_2_implicit_relation_inference"
+        result.heartbeat_at = time.time()
         node_names = [n["name"] for n in nodes[:20]] # 限制规模
         subgraph = self.store.get_subgraph_by_entities(node_names, max_depth=1)
         edges = [{"source": e["source"], "target": e["target"], "relation_type": e["relation_type"]}
