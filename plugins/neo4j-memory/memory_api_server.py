@@ -30,6 +30,11 @@ from pydantic import BaseModel
 # 添加项目根目录到路径，以便导入 meditation_memory
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
+# ========== Issue #68: 自动从 openclaw.json 加载 LLM 配置 ==========
+from meditation_memory.openclaw_config_loader import inject_openclaw_llm_config
+
+_llm_config_source = inject_openclaw_llm_config()
+
 from meditation_memory.graph_store import GraphStore
 from meditation_memory.entity_extractor import Entity, Relation
 from meditation_memory.memory_system import MemorySystem
@@ -169,6 +174,14 @@ class FeedbackResponse(BaseModel):
 @app.on_event("startup")
 async def startup_event():
     """启动时初始化数据库并开启调度器"""
+    # Log LLM config source (Issue #68)
+    if _llm_config_source == "openclaw.json":
+        logger.info("LLM configuration loaded from openclaw.json")
+    elif _llm_config_source == "env":
+        logger.info("LLM configuration sourced from .env (openclaw.json detected but not overriding)")
+    else:
+        logger.info("Using default LLM configuration (.env or built-in defaults)")
+
     if not store.verify_connectivity():
         logger.error("Failed to connect to Neo4j. API server may not work correctly.")
     else:
@@ -189,55 +202,12 @@ async def shutdown_event():
 
 @app.get("/health")
 async def health_check():
-    """
-    Issue #38: 基本健康检查端点
-    
-    返回：
-    {
-        "status": "healthy",
-        "neo4j_connection": "connected",
-        "llm_api_status": "ok",
-        "uptime_seconds": 86400,
-        "last_meditation": "2026-04-09T04:00:00Z",
-        "meditation_status": "success"
+    connected = store.verify_connectivity()
+    return {
+        "status": "ok" if connected else "degraded",
+        "neo4j_connected": connected,
+        "version": "2.4"
     }
-    """
-    from health_endpoints import get_health_check
-    return get_health_check(store, meditation_engine)
-
-
-@app.get("/diagnose")
-async def detailed_diagnose():
-    """
-    Issue #38: 详细诊断端点
-    
-    返回完整的系统诊断信息，包括 Neo4j、LLM、冥思、API 服务状态。
-    """
-    from health_endpoints import get_detailed_diagnose
-    return get_detailed_diagnose(store, meditation_engine)
-
-
-@app.get("/ready")
-async def readiness_check():
-    """
-    Issue #38: 就绪检查端点（用于 Kubernetes/容器编排）
-    
-    返回：
-    - 200 OK + {"ready": true} - 服务就绪
-    - 503 Service Unavailable + {"ready": false, "reason": "..."} - 服务未就绪
-    """
-    from health_endpoints import get_readiness_check
-    from fastapi.responses import JSONResponse
-    
-    result = get_readiness_check(store)
-    
-    if result["ready"]:
-        return JSONResponse(status_code=200, content=result)
-    else:
-        return JSONResponse(
-            status_code=503,
-            content=result
-        )
 
 @app.post("/ingest")
 async def ingest_memory(request: IngestRequest, background_tasks: BackgroundTasks):
@@ -337,111 +307,6 @@ async def get_stats():
         "meditation": meditation_stats
     }
 
-
-# ========== 提示词熵（Prompt Entropy）相关端点 - Issue #54 ==========
-
-class PromptEntropyRequest(BaseModel):
-    """提示词熵计算请求"""
-    text: str
-    include_semantic: bool = False  # 是否包含语义熵
-    embeddings: Optional[List[List[float]]] = None  # 预计算的 embedding
-
-
-class PromptEntropyCompareRequest(BaseModel):
-    """提示词熵对比请求（Meditation 前后）"""
-    before_text: str
-    after_text: str
-
-
-@app.post("/prompt-entropy/calculate")
-async def calculate_prompt_entropy(request: PromptEntropyRequest):
-    """
-    计算提示词熵
-    
-    支持：
-    - Token-level Shannon 熵
-    - Semantic 熵（可选，需要提供 embeddings）
-    - 健康度评估与建议
-    """
-    try:
-        from evaluation.prompt_entropy import PromptEntropyCalculator
-        
-        calculator = PromptEntropyCalculator()
-        
-        if request.include_semantic and request.embeddings:
-            result = calculator.calculate_semantic_entropy(request.text, request.embeddings)
-        else:
-            result = calculator.calculate_token_entropy(request.text)
-        
-        return {
-            "status": "success",
-            "result": result.to_dict()
-        }
-    except Exception as e:
-        logger.error(f"Prompt entropy calculation failed: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
-
-
-@app.post("/prompt-entropy/compare")
-async def compare_prompt_entropy(request: PromptEntropyCompareRequest):
-    """
-    比较 Meditation 前后的提示词熵变化
-    
-    用于评估冥思效果：
-    - 熵变化（应降低）
-    - 困惑度变化
-    - 健康度提升
-    """
-    try:
-        from evaluation.prompt_entropy import PromptEntropyCalculator
-        
-        calculator = PromptEntropyCalculator()
-        comparison = calculator.compare_prompt_entropy(
-            request.before_text,
-            request.after_text
-        )
-        
-        return {
-            "status": "success",
-            "comparison": comparison
-        }
-    except Exception as e:
-        logger.error(f"Prompt entropy comparison failed: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
-
-
-@app.get("/prompt-entropy/health-report")
-async def get_prompt_entropy_health_report():
-    """
-    获取提示词熵健康报告
-    
-    返回历史冥思周期的提示词熵统计：
-    - 平均熵值
-    - 熵减趋势
-    - 健康度分布
-    - 优化建议
-    """
-    try:
-        # 从冥想历史中获取熵统计数据
-        meditation_stats = store.get_meditation_stats()
-        
-        # 提取提示词熵相关统计（如果存在）
-        prompt_entropy_stats = meditation_stats.get("prompt_entropy", {})
-        
-        return {
-            "status": "success",
-            "report": {
-                "prompt_entropy_stats": prompt_entropy_stats,
-                "recommendations": [
-                    "定期监控提示词熵变化",
-                    "熵值过高时考虑进一步压缩",
-                    "结合图谱熵形成双向闭环"
-                ]
-            }
-        }
-    except Exception as e:
-        logger.error(f"Health report generation failed: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
 
 # ========== 冥思（Meditation）相关端点 ==========
 
@@ -781,19 +646,5 @@ async def run_meditation_task(mode: str, target_nodes: Optional[List[str]] = Non
         current_run = None
 
 if __name__ == "__main__":
-    import argparse
-    
-    parser = argparse.ArgumentParser(description="Neo4j 记忆服务器")
-    parser.add_argument("--port", type=int, default=18900, help="服务端口 (默认: 18900)")
-    parser.add_argument("--host", type=str, default="0.0.0.0", help="绑定主机 (默认: 0.0.0.0)")
-    parser.add_argument("--max-meditation-time", type=int, default=1200, help="冥思最大执行时间(秒) (默认: 1200)")
-    
-    args = parser.parse_args()
-    
-    # 设置冥思超时配置
-    import os
-    os.environ["MEDITATION_MAX_TIME_SECONDS"] = str(args.max_meditation_time)
-    
-    print(f"启动 Neo4j 记忆服务器在 {args.host}:{args.port} (冥思超时: {args.max_meditation_time}秒)")
     import uvicorn
-    uvicorn.run(app, host=args.host, port=args.port)
+    uvicorn.run(app, host="0.0.0.0", port=18900)

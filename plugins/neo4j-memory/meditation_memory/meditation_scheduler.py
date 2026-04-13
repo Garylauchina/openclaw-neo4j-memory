@@ -111,15 +111,16 @@ class MeditationScheduler:
         if now - self._last_run_time < self.config.trigger.min_interval_seconds:
             return
 
-        # 1. 检查定时触发 (简单实现：检查小时和分钟)
-        # 默认 "0 3 * * *" -> 凌晨 3 点
+        dt_now = datetime.now()
+        # 定时触发：使用 ±1 分钟窗口，避免服务重启错过精确时刻
         cron_parts = self.config.trigger.cron_schedule.split()
         if len(cron_parts) >= 2:
             target_min = int(cron_parts[0])
             target_hour = int(cron_parts[1])
-            dt_now = datetime.now()
-            if dt_now.hour == target_hour and dt_now.minute == target_min:
-                logger.info("Cron schedule triggered meditation.")
+            if (dt_now.hour == target_hour and
+                abs(dt_now.minute - target_min) <= 1 and
+                (now - self._last_run_time) > 120):
+                logger.info(f"Cron schedule triggered meditation ({target_hour}:{target_min:02d}).")
                 await self._trigger_run("scheduled")
                 return
 

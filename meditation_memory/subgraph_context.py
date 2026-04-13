@@ -489,8 +489,14 @@ class SubgraphContext:
             "located_in": "位于",
             "part_of": "属于",
             "causes": "导致",
+            "created_by": "由…创建",
+            "belongs_to": "属于",
+            "knows": "认识",
+            "uses": "使用",
+            "contains": "包含",
+            "depends_on": "依赖于",
         }
-        return mapping.get(relation_type, relation_type.replace("_", " "))
+        return mapping.get(relation_type, f"[{relation_type}]")
 
     def end_session(self) -> List[ExtractionResult]:
         """
@@ -613,6 +619,31 @@ class SubgraphContext:
                 return [record["e.name"] for record in result]
         except Exception:
             return []
+
+    @staticmethod
+    def _relation_to_readable(relation_type: str) -> str:
+        """将关系类型转为中文可读描述"""
+        mapping = {
+            "related_to": "与…相关",
+            "works_at": "工作于",
+            "located_in": "位于",
+            "part_of": "属于",
+            "causes": "导致",
+            "created_by": "由…创建",
+            "belongs_to": "属于",
+            "knows": "认识",
+            "uses": "使用",
+            "contains": "包含",
+            "depends_on": "依赖于",
+            "aims_at": "目标是",
+            "achieves": "实现",
+            "precedes": "先于",
+            "prevents": "阻止",
+            "supports": "支持",
+            "opposes": "反对",
+            "contradicts": "与…矛盾",
+            "leads_to": "引向",
+        }
         return mapping.get(relation_type, f"[{relation_type}]")
 
 
