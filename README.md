@@ -111,6 +111,8 @@ CONTRIBUTING.md 里记载了详细的编织法则。简单来说:
 | `plugins/neo4j-memory/` | 插件包 | OpenClaw 加载的镜像目录 |
 | `cognitive_engine/` | 认知层 | 策略蒸馏、自适应学习、元认知反馈(实验性) |
 
+当前主线默认承诺的 API 面仅包括：`/health`、`/ingest`、`/search`、`/stats`、冥思相关端点。历史实验接口如扩展健康检查、提示词熵评估，除非重新立项并回到主线，否则不视为稳定能力。
+
 ---
 
 ## 🕰 进化刻度碑
