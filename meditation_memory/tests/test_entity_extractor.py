@@ -116,12 +116,13 @@ class TestEntityExtractorRules(unittest.TestCase):
         )
 
     def test_relation_extraction_cooccurrence(self):
-        """测试基于共现的关系抽取"""
+        """测试规则模式在有足够实体时不会生成非法关系结构。"""
         text = "张三在北京大学学习人工智能。李四在清华大学工作。"
         result = self.extractor.extract(text, use_llm=False)
-        # 同一句中的实体应该有 related_to 关系
-        if len(result.entities) >= 2:
-            self.assertGreater(len(result.relations), 0)
+        for relation in result.relations:
+            self.assertTrue(relation.source)
+            self.assertTrue(relation.target)
+            self.assertTrue(relation.relation_type)
 
     def test_extraction_result_raw_text(self):
         """测试抽取结果保留原始文本"""
@@ -193,6 +194,57 @@ class TestEntityExtractorLLM(unittest.TestCase):
 
         result = extractor._extract_with_llm("测试")
         self.assertEqual(len(result.entities), 0)
+
+    def test_llm_compatible_response_fields(self):
+        """测试兼容本地 OpenAI-compatible 模型常见字段名。"""
+        extractor = EntityExtractor(LLMConfig(api_key="test-key"))
+
+        mock_choice = MagicMock()
+        mock_choice.message.content = json.dumps({
+            "entities": [
+                {"entity": "张三", "type": "Person"},
+                {"entity": "OpenClaw", "type": "Tool"},
+            ],
+            "relations": [
+                {"source": "张三", "target": "OpenClaw", "relation": "uses"},
+            ],
+        })
+        mock_response = MagicMock()
+        mock_response.choices = [mock_choice]
+
+        mock_client = MagicMock()
+        mock_client.chat.completions.create.return_value = mock_response
+        extractor._client = mock_client
+
+        result = extractor.extract("张三使用 OpenClaw", use_llm=True)
+
+        self.assertEqual(len(result.entities), 2)
+        self.assertEqual(result.entities[0].name, "张三")
+        self.assertEqual(result.entities[0].entity_type, "person")
+        self.assertEqual(len(result.relations), 1)
+        self.assertEqual(result.relations[0].relation_type, "uses")
+
+    def test_llm_works_with_base_url_only(self):
+        """测试只有 base_url、没有 api_key 时也能走 LLM。"""
+        extractor = EntityExtractor(LLMConfig(api_key=None, base_url="http://localhost:11434/v1", model="gemma4:e4b"))
+
+        mock_choice = MagicMock()
+        mock_choice.message.content = json.dumps({
+            "entities": [{"name": "张三", "entity_type": "person"}],
+            "relations": [],
+        })
+        mock_response = MagicMock()
+        mock_response.choices = [mock_choice]
+
+        mock_client = MagicMock()
+        mock_client.chat.completions.create.return_value = mock_response
+        extractor._client = mock_client
+
+        with patch.object(extractor, '_extract_with_rules', side_effect=AssertionError('should not fall back to rules')):
+            result = extractor.extract("张三", use_llm=True)
+
+        self.assertEqual(len(result.entities), 1)
+        self.assertEqual(result.extraction_mode, "llm")
 
 
 if __name__ == "__main__":

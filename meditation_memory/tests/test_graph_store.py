@@ -75,13 +75,18 @@ class TestGraphStoreOperations(unittest.TestCase):
             Entity(name="人工智能", entity_type="concept"),
         ]
 
-        mock_record = {"eid": "4:xxx:0"}
+        mock_record = {"updated": 3}
         mock_result = MagicMock()
         mock_result.single.return_value = mock_record
         self.mock_session.run.return_value = mock_result
 
         count = self.store.upsert_entities(entities)
         self.assertEqual(count, 3)
+
+        call_args = self.mock_session.run.call_args
+        batch = call_args[1]["batch"]
+        self.assertEqual(len(batch), 3)
+        self.assertTrue(all(item["mention_count"] == 1 for item in batch))
 
     def test_upsert_relation(self):
         """测试关系写入"""
