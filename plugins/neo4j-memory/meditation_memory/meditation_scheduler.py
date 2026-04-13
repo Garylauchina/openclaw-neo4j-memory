@@ -39,25 +39,56 @@ class MeditationScheduler:
         self._last_check_timestamp_ms: int = int(time.time() * 1000)
         self._is_running = False
         self._task: Optional[asyncio.Task] = None
+        self._startup_task: Optional[asyncio.Task] = None
 
     async def start(self):
-        """启动调度器循环"""
+        """启动调度器循环；启动补跑改为后台执行，避免阻塞 API ready。"""
         if self._is_running:
             return
         self._is_running = True
         self._task = asyncio.create_task(self._scheduler_loop())
+        self._startup_task = asyncio.create_task(self._catch_up_on_startup())
         logger.info("Meditation scheduler started.")
 
     async def stop(self):
         """停止调度器循环"""
         self._is_running = False
+        if self._startup_task:
+            self._startup_task.cancel()
+            try:
+                await self._startup_task
+            except asyncio.CancelledError:
+                pass
+            self._startup_task = None
         if self._task:
             self._task.cancel()
             try:
                 await self._task
             except asyncio.CancelledError:
                 pass
+            self._task = None
         logger.info("Meditation scheduler stopped.")
+
+    async def _catch_up_on_startup(self):
+        """启动时补跑检查：如果今天没跑过且当前时间已过调度窗口，后台补跑一次。"""
+        try:
+            await asyncio.sleep(1)
+            now = datetime.now()
+            cron_parts = self.config.trigger.cron_schedule.split()
+            if len(cron_parts) >= 2:
+                target_hour = int(cron_parts[1])
+                if now.hour >= target_hour and (time.time() - self._last_run_time) > 180:
+                    logger.info(
+                        f"Startup catch-up: scheduled time was {target_hour}:00, "
+                        f"now {now.hour}:{now.minute:02d}. Running in background."
+                    )
+                    await self._trigger_run("startup_catchup")
+        except asyncio.CancelledError:
+            raise
+        except Exception as e:
+            logger.error(f"Startup catch-up failed: {e}")
+        finally:
+            self._startup_task = None
 
     async def _scheduler_loop(self):
         """主调度循环"""
@@ -110,11 +141,15 @@ class MeditationScheduler:
             self._last_run_time = time.time()
             self._last_check_timestamp_ms = int(time.time() * 1000)
 
-            # 运行引擎
-            result = await self.engine.run_meditation(mode="auto")
+            # 运行引擎。冥思内部包含大量同步 CPU/IO 工作，放到独立线程避免阻塞 API 事件循环。
+            result = await asyncio.to_thread(self._run_meditation_sync, "auto")
             logger.info(f"Meditation run finished. Status: {result.status}")
         except Exception as e:
             logger.error(f"Failed to run triggered meditation: {e}")
+
+    def _run_meditation_sync(self, mode: str):
+        """在独立线程中执行异步冥思，避免主事件循环被同步步骤饿死。"""
+        return asyncio.run(self.engine.run_meditation(mode=mode))
 
 
 async def main():

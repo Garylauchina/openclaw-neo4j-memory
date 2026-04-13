@@ -196,19 +196,7 @@ class SubgraphContext:
             max_edges=self._config.max_edges,
         )
 
-        # 第四步：格式化为上下文文本
-        context_text = self._format_subgraph_as_context(subgraph)
-
-        # 截断到最大长度
-        if len(context_text) > self._config.max_context_chars:
-            context_text = context_text[: self._config.max_context_chars] + "\n..."
-
-        return ContextResult(
-            context_text=context_text,
-            subgraph=subgraph,
-            matched_entities=matched_entities,
-            extraction=extraction,
-        )
+        return self._build_context_result(subgraph, matched_entities, extraction)
 
     def build_system_prompt(
         self,
@@ -295,15 +283,10 @@ class SubgraphContext:
         
         if not current_entities:
             # 无新实体，返回缓存上下文
-            context_text = self._format_subgraph_as_context(self._session.cached_subgraph)
-            if len(context_text) > self._config.max_context_chars:
-                context_text = context_text[: self._config.max_context_chars] + "\n..."
-            
-            result = ContextResult(
-                context_text=context_text,
-                subgraph=self._session.cached_subgraph,
-                matched_entities=list(self._session.cached_entities),
-                extraction=extraction,
+            result = self._build_context_result(
+                self._session.cached_subgraph,
+                list(self._session.cached_entities),
+                extraction,
             )
             self._session.update_with_extraction(extraction, new_subgraph=None)
             return result
@@ -324,30 +307,20 @@ class SubgraphContext:
                 )
             else:
                 new_subgraph = {"nodes": [], "edges": []}
-            
-            context_text = self._format_subgraph_as_context(new_subgraph)
-            if len(context_text) > self._config.max_context_chars:
-                context_text = context_text[: self._config.max_context_chars] + "\n..."
-            
-            result = ContextResult(
-                context_text=context_text,
-                subgraph=new_subgraph,
-                matched_entities=matched_entities,
-                extraction=extraction,
+
+            result = self._build_context_result(
+                new_subgraph,
+                matched_entities,
+                extraction,
             )
             self._session.update_with_extraction(extraction, new_subgraph=new_subgraph)
             return result
         else:
             # 主题未变化：使用缓存，但补充新实体
-            context_text = self._format_subgraph_as_context(self._session.cached_subgraph)
-            if len(context_text) > self._config.max_context_chars:
-                context_text = context_text[: self._config.max_context_chars] + "\n..."
-            
-            result = ContextResult(
-                context_text=context_text,
-                subgraph=self._session.cached_subgraph,
-                matched_entities=list(self._session.cached_entities),
-                extraction=extraction,
+            result = self._build_context_result(
+                self._session.cached_subgraph,
+                list(self._session.cached_entities),
+                extraction,
             )
             self._session.update_with_extraction(extraction, new_subgraph=None)
             return result
@@ -475,61 +448,158 @@ class SubgraphContext:
             return []
 
 
+    def _build_context_result(
+        self,
+        subgraph: Dict[str, Any],
+        matched_entities: List[str],
+        extraction: ExtractionResult,
+    ) -> "ContextResult":
+        prepared = self._prepare_subgraph_for_prompt(subgraph)
+        context_text = self._format_subgraph_as_context(prepared)
+        return ContextResult(
+            context_text=context_text,
+            subgraph=prepared,
+            matched_entities=matched_entities,
+            extraction=extraction,
+        )
+
+    def _prepare_subgraph_for_prompt(self, subgraph: Dict[str, Any]) -> Dict[str, Any]:
+        """对检索子图做预算化裁剪，避免一次注入过多实体和关系。"""
+        nodes = self._sanitize_nodes(subgraph.get("nodes", []))
+        if not nodes:
+            return {"nodes": [], "edges": []}
+
+        budget_chars = max(200, self._config.max_context_chars)
+        node_budget = max(4, min(self._config.max_nodes, budget_chars // 90))
+        kept_nodes = nodes[:node_budget]
+        kept_names = {node["name"] for node in kept_nodes}
+
+        edges = self._sanitize_edges(subgraph.get("edges", []), kept_names)
+        edge_budget = max(4, min(self._config.max_edges, budget_chars // 70))
+        kept_edges = edges[:edge_budget]
+
+        return {"nodes": kept_nodes, "edges": kept_edges}
+
+    def _sanitize_nodes(self, nodes: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+        seen: Dict[str, Dict[str, Any]] = {}
+        for node in nodes:
+            name = (node.get("name") or "").strip()
+            if not name or name.startswith("[META]"):
+                continue
+            if node.get("entity_type") == "meta_knowledge":
+                continue
+
+            mention_count = node.get("mention_count", 0) or 0
+            current = seen.get(name)
+            if current is None or mention_count > (current.get("mention_count", 0) or 0):
+                seen[name] = {
+                    "name": name,
+                    "entity_type": node.get("entity_type", "其他") or "其他",
+                    "mention_count": mention_count,
+                }
+
+        return sorted(
+            seen.values(),
+            key=lambda item: (-(item.get("mention_count", 0) or 0), len(item["name"]), item["name"]),
+        )
+
+    def _sanitize_edges(
+        self,
+        edges: List[Dict[str, Any]],
+        kept_names: Set[str],
+    ) -> List[Dict[str, Any]]:
+        seen = set()
+        edge_records: List[Tuple[int, Dict[str, Any]]] = []
+        name_rank = {node_name: idx for idx, node_name in enumerate(sorted(kept_names))}
+
+        for edge in edges:
+            src = (edge.get("source") or "").strip()
+            tgt = (edge.get("target") or "").strip()
+            if not src or not tgt:
+                continue
+            if src not in kept_names or tgt not in kept_names:
+                continue
+            if "[META]" in src or "[META]" in tgt:
+                continue
+
+            relation_type = edge.get("relation_type", "related_to") or "related_to"
+            key = (src, tgt, relation_type)
+            if key in seen:
+                continue
+            seen.add(key)
+
+            rank = name_rank.get(src, 999) + name_rank.get(tgt, 999)
+            edge_records.append(
+                (
+                    rank,
+                    {
+                        "source": src,
+                        "target": tgt,
+                        "relation_type": relation_type,
+                    },
+                )
+            )
+
+        edge_records.sort(key=lambda item: (item[0], item[1]["source"], item[1]["target"]))
+        return [item[1] for item in edge_records]
+
     def _format_subgraph_as_context(self, subgraph: Dict[str, Any]) -> str:
-        """将子图数据格式化为自然语言上下文"""
+        """将子图数据格式化为预算化自然语言上下文。"""
         nodes = subgraph.get("nodes", [])
         edges = subgraph.get("edges", [])
 
         if not nodes and not edges:
             return ""
 
-        # 过滤噪声：META 元知识节点和占位符
-        nodes = [
-            n for n in nodes
-            if n.get("entity_type") != "meta_knowledge"
-            and not n.get("name", "").startswith("[META]")
-            and n.get("name", "")
-        ]
-        edges = [
-            e for e in edges
-            if "[META]" not in e.get("source", "")
-            and "[META]" not in e.get("target", "")
-        ]
+        type_labels = {
+            "person": "人物",
+            "place": "地点",
+            "concept": "概念",
+            "event": "事件",
+            "object": "物品",
+            "organization": "组织",
+            "intent": "意图",
+        }
 
+        budget = max(200, self._config.max_context_chars)
+        current_length = 0
         lines: List[str] = []
 
-        # 格式化实体信息
-        if nodes:
-            lines.append("### 已知实体")
-            # 按类型分组
-            type_groups: Dict[str, List[str]] = {}
-            for node in nodes:
-                t = node.get("entity_type", "其他")
-                type_groups.setdefault(t, []).append(node.get("name", ""))
+        def append_line(line: str) -> bool:
+            nonlocal current_length
+            extra = len(line) + (1 if lines else 0)
+            if current_length + extra > budget:
+                return False
+            lines.append(line)
+            current_length += extra
+            return True
 
-            type_labels = {
-                "person": "人物",
-                "place": "地点",
-                "concept": "概念",
-                "event": "事件",
-                "object": "物品",
-                "organization": "组织",
-            }
-            for etype, names in type_groups.items():
-                label = type_labels.get(etype, etype)
-                lines.append(f"- {label}：{', '.join(names)}")
+        grouped: Dict[str, List[str]] = {}
+        for node in nodes:
+            grouped.setdefault(node.get("entity_type", "其他"), []).append(node.get("name", ""))
 
-        # 格式化关系信息
+        if grouped and append_line("### 已知实体"):
+            for entity_type, names in grouped.items():
+                unique_names: List[str] = []
+                for name in names:
+                    if name and name not in unique_names:
+                        unique_names.append(name)
+                label = type_labels.get(entity_type, entity_type)
+                if not append_line(f"- {label}：{'、'.join(unique_names)}"):
+                    break
+
         if edges:
-            lines.append("")
-            lines.append("### 已知关系")
-            for edge in edges:
-                src = edge.get("source", "?")
-                tgt = edge.get("target", "?")
-                rtype = edge.get("relation_type", "related_to")
-                # 将关系类型转为可读描述
-                readable = self._relation_to_readable(rtype)
-                lines.append(f"- {src} {readable} {tgt}")
+            append_line("")
+            if append_line("### 已知关系"):
+                for edge in edges:
+                    readable = self._relation_to_readable(edge.get("relation_type", "related_to"))
+                    if not append_line(f"- {edge.get('source', '?')} {readable} {edge.get('target', '?')}"):
+                        break
+
+        if current_length >= budget and lines:
+            suffix = "\n..."
+            if len(lines[-1]) + len(suffix) <= budget:
+                lines[-1] = f"{lines[-1]}{suffix}"
 
         return "\n".join(lines)
 

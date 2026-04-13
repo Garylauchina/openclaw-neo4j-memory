@@ -257,7 +257,10 @@ async def search_memory(request: SearchRequest):
     """搜索记忆（升级版：同时返回策略推荐）"""
     try:
         # 1. 检索记忆上下文（保持原有逻辑）
-        context = memory_system.retrieve_context(request.query, request.session_id)
+        context = memory_system.retrieve_context(
+            request.query,
+            use_llm=request.use_llm,
+        )
         context_dict = context.to_dict() if hasattr(context, "to_dict") else context
 
         # 2. 检索推荐策略（Phase 4 新增）

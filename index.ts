@@ -149,6 +149,48 @@ function extractTextFromMessages(messages: unknown[]): string {
   return parts.join("\n");
 }
 
+function extractTextContent(content: unknown): string {
+  if (typeof content === "string") {
+    return content;
+  }
+  if (Array.isArray(content)) {
+    return (content as Array<Record<string, unknown>>)
+      .filter((c) => c.type === "text" && typeof c.text === "string")
+      .map((c) => c.text as string)
+      .join("\n");
+  }
+  return "";
+}
+
+function sanitizeRecallQuery(text: string): string {
+  const withoutInjectedMemory = text.replace(
+    /<neo4j-graph-memory>[\s\S]*?<\/neo4j-graph-memory>/gi,
+    " ",
+  );
+  const collapsed = withoutInjectedMemory.replace(/\s+/g, " ").trim();
+  if (collapsed.length <= 1200) {
+    return collapsed;
+  }
+  return collapsed.slice(collapsed.length - 1200);
+}
+
+function extractRecallQuery(messages?: unknown[], fallbackPrompt?: string): string {
+  if (Array.isArray(messages)) {
+    for (let i = messages.length - 1; i >= 0; i -= 1) {
+      const msg = messages[i];
+      if (!msg || typeof msg !== "object") continue;
+      const record = msg as Record<string, unknown>;
+      if (record.role !== "user") continue;
+      const text = sanitizeRecallQuery(extractTextContent(record.content));
+      if (text.length >= 5) {
+        return text;
+      }
+    }
+  }
+
+  return sanitizeRecallQuery(fallbackPrompt ?? "");
+}
+
 /**
  * Read a session JSONL file and extract conversation text.
  */
@@ -474,7 +516,8 @@ export default definePluginEntry({
     // ------------------------------------------------------------------
     if (cfg.auto_search) {
       api.on("before_agent_start", async (event: { prompt: string; messages?: unknown[] }) => {
-        if (!event.prompt || event.prompt.length < 5) {
+        const recallQuery = extractRecallQuery(event.messages, event.prompt);
+        if (!recallQuery || recallQuery.length < 5) {
           return;
         }
 
@@ -484,7 +527,7 @@ export default definePluginEntry({
             entity_count?: number;
             edge_count?: number;
           }>("/search", "POST", {
-            query: event.prompt,
+            query: recallQuery,
             use_llm: cfg.use_llm_search,
           });
 
@@ -494,7 +537,7 @@ export default definePluginEntry({
 
           log.info(
             `neo4j-memory [auto-recall]: injecting graph context ` +
-            `(entities=${result.entity_count ?? 0}, edges=${result.edge_count ?? 0})`,
+            `(queryChars=${recallQuery.length}, entities=${result.entity_count ?? 0}, edges=${result.edge_count ?? 0})`,
           );
 
           return {
