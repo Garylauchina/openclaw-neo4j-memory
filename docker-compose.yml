@@ -61,7 +61,8 @@ services:
       test: ["CMD-SHELL", "curl -f http://localhost:18900/health || exit 1"]
       interval: 30s
       timeout: 5s
-      retries: 3
+      retries: 10
+      start_period: 180s
 
   # ========== MCP Server（Issue #70） ==========
   mcp-server:
