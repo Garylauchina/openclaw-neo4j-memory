@@ -46,25 +46,43 @@ def analyze_and_adjust_simple(store: Any) -> Dict[str, Any]:
         if truncated_entities:
             logger.info(f"Found {len(truncated_entities)} truncated entities")
             # 只清理出现次数<=1的截断实体
-            for entity_name, count in truncated_entities:
-                if count <= 1:
+            for item in truncated_entities:
+                if isinstance(item, dict):
+                    entity_name = item.get("name")
+                    count = item.get("mention_count", 0) or 0
+                elif isinstance(item, (list, tuple)) and len(item) >= 2:
+                    entity_name, count = item[0], item[1]
+                else:
+                    logger.warning(f"Unexpected truncated entity payload: {item!r}")
+                    continue
+
+                if entity_name and count <= 1:
                     params["cleanup_targets"].append(entity_name)
         
         # 2. 查找超级节点 (关系扇出度 > 15)
         super_nodes = find_super_nodes_simple(store)
         if super_nodes:
             logger.info(f"Found {len(super_nodes)} super nodes")
-            for node_id, fanout in super_nodes:
-                params["split_candidates"].append(node_id)
+            for item in super_nodes:
+                if isinstance(item, dict):
+                    node_id = item.get("element_id") or item.get("node_id") or item.get("id")
+                elif isinstance(item, (list, tuple)) and len(item) >= 1:
+                    node_id = item[0]
+                else:
+                    logger.warning(f"Unexpected super node payload: {item!r}")
+                    continue
+
+                if node_id:
+                    params["split_candidates"].append(node_id)
         
-    except Exception as e:
-        logger.error(f"Error in simple meditation evolution: {e}")
+    except Exception:
+        logger.exception("Error in simple meditation evolution")
         params["evolution_enabled"] = False
     
     return params
 
 
-def find_truncated_entities_simple(store: Any, max_length: int = 4) -> List[tuple]:
+def find_truncated_entities_simple(store: Any, max_length: int = 4) -> List[Any]:
     """
     查找截断的中文实体名（简化版）
     
@@ -89,7 +107,7 @@ def find_truncated_entities_simple(store: Any, max_length: int = 4) -> List[tupl
         return []
 
 
-def find_super_nodes_simple(store: Any, fanout_threshold: int = 15) -> List[tuple]:
+def find_super_nodes_simple(store: Any, fanout_threshold: int = 15) -> List[Any]:
     """
     查找超级节点（简化版）
     
