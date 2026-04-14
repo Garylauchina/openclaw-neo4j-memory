@@ -201,6 +201,25 @@ class TestSubgraphContextPrompt(unittest.TestCase):
         self.assertLess(node_names.index("AI"), node_names.index("消息总结"))
         self.assertLess(node_names.index("机器学习"), node_names.index("消息总结"))
 
+    def test_related_to_edges_are_ranked_lower_than_specific_relations(self):
+        edges = self.ctx_builder._sanitize_edges(
+            [
+                {"source": "AI", "target": "机器学习", "relation_type": "related_to"},
+                {"source": "AI", "target": "OpenAI", "relation_type": "created_by"},
+            ],
+            {"AI", "机器学习", "OpenAI"},
+        )
+        relation_types = [e["relation_type"] for e in edges]
+        self.assertEqual(relation_types[0], "created_by")
+        self.assertEqual(relation_types[1], "related_to")
+
+    def test_generic_meta_nodes_are_ranked_lower(self):
+        meta_nodes = self.ctx_builder._sanitize_meta_nodes([
+            {"name": "[META] 系统稳定性作为核心机制驱动整体演化", "entity_type": "meta_knowledge", "mention_count": 10},
+            {"name": "[META] AI相关知识帮助解释当前问题", "entity_type": "meta_knowledge", "mention_count": 3},
+        ])
+        self.assertEqual(meta_nodes[0]["name"], "[META] AI相关知识帮助解释当前问题")
+
 
 class TestRelationReadable(unittest.TestCase):
     """关系可读化测试"""

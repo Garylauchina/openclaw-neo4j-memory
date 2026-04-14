@@ -415,15 +415,22 @@ class SubgraphContext:
                 continue
             mention_count = node.get("mention_count", 0) or 0
             current = seen.get(name)
+            candidate = {
+                "name": name,
+                "entity_type": node.get("entity_type", "meta_knowledge") or "meta_knowledge",
+                "mention_count": mention_count,
+                "selection_penalty": self._meta_selection_penalty(name, mention_count),
+            }
             if current is None or mention_count > (current.get("mention_count", 0) or 0):
-                seen[name] = {
-                    "name": name,
-                    "entity_type": node.get("entity_type", "meta_knowledge") or "meta_knowledge",
-                    "mention_count": mention_count,
-                }
+                seen[name] = candidate
         return sorted(
             seen.values(),
-            key=lambda item: (-(item.get("mention_count", 0) or 0), len(item["name"]), item["name"]),
+            key=lambda item: (
+                item.get("selection_penalty", 0),
+                -(item.get("mention_count", 0) or 0),
+                len(item["name"]),
+                item["name"],
+            ),
         )
 
     def _sanitize_edges(
@@ -451,7 +458,8 @@ class SubgraphContext:
                 continue
             seen.add(key)
 
-            rank = name_rank.get(src, 999) + name_rank.get(tgt, 999)
+            penalty = self._edge_selection_penalty(relation_type)
+            rank = penalty * 1000 + name_rank.get(src, 999) + name_rank.get(tgt, 999)
             edge_records.append(
                 (
                     rank,
@@ -459,12 +467,28 @@ class SubgraphContext:
                         "source": src,
                         "target": tgt,
                         "relation_type": relation_type,
+                        "selection_penalty": penalty,
                     },
                 )
             )
 
         edge_records.sort(key=lambda item: (item[0], item[1]["source"], item[1]["target"]))
         return [item[1] for item in edge_records]
+
+    def _meta_selection_penalty(self, name: str, mention_count: int) -> int:
+        if mention_count <= 1:
+            return 1
+        generic_meta_markers = ["系统", "机制", "价值", "稳定性", "范式转移", "核心驱动力"]
+        if any(marker in name for marker in generic_meta_markers):
+            return 1
+        return 0
+
+    def _edge_selection_penalty(self, relation_type: str) -> int:
+        if relation_type == "related_to":
+            return 2
+        if relation_type.startswith("custom_"):
+            return 1
+        return 0
 
     def _format_subgraph_as_context(self, subgraph: Dict[str, Any]) -> str:
         """将子图数据格式化为预算化自然语言上下文。"""
