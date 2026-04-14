@@ -94,14 +94,12 @@ def find_truncated_entities_simple(store: Any, max_length: int = 4) -> List[Any]
         [(实体名, 提及次数), ...]
     """
     try:
-        # 使用store的现有方法获取短名实体
-        # 假设store有get_short_name_entities方法（从之前的搜索中看到）
+        if hasattr(store, 'get_truncated_entity_candidates'):
+            return store.get_truncated_entity_candidates(max_name_length=max_length)
         if hasattr(store, 'get_short_name_entities'):
             return store.get_short_name_entities(max_name_length=max_length)
-        else:
-            # 回退方案：返回空列表
-            logger.warning("store.get_short_name_entities not available")
-            return []
+        logger.warning("store.get_truncated_entity_candidates/get_short_name_entities not available")
+        return []
     except Exception as e:
         logger.error(f"Failed to find truncated entities: {e}")
         return []

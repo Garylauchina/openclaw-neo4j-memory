@@ -869,7 +869,7 @@ class MeditationEngine:
         # 3.2 截断修复
         result.current_step = "step_3_2_truncated_repair"
         result.heartbeat_at = time.time()
-        short_nodes = self.store.get_short_name_entities(
+        short_nodes = self.store.get_truncated_entity_candidates(
             max_name_length=self.config.merging.truncation_name_length
         )
         for sn in short_nodes:

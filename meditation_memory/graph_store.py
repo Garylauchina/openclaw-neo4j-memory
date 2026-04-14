@@ -1162,7 +1162,7 @@ class GraphStore:
         max_name_length: int = 2,
         skip_recent_seconds: int = 300,
     ) -> List[Dict[str, Any]]:
-        """获取名称过短的实体（可能是截断实体）及其邻居。"""
+        """获取短名实体及其邻居，用于审计或进一步筛选。"""
         query = """
         MATCH (e:Entity)
         WHERE NOT e:Archived
@@ -1183,6 +1183,48 @@ class GraphStore:
                 skip_ms=skip_recent_seconds * 1000,
             )
             return [dict(record) for record in result]
+
+    def get_truncated_entity_candidates(
+        self,
+        max_name_length: int = 2,
+        skip_recent_seconds: int = 300,
+    ) -> List[Dict[str, Any]]:
+        """获取更可能是真实异常截断的实体候选，避免把所有短名都送去修复。"""
+        short_entities = self.get_short_name_entities(
+            max_name_length=max_name_length,
+            skip_recent_seconds=skip_recent_seconds,
+        )
+
+        generic_allowlist = {
+            "消息总结", "用户发送", "关键指标", "积压节点", "进程管理", "任务调度", "平台运行",
+            "技术细节", "技术要点", "知识图谱", "通货膨胀", "版本信息", "功能测试", "默认值",
+            "初始化", "核心实体", "主要实体", "结构", "属性", "效果", "明白", "张三",
+        }
+        review_types = {"person", "place", "organization", "technology"}
+
+        candidates = []
+        for entity in short_entities:
+            name = (entity.get("name") or "").strip()
+            entity_type = (entity.get("entity_type") or "").strip()
+            mention_count = entity.get("mention_count") or 0
+            neighbor_names = entity.get("neighbor_names") or []
+
+            if not name:
+                continue
+            if name in generic_allowlist:
+                continue
+            if entity_type in review_types and mention_count >= 2:
+                continue
+            if len(name) <= 1:
+                candidates.append(entity)
+                continue
+            if len(name) <= 2 and not neighbor_names:
+                candidates.append(entity)
+                continue
+            if len(name) <= max_name_length and mention_count <= 1 and not neighbor_names:
+                candidates.append(entity)
+
+        return candidates
 
     def get_entities_missing_metadata(
         self,

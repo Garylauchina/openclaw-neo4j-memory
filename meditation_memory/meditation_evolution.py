@@ -500,14 +500,18 @@ def find_truncated_entities(store: Any, max_length: int = 4) -> List[str]:
         截断实体名列表
     """
     try:
-        # 查找名字长度小于max_length的中文实体
+        if hasattr(store, 'get_truncated_entity_candidates'):
+            result = store.get_truncated_entity_candidates(max_name_length=max_length)
+            return [(record.get("name"), record.get("mention_count", 0)) for record in result]
+
+        # 回退逻辑：只按短名做粗筛
         cypher = """
         MATCH (n:Entity)
         WHERE size(n.name) < $max_length
-        AND n.name =~ '[\\u4e00-\\u9fa5]+'  // 只匹配中文字符
+        AND n.name =~ '[\\u4e00-\\u9fa5]+'
         RETURN n.name as name, n.mention_count as count
         """
-        
+
         result = store.execute_query(cypher, {"max_length": max_length})
         return [(record.get("name"), record.get("count", 0)) for record in result]
         

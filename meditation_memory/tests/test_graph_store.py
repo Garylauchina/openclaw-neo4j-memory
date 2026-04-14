@@ -216,6 +216,31 @@ class TestGraphStoreOperations(unittest.TestCase):
         call_args = self.mock_session.run.call_args
         self.assertEqual(call_args[1]["skip_recent_ms"], 3600 * 1000)
 
+    def test_get_truncated_entity_candidates_filters_valid_short_names(self):
+        self.store.get_short_name_entities = MagicMock(return_value=[
+            {"name": "消息总结", "entity_type": "concept", "mention_count": 72, "neighbor_names": ["技术要点"]},
+            {"name": "张三", "entity_type": "person", "mention_count": 2, "neighbor_names": ["项目A"]},
+            {"name": "代码分支", "entity_type": "concept", "mention_count": 0, "neighbor_names": []},
+            {"name": "游", "entity_type": "concept", "mention_count": 0, "neighbor_names": []},
+        ])
+
+        results = self.store.get_truncated_entity_candidates(max_name_length=4, skip_recent_seconds=0)
+        names = [r["name"] for r in results]
+
+        self.assertEqual(names, ["代码分支", "游"])
+
+    def test_get_truncated_entity_candidates_keeps_short_low_context_candidates(self):
+        self.store.get_short_name_entities = MagicMock(return_value=[
+            {"name": "AB", "entity_type": "concept", "mention_count": 0, "neighbor_names": []},
+            {"name": "接口", "entity_type": "technology", "mention_count": 3, "neighbor_names": ["协议"]},
+        ])
+
+        results = self.store.get_truncated_entity_candidates(max_name_length=4, skip_recent_seconds=0)
+        names = [r["name"] for r in results]
+
+        self.assertIn("AB", names)
+        self.assertNotIn("接口", names)
+
     def test_close(self):
         """测试关闭连接"""
         self.store.close()
