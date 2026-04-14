@@ -355,15 +355,19 @@ class SubgraphContext:
             return {"nodes": [], "edges": [], "meta_nodes": []}
 
         budget_chars = max(200, self._config.max_context_chars)
-        node_budget = max(4, min(self._config.max_nodes, budget_chars // 90))
+        node_chars_budget = max(120, int(budget_chars * 0.45))
+        relation_chars_budget = max(80, int(budget_chars * 0.30))
+        meta_chars_budget = max(80, budget_chars - node_chars_budget - relation_chars_budget)
+
+        node_budget = max(3, min(self._config.max_nodes, node_chars_budget // 90))
         kept_nodes = nodes[:node_budget]
         kept_names = {node["name"] for node in kept_nodes}
 
         edges = self._sanitize_edges(subgraph.get("edges", []), kept_names)
-        edge_budget = max(4, min(self._config.max_edges, budget_chars // 70))
+        edge_budget = max(2, min(self._config.max_edges, relation_chars_budget // 70))
         kept_edges = edges[:edge_budget]
 
-        meta_budget = max(2, min(6, budget_chars // 220))
+        meta_budget = max(1, min(6, meta_chars_budget // 140))
         kept_meta_nodes = meta_nodes[:meta_budget]
 
         return {"nodes": kept_nodes, "edges": kept_edges, "meta_nodes": kept_meta_nodes}

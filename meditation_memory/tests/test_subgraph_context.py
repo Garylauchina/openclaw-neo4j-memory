@@ -220,6 +220,26 @@ class TestSubgraphContextPrompt(unittest.TestCase):
         ])
         self.assertEqual(meta_nodes[0]["name"], "[META] AI相关知识帮助解释当前问题")
 
+    def test_prepare_subgraph_uses_split_budgets(self):
+        self.ctx_builder._config.max_context_chars = 300
+        prepared = self.ctx_builder._prepare_subgraph_for_prompt({
+            "nodes": [
+                {"name": "AI", "entity_type": "concept", "mention_count": 5},
+                {"name": "机器学习", "entity_type": "concept", "mention_count": 4},
+                {"name": "OpenAI", "entity_type": "organization", "mention_count": 3},
+                {"name": "神经网络", "entity_type": "concept", "mention_count": 2},
+            ],
+            "edges": [
+                {"source": "AI", "target": "OpenAI", "relation_type": "created_by"},
+                {"source": "AI", "target": "机器学习", "relation_type": "related_to"},
+                {"source": "机器学习", "target": "神经网络", "relation_type": "part_of"},
+            ],
+        })
+        self.assertLessEqual(len(prepared["nodes"]), 3)
+        self.assertLessEqual(len(prepared["edges"]), 2)
+        self.assertIn("meta_nodes", prepared)
+
+
 
 class TestRelationReadable(unittest.TestCase):
     """关系可读化测试"""
