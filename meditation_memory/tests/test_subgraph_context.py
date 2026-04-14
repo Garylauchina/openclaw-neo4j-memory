@@ -213,6 +213,7 @@ class TestSubgraphContextPrompt(unittest.TestCase):
                 {"source": "AI", "target": "OpenAI", "relation_type": "created_by"},
             ],
             {"AI", "机器学习", "OpenAI"},
+            {"AI"},
         )
         relation_types = [e["relation_type"] for e in edges]
         self.assertEqual(relation_types[0], "created_by")
@@ -220,6 +221,7 @@ class TestSubgraphContextPrompt(unittest.TestCase):
         self.assertEqual(edges[0]["selection_reason"], "selected: specific semantic relation")
         self.assertEqual(edges[1]["selection_reason"], "downranked: generic relation")
         self.assertGreater(edges[0]["selection_score"], edges[1]["selection_score"])
+        self.assertGreater(edges[0]["selection_score"], 1.0)
 
     def test_generic_meta_nodes_are_ranked_lower(self):
         meta_nodes = self.ctx_builder._sanitize_meta_nodes([

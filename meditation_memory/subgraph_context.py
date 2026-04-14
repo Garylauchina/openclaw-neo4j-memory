@@ -366,7 +366,7 @@ class SubgraphContext:
         kept_nodes = nodes[:node_budget]
         kept_names = {node["name"] for node in kept_nodes}
 
-        edges = self._sanitize_edges(subgraph.get("edges", []), kept_names)
+        edges = self._sanitize_edges(subgraph.get("edges", []), kept_names, matched_entity_set)
         edge_budget = max(2, min(self._config.max_edges, relation_chars_budget // 70))
         kept_edges = edges[:edge_budget]
 
@@ -458,6 +458,7 @@ class SubgraphContext:
         self,
         edges: List[Dict[str, Any]],
         kept_names: Set[str],
+        matched_entity_set: Optional[Set[str]] = None,
     ) -> List[Dict[str, Any]]:
         seen = set()
         edge_records: List[Tuple[int, Dict[str, Any]]] = []
@@ -480,6 +481,7 @@ class SubgraphContext:
             seen.add(key)
 
             penalty, reason = self._edge_selection_metadata(relation_type)
+            query_boost = 1.5 if src in (matched_entity_set or set()) or tgt in (matched_entity_set or set()) else 0.0
             rank = penalty * 1000 + name_rank.get(src, 999) + name_rank.get(tgt, 999)
             
             edge_records.append(
@@ -491,7 +493,7 @@ class SubgraphContext:
                         "relation_type": relation_type,
                         "selection_penalty": penalty,
                         "selection_reason": reason,
-                        "selection_score": self._selection_score(1, penalty),
+                        "selection_score": self._selection_score(1, penalty) + query_boost,
                     },
                 )
             )
