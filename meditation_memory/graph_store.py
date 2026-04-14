@@ -2102,6 +2102,7 @@ class GraphStore:
         OPTIONAL MATCH (archived:Entity:Archived)
         WITH pending_count, count(archived) AS archived_count
         OPTIONAL MATCH (meta:Entity {entity_type: "meta_knowledge"})
+        WHERE NOT meta:Archived
         WITH pending_count, archived_count, count(meta) AS meta_count
         OPTIONAL MATCH ()-[r:RELATES_TO {relation_type: "related_to"}]->()
         RETURN pending_count,
