@@ -225,9 +225,11 @@ class SubgraphContext:
             enhanced_prompt += "\n\n"
 
         enhanced_prompt += (
-            "## 相关记忆上下文\n"
-            "以下是从长期记忆图谱中检索到的与当前对话相关的信息，"
-            "请在回答时参考这些背景知识：\n\n"
+            "## 当前上下文\n"
+            f"用户当前问题：{user_input.strip()}\n\n"
+            "## 相关记忆与知识\n"
+            "以下是从长期记忆图谱中检索到的与当前问题相关的信息。"
+            "请优先将其视为背景知识，并结合当前上下文回答。\n\n"
             f"{ctx.context_text}"
         )
 

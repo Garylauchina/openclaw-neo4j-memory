@@ -116,7 +116,7 @@ class TestMemorySystemRetrieve(unittest.TestCase):
 
     def test_build_prompt(self):
         """测试提示词构建"""
-        self.ms._context_builder.build_system_prompt.return_value = "你是助手\n\n## 相关记忆上下文\n..."
+        self.ms._context_builder.build_system_prompt.return_value = "你是助手\n\n## 当前上下文\n用户当前问题：张三在哪？\n\n## 相关记忆与知识\n..."
 
         prompt = self.ms.build_prompt("张三在哪？", base_prompt="你是助手")
         self.assertIn("你是助手", prompt)

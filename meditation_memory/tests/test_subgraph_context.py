@@ -167,7 +167,9 @@ class TestSubgraphContextPrompt(unittest.TestCase):
             "什么是AI？", base_system_prompt="你是助手"
         )
         self.assertIn("你是助手", prompt)
-        self.assertIn("相关记忆上下文", prompt)
+        self.assertIn("当前上下文", prompt)
+        self.assertIn("用户当前问题：什么是AI？", prompt)
+        self.assertIn("相关记忆与知识", prompt)
         self.assertIn("AI", prompt)
 
 
