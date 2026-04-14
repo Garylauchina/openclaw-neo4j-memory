@@ -17,6 +17,11 @@ import logging
 from typing import List, Dict, Any, Optional, Set, Tuple
 from difflib import SequenceMatcher
 
+LOW_INFORMATION_CONCEPT_KEYWORDS = {
+    "总结", "指标", "管理", "执行", "效果", "内容", "状态", "数据", "信息", "问题",
+    "功能", "策略", "节点", "实体", "报告", "分析", "结果", "参数", "机制", "结构",
+}
+
 from .config import SubgraphConfig
 from .entity_extractor import EntityExtractor, ExtractionResult
 from .graph_store import GraphStore
@@ -373,18 +378,34 @@ class SubgraphContext:
                 continue
 
             mention_count = node.get("mention_count", 0) or 0
+            entity_type = node.get("entity_type", "其他") or "其他"
             current = seen.get(name)
+            candidate = {
+                "name": name,
+                "entity_type": entity_type,
+                "mention_count": mention_count,
+                "selection_penalty": self._node_selection_penalty(name, entity_type, mention_count),
+            }
             if current is None or mention_count > (current.get("mention_count", 0) or 0):
-                seen[name] = {
-                    "name": name,
-                    "entity_type": node.get("entity_type", "其他") or "其他",
-                    "mention_count": mention_count,
-                }
+                seen[name] = candidate
 
         return sorted(
             seen.values(),
-            key=lambda item: (-(item.get("mention_count", 0) or 0), len(item["name"]), item["name"]),
+            key=lambda item: (
+                item.get("selection_penalty", 0),
+                -(item.get("mention_count", 0) or 0),
+                len(item["name"]),
+                item["name"],
+            ),
         )
+
+    def _node_selection_penalty(self, name: str, entity_type: str, mention_count: int) -> int:
+        if entity_type == "concept" and len(name) <= 4:
+            if any(keyword in name for keyword in LOW_INFORMATION_CONCEPT_KEYWORDS):
+                return 2
+            if mention_count <= 1:
+                return 1
+        return 0
 
     def _sanitize_meta_nodes(self, nodes: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
         seen: Dict[str, Dict[str, Any]] = {}

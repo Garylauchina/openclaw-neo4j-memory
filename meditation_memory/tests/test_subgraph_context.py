@@ -178,6 +178,30 @@ class TestSubgraphContextPrompt(unittest.TestCase):
         self.assertIn("AI", prompt)
 
 
+    def test_low_information_short_concepts_are_ranked_lower(self):
+        self.mock_extractor.extract.return_value = ExtractionResult(
+            entities=[Entity(name="AI", entity_type="concept")],
+        )
+        self.mock_store.find_entity.return_value = {"name": "AI"}
+        self.mock_store.get_subgraph_by_entities.return_value = {
+            "nodes": [
+                {"name": "消息总结", "entity_type": "concept", "mention_count": 100},
+                {"name": "AI", "entity_type": "concept", "mention_count": 5},
+                {"name": "机器学习", "entity_type": "concept", "mention_count": 4},
+            ],
+            "edges": [],
+        }
+
+        result = self.ctx_builder.build_context("什么是AI？")
+        node_names = [n["name"] for n in result.subgraph["nodes"]]
+
+        self.assertIn("AI", node_names)
+        self.assertIn("机器学习", node_names)
+        self.assertIn("消息总结", node_names)
+        self.assertLess(node_names.index("AI"), node_names.index("消息总结"))
+        self.assertLess(node_names.index("机器学习"), node_names.index("消息总结"))
+
+
 class TestRelationReadable(unittest.TestCase):
     """关系可读化测试"""
 
