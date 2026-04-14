@@ -202,6 +202,7 @@ class TestSubgraphContextPrompt(unittest.TestCase):
         self.assertLess(node_names.index("机器学习"), node_names.index("消息总结"))
         low_info = next(n for n in result.subgraph["nodes"] if n["name"] == "消息总结")
         self.assertEqual(low_info["selection_reason"], "downranked: low-information short concept")
+        self.assertIn("selected_nodes", result.debug_info)
 
     def test_related_to_edges_are_ranked_lower_than_specific_relations(self):
         edges = self.ctx_builder._sanitize_edges(
@@ -244,6 +245,17 @@ class TestSubgraphContextPrompt(unittest.TestCase):
         self.assertLessEqual(len(prepared["nodes"]), 3)
         self.assertLessEqual(len(prepared["edges"]), 2)
         self.assertIn("meta_nodes", prepared)
+
+    def test_context_result_to_dict_contains_debug_info(self):
+        result = ContextResult(
+            context_text="测试上下文",
+            subgraph={"nodes": [{"name": "A"}], "edges": [], "meta_nodes": []},
+            matched_entities=["A"],
+            debug_info={"selected_nodes": [{"name": "A", "selection_reason": "selected"}]},
+        )
+        data = result.to_dict()
+        self.assertIn("debug_info", data)
+        self.assertIn("meta_count", data)
 
 
 

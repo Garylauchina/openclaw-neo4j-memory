@@ -340,11 +340,13 @@ class SubgraphContext:
     ) -> "ContextResult":
         prepared = self._prepare_subgraph_for_prompt(subgraph)
         context_text = self._format_subgraph_as_context(prepared)
+        debug_info = self._build_selection_debug_info(prepared)
         return ContextResult(
             context_text=context_text,
             subgraph=prepared,
             matched_entities=matched_entities,
             extraction=extraction,
+            debug_info=debug_info,
         )
 
     def _prepare_subgraph_for_prompt(self, subgraph: Dict[str, Any]) -> Dict[str, Any]:
@@ -571,6 +573,39 @@ class SubgraphContext:
 
         return "\n".join(lines)
 
+    def _build_selection_debug_info(self, subgraph: Dict[str, Any]) -> Dict[str, Any]:
+        return {
+            "selected_nodes": [
+                {
+                    "name": node.get("name"),
+                    "entity_type": node.get("entity_type"),
+                    "mention_count": node.get("mention_count"),
+                    "selection_penalty": node.get("selection_penalty", 0),
+                    "selection_reason": node.get("selection_reason", ""),
+                }
+                for node in subgraph.get("nodes", [])
+            ],
+            "selected_edges": [
+                {
+                    "source": edge.get("source"),
+                    "target": edge.get("target"),
+                    "relation_type": edge.get("relation_type"),
+                    "selection_penalty": edge.get("selection_penalty", 0),
+                    "selection_reason": edge.get("selection_reason", ""),
+                }
+                for edge in subgraph.get("edges", [])
+            ],
+            "selected_meta_nodes": [
+                {
+                    "name": node.get("name"),
+                    "mention_count": node.get("mention_count"),
+                    "selection_penalty": node.get("selection_penalty", 0),
+                    "selection_reason": node.get("selection_reason", ""),
+                }
+                for node in subgraph.get("meta_nodes", [])
+            ],
+        }
+
     @staticmethod
     def _relation_to_readable(relation_type: str) -> str:
         """将关系类型转为中文可读描述"""
@@ -747,11 +782,13 @@ class ContextResult:
         subgraph: Dict[str, Any],
         matched_entities: List[str],
         extraction: Optional[ExtractionResult] = None,
+        debug_info: Optional[Dict[str, Any]] = None,
     ):
         self.context_text = context_text
         self.subgraph = subgraph
         self.matched_entities = matched_entities
         self.extraction = extraction
+        self.debug_info = debug_info or {}
 
     def to_dict(self) -> Dict[str, Any]:
         """转为字典"""
@@ -761,4 +798,6 @@ class ContextResult:
             "matched_entities": self.matched_entities,
             "entity_count": len(self.subgraph.get("nodes", [])),
             "edge_count": len(self.subgraph.get("edges", [])),
+            "meta_count": len(self.subgraph.get("meta_nodes", [])),
+            "debug_info": self.debug_info,
         }
