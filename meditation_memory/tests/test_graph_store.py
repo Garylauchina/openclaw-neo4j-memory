@@ -181,6 +181,29 @@ class TestGraphStoreOperations(unittest.TestCase):
         self.assertEqual(stats["node_count"], 10)
         self.assertEqual(stats["edge_count"], 15)
 
+    def test_build_meta_cluster_signature_is_order_insensitive(self):
+        sig1 = self.store._build_meta_cluster_signature(["张三", "项目A", "北京"])
+        sig2 = self.store._build_meta_cluster_signature(["北京", "张三", "项目A", "张三"])
+        self.assertEqual(sig1, sig2)
+
+    def test_create_meta_knowledge_reuses_existing_signature_match(self):
+        self.store._find_meta_knowledge_by_signature = MagicMock(return_value="[META] existing")
+        self.store._find_similar_meta_knowledge = MagicMock(return_value=None)
+
+        self.mock_session.run.return_value = MagicMock()
+
+        ok = self.store.create_meta_knowledge_node(
+            summary="张三长期参与项目A并与北京相关资源形成稳定协作。",
+            related_entity_names=["张三", "项目A", "北京"],
+        )
+
+        self.assertTrue(ok)
+        self.store._find_meta_knowledge_by_signature.assert_called_once()
+        self.store._find_similar_meta_knowledge.assert_not_called()
+
+        reuse_call = self.mock_session.run.call_args_list[0]
+        self.assertIn("cluster_signature", reuse_call[1])
+
     def test_close(self):
         """测试关闭连接"""
         self.store.close()

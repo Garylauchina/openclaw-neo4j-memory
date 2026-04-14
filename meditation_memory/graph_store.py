@@ -24,6 +24,7 @@ v3.0 — Phase 3: 策略蒸馏与进化相关方法：
 
 from __future__ import annotations
 
+import hashlib
 import json
 import logging
 import math
@@ -1770,6 +1771,33 @@ class GraphStore:
             return 0.0
         return len(sa & sb) / len(sa | sb)
 
+    def _build_meta_cluster_signature(self, related_entity_names: List[str]) -> str:
+        normalized = sorted({name.strip().lower() for name in related_entity_names if name and name.strip()})
+        raw = "|".join(normalized)
+        return hashlib.sha1(raw.encode("utf-8")).hexdigest()
+
+    def _find_meta_knowledge_by_signature(
+        self,
+        cluster_signature: str,
+        meta_entity_type: str = "meta_knowledge",
+    ) -> Optional[str]:
+        query = """
+        MATCH (m:Entity {entity_type: $entity_type, cluster_signature: $cluster_signature})
+        RETURN m.name AS name
+        LIMIT 1
+        """
+        try:
+            with self.driver.session(database=self._config.database) as session:
+                record = session.run(
+                    query,
+                    entity_type=meta_entity_type,
+                    cluster_signature=cluster_signature,
+                ).single()
+                return record["name"] if record else None
+        except Exception as e:
+            logger.warning("Failed to find meta knowledge by signature: %s", e)
+            return None
+
     def _find_similar_meta_knowledge(
         self,
         summary: str,
@@ -1823,14 +1851,20 @@ class GraphStore:
         Returns:
             是否成功
         """
-        # 去重：查找语义相似的已有元知识节点
-        existing_name = self._find_similar_meta_knowledge(summary, similarity_threshold=0.85)
+        cluster_signature = self._build_meta_cluster_signature(related_entity_names)
+
+        # 去重优先级 1: 同一簇签名直接复用
+        existing_name = self._find_meta_knowledge_by_signature(cluster_signature, meta_entity_type)
+        if not existing_name:
+            # 去重优先级 2: 文本相似度兜底
+            existing_name = self._find_similar_meta_knowledge(summary, similarity_threshold=0.85)
         if existing_name:
             # 复用已有节点：更新描述并建立新关系
             reuse_query = """
             MATCH (m:Entity {name: $name, entity_type: $entity_type})
             SET m.description = $summary,
                 m.updated_at = timestamp(),
+                m.cluster_signature = $cluster_signature,
                 m.mention_count = coalesce(m.mention_count, 0) + 1
             RETURN elementId(m) AS eid
             """
@@ -1853,6 +1887,7 @@ class GraphStore:
                         name=existing_name,
                         entity_type=meta_entity_type,
                         summary=summary,
+                        cluster_signature=cluster_signature,
                     )
                     for entity_name in related_entity_names:
                         session.run(
@@ -1877,12 +1912,14 @@ class GraphStore:
             m.description = $summary,
             m.created_at = timestamp(),
             m.updated_at = timestamp(),
+            m.cluster_signature = $cluster_signature,
             m.mention_count = 1,
             m.created_by = "meditation",
             m.activation_level = 1.0
         ON MATCH SET
             m.description = $summary,
-            m.updated_at = timestamp()
+            m.updated_at = timestamp(),
+            m.cluster_signature = $cluster_signature
         RETURN elementId(m) AS eid
         """
         link_query = """
@@ -1904,6 +1941,7 @@ class GraphStore:
                     name=meta_name,
                     entity_type=meta_entity_type,
                     summary=summary,
+                    cluster_signature=cluster_signature,
                 )
                 if not result.single():
                     return False
