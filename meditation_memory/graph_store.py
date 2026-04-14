@@ -311,10 +311,35 @@ class GraphStore:
             e.mention_count = coalesce(e.mention_count, 0) + item.mention_count,
             e.attention_score = item.attention,
             e.belief_type = item.belief_type,
-            e.belief_strength = item.belief_strength,
-            e.knowledge_state = item.knowledge_state,
-            e.evidence_count = item.evidence_count,
-            e.source_count = item.source_count,
+            e.belief_strength = CASE
+                WHEN coalesce(e.belief_strength, 0.0) > item.belief_strength THEN coalesce(e.belief_strength, 0.0)
+                ELSE item.belief_strength
+            END,
+            e.evidence_count = coalesce(e.evidence_count, 0) + item.evidence_count,
+            e.source_count = CASE
+                WHEN item.source_id IS NOT NULL AND item.source_id <> '' AND coalesce(e.last_source_id, '') <> item.source_id
+                    THEN coalesce(e.source_count, 0) + item.source_count
+                ELSE coalesce(e.source_count, 0)
+            END,
+            e.last_source_id = item.source_id,
+            e.knowledge_state = CASE
+                WHEN (
+                    CASE
+                        WHEN coalesce(e.belief_strength, 0.0) > item.belief_strength THEN coalesce(e.belief_strength, 0.0)
+                        ELSE item.belief_strength
+                    END
+                ) >= $stable_belief_strength_threshold
+                AND (coalesce(e.evidence_count, 0) + item.evidence_count) >= $stable_min_evidence_count
+                AND (
+                    CASE
+                        WHEN item.source_id IS NOT NULL AND item.source_id <> '' AND coalesce(e.last_source_id, '') <> item.source_id
+                            THEN coalesce(e.source_count, 0) + item.source_count
+                        ELSE coalesce(e.source_count, 0)
+                    END
+                ) >= $stable_min_source_count
+                THEN 'stable'
+                ELSE 'hypothesis'
+            END,
             e.needs_meditation = true
         RETURN count(e) AS updated
         """
@@ -340,9 +365,16 @@ class GraphStore:
                 "knowledge_state": e.properties.get("knowledge_state", "stable"),
                 "evidence_count": e.properties.get("evidence_count", 1),
                 "source_count": e.properties.get("source_count", 1),
+                "source_id": e.properties.get("source_id", ""),
             })
         with self.driver.session(database=self._config.database) as session:
-            result = session.run(query, batch=batch)
+            result = session.run(
+                query,
+                batch=batch,
+                stable_belief_strength_threshold=0.7,
+                stable_min_evidence_count=3,
+                stable_min_source_count=2,
+            )
             record = result.single()
             return record["updated"] if record else 0
 
@@ -832,9 +864,12 @@ class GraphStore:
         query = """
         MATCH (e:Entity)
         WHERE NOT e:Archived
-        WITH count(e) AS node_count
+        WITH count(e) AS node_count,
+             count(CASE WHEN coalesce(e.knowledge_state, 'stable') = 'hypothesis' THEN 1 END) AS hypothesis_entity_count,
+             count(CASE WHEN coalesce(e.knowledge_state, 'stable') = 'stable' THEN 1 END) AS stable_entity_count
         OPTIONAL MATCH ()-[r:RELATES_TO]->()
-        RETURN node_count, count(r) AS edge_count
+        RETURN node_count, count(r) AS edge_count,
+               hypothesis_entity_count, stable_entity_count
         """
         with self.driver.session(database=self._config.database) as session:
             result = session.run(query)
@@ -843,8 +878,15 @@ class GraphStore:
                 return {
                     "node_count": record["node_count"],
                     "edge_count": record["edge_count"],
+                    "hypothesis_entity_count": record.get("hypothesis_entity_count", 0),
+                    "stable_entity_count": record.get("stable_entity_count", record["node_count"]),
                 }
-            return {"node_count": 0, "edge_count": 0}
+            return {
+                "node_count": 0,
+                "edge_count": 0,
+                "hypothesis_entity_count": 0,
+                "stable_entity_count": 0,
+            }
 
     def clear_all(self):
         """清空所有数据（仅用于测试）"""

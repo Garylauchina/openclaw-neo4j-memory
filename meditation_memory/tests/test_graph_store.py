@@ -87,6 +87,24 @@ class TestGraphStoreOperations(unittest.TestCase):
         batch = call_args[1]["batch"]
         self.assertEqual(len(batch), 3)
         self.assertTrue(all(item["mention_count"] == 1 for item in batch))
+        self.assertTrue(all("knowledge_state" in item for item in batch))
+        self.assertEqual(call_args[1]["stable_min_evidence_count"], 3)
+        self.assertEqual(call_args[1]["stable_min_source_count"], 2)
+
+    def test_get_stats_includes_knowledge_state_counts(self):
+        mock_record = {
+            "node_count": 10,
+            "edge_count": 15,
+            "hypothesis_entity_count": 4,
+            "stable_entity_count": 6,
+        }
+        mock_result = MagicMock()
+        mock_result.single.return_value = mock_record
+        self.mock_session.run.return_value = mock_result
+
+        stats = self.store.get_stats()
+        self.assertEqual(stats["hypothesis_entity_count"], 4)
+        self.assertEqual(stats["stable_entity_count"], 6)
 
     def test_upsert_relation(self):
         """测试关系写入"""
