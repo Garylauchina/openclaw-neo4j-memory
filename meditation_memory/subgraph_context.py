@@ -345,8 +345,9 @@ class SubgraphContext:
     def _prepare_subgraph_for_prompt(self, subgraph: Dict[str, Any]) -> Dict[str, Any]:
         """对检索子图做预算化裁剪，避免一次注入过多实体和关系。"""
         nodes = self._sanitize_nodes(subgraph.get("nodes", []))
-        if not nodes:
-            return {"nodes": [], "edges": []}
+        meta_nodes = self._sanitize_meta_nodes(subgraph.get("nodes", []))
+        if not nodes and not meta_nodes:
+            return {"nodes": [], "edges": [], "meta_nodes": []}
 
         budget_chars = max(200, self._config.max_context_chars)
         node_budget = max(4, min(self._config.max_nodes, budget_chars // 90))
@@ -357,7 +358,10 @@ class SubgraphContext:
         edge_budget = max(4, min(self._config.max_edges, budget_chars // 70))
         kept_edges = edges[:edge_budget]
 
-        return {"nodes": kept_nodes, "edges": kept_edges}
+        meta_budget = max(2, min(6, budget_chars // 220))
+        kept_meta_nodes = meta_nodes[:meta_budget]
+
+        return {"nodes": kept_nodes, "edges": kept_edges, "meta_nodes": kept_meta_nodes}
 
     def _sanitize_nodes(self, nodes: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
         seen: Dict[str, Dict[str, Any]] = {}
@@ -377,6 +381,25 @@ class SubgraphContext:
                     "mention_count": mention_count,
                 }
 
+        return sorted(
+            seen.values(),
+            key=lambda item: (-(item.get("mention_count", 0) or 0), len(item["name"]), item["name"]),
+        )
+
+    def _sanitize_meta_nodes(self, nodes: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+        seen: Dict[str, Dict[str, Any]] = {}
+        for node in nodes:
+            name = (node.get("name") or "").strip()
+            if not name or not name.startswith("[META]"):
+                continue
+            mention_count = node.get("mention_count", 0) or 0
+            current = seen.get(name)
+            if current is None or mention_count > (current.get("mention_count", 0) or 0):
+                seen[name] = {
+                    "name": name,
+                    "entity_type": node.get("entity_type", "meta_knowledge") or "meta_knowledge",
+                    "mention_count": mention_count,
+                }
         return sorted(
             seen.values(),
             key=lambda item: (-(item.get("mention_count", 0) or 0), len(item["name"]), item["name"]),
@@ -426,8 +449,9 @@ class SubgraphContext:
         """将子图数据格式化为预算化自然语言上下文。"""
         nodes = subgraph.get("nodes", [])
         edges = subgraph.get("edges", [])
+        meta_nodes = subgraph.get("meta_nodes", [])
 
-        if not nodes and not edges:
+        if not nodes and not edges and not meta_nodes:
             return ""
 
         type_labels = {
@@ -473,6 +497,16 @@ class SubgraphContext:
                 for edge in edges:
                     readable = self._relation_to_readable(edge.get("relation_type", "related_to"))
                     if not append_line(f"- {edge.get('source', '?')} {readable} {edge.get('target', '?')}"):
+                        break
+
+        if meta_nodes:
+            append_line("")
+            if append_line("### 相关元知识"):
+                for node in meta_nodes:
+                    meta_name = node.get("name", "")
+                    if len(meta_name) > 120:
+                        meta_name = meta_name[:117] + "..."
+                    if not append_line(f"- {meta_name}"):
                         break
 
         if current_length >= budget and lines:
