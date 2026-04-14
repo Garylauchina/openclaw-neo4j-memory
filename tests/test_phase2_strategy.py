@@ -99,6 +99,8 @@ class TestGraphStorePhase2(unittest.TestCase):
         self.assertIn("s.fitness_score = $fitness_score", cypher)
         self.assertIn("s.needs_meditation = true", cypher)
         self.assertIn("s.uses_real_data = $uses_real_data", cypher)
+        self.assertIn("s.applicable_scenarios = $applicable_scenarios", cypher)
+        self.assertIn("s.source = $source", cypher)
 
         # 验证参数
         kwargs = call_args[1]
@@ -107,6 +109,8 @@ class TestGraphStorePhase2(unittest.TestCase):
         self.assertTrue(kwargs["uses_real_data"])
         self.assertAlmostEqual(kwargs["fitness_score"], 0.85)
         self.assertEqual(kwargs["usage_count"], 10)
+        self.assertEqual(kwargs["applicable_scenarios"], [])
+        self.assertEqual(kwargs["source"], "unknown")
 
     def test_create_evolution_link_cypher(self):
         """验证 create_evolution_link 创建 EVOLVED_FROM 关系。"""

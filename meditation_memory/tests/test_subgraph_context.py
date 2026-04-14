@@ -296,6 +296,36 @@ class TestSubgraphContextPrompt(unittest.TestCase):
         self.assertIn("selected_strategies", result.debug_info)
         self.assertIn("query-matched", strategies[0]["selection_reason"])
 
+    def test_strategy_selection_respects_strategy_budget(self):
+        self.ctx_builder._config.max_context_chars = 240
+        self.ctx_builder._config.max_strategies = 3
+        self.ctx_builder._config.strategy_chars_budget_ratio = 0.2
+        self.mock_extractor.extract.return_value = ExtractionResult(
+            entities=[Entity(name="AI", entity_type="concept")],
+        )
+        self.mock_store.find_entity.return_value = {"name": "AI"}
+        self.mock_store.get_subgraph_by_entities.return_value = {
+            "nodes": [{"name": "AI", "entity_type": "concept", "mention_count": 4}],
+            "edges": [],
+        }
+        self.mock_store.get_strategies_for_injection.return_value = [
+            {
+                "name": "s1",
+                "description": "A" * 120,
+                "applicable_scenarios": ["AI"],
+                "fitness_score": 0.9,
+            },
+            {
+                "name": "s2",
+                "description": "B" * 120,
+                "applicable_scenarios": ["AI"],
+                "fitness_score": 0.8,
+            },
+        ]
+
+        result = self.ctx_builder.build_context("什么是AI？")
+        self.assertLessEqual(len(result.subgraph["strategies"]), 1)
+
     def test_context_result_to_dict_contains_debug_info(self):
         result = ContextResult(
             context_text="测试上下文",

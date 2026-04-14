@@ -2201,7 +2201,9 @@ class GraphStore:
             s.evolution_steps = $evolution_steps,
             s.needs_meditation = true,
             s.content = $content,
-            s.description = $description
+            s.description = $description,
+            s.applicable_scenarios = $applicable_scenarios,
+            s.source = $source
         ON MATCH SET
             s.fitness_score = $fitness_score,
             s.real_world_bonus = $real_world_bonus,
@@ -2213,29 +2215,40 @@ class GraphStore:
             s.evolution_steps = $evolution_steps,
             s.needs_meditation = true,
             s.content = $content,
-            s.description = $description
+            s.description = $description,
+            s.applicable_scenarios = $applicable_scenarios,
+            s.source = $source
         RETURN elementId(s) AS eid
         """
         perf = strategy_data.get("performance", {})
         meta = strategy_data.get("metadata", {})
         content = strategy_data.get("content") or meta.get("description", "") or ""
-        description = strategy_data.get("description") or meta.get("description", "") or ""
+        description = strategy_data.get("description") or meta.get("description", "") or content
+        applicable_scenarios = (
+            strategy_data.get("applicable_scenarios")
+            or meta.get("applicable_scenarios", [])
+            or []
+        )
+        source = strategy_data.get("source") or meta.get("source", "unknown")
+        created_at = strategy_data.get("created_at") or meta.get("created_at", "")
         with self.driver.session(database=self._config.database) as session:
             result = session.run(
                 query,
                 name=strategy_data["name"],
-                strategy_type=strategy_data.get("type", "unknown"),
+                strategy_type=strategy_data.get("type", strategy_data.get("strategy_type", "unknown")),
                 uses_real_data=strategy_data.get("uses_real_data", False),
-                fitness_score=strategy_data.get("fitness", 0.0),
+                fitness_score=strategy_data.get("fitness", strategy_data.get("fitness_score", 0.0)),
                 real_world_bonus=strategy_data.get("real_world_bonus", 0.0),
-                avg_accuracy=perf.get("avg_accuracy", 0.0),
-                avg_success=perf.get("avg_success", 0.0),
-                avg_cost=perf.get("avg_cost", 0.0),
-                usage_count=perf.get("usage_count", 0),
-                created_at=meta.get("created_at", ""),
-                evolution_steps=meta.get("evolution_steps", 0),
-                content=strategy_data.get("content", ""),
-                description=strategy_data.get("description", ""),
+                avg_accuracy=perf.get("avg_accuracy", strategy_data.get("avg_accuracy", 0.0)),
+                avg_success=perf.get("avg_success", strategy_data.get("avg_success", 0.0)),
+                avg_cost=perf.get("avg_cost", strategy_data.get("avg_cost", 0.0)),
+                usage_count=perf.get("usage_count", strategy_data.get("usage_count", 0)),
+                created_at=created_at,
+                evolution_steps=meta.get("evolution_steps", strategy_data.get("evolution_steps", 0)),
+                content=content,
+                description=description,
+                applicable_scenarios=applicable_scenarios,
+                source=source,
             )
             record = result.single()
             return record["eid"] if record else ""

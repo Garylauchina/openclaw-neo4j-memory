@@ -360,9 +360,11 @@ class SubgraphContext:
             return {"nodes": [], "edges": [], "meta_nodes": [], "strategies": []}
 
         budget_chars = max(200, self._config.max_context_chars)
-        node_chars_budget = max(120, int(budget_chars * 0.45))
-        relation_chars_budget = max(80, int(budget_chars * 0.30))
-        meta_chars_budget = max(80, budget_chars - node_chars_budget - relation_chars_budget)
+        strategy_chars_budget = max(80, int(budget_chars * self._config.strategy_chars_budget_ratio))
+        remaining_budget = max(120, budget_chars - strategy_chars_budget)
+        node_chars_budget = max(120, int(remaining_budget * 0.45))
+        relation_chars_budget = max(80, int(remaining_budget * 0.30))
+        meta_chars_budget = max(80, remaining_budget - node_chars_budget - relation_chars_budget)
 
         node_budget = max(3, min(self._config.max_nodes, node_chars_budget // 90))
         kept_nodes = nodes[:node_budget]
@@ -562,7 +564,21 @@ class SubgraphContext:
                 item.get("name", ""),
             )
         )
-        return ranked[: max(1, self._config.max_strategies)]
+
+        strategy_chars_budget = max(80, int(max(200, self._config.max_context_chars) * self._config.strategy_chars_budget_ratio))
+        selected: List[Dict[str, Any]] = []
+        used_chars = 0
+        for item in ranked:
+            desc = item.get("description") or item.get("content") or ""
+            scenarios = item.get("applicable_scenarios") or []
+            estimated_chars = len(item.get("name", "")) + len(desc) + sum(len(s) for s in scenarios[:2]) + 20
+            if selected and used_chars + estimated_chars > strategy_chars_budget:
+                continue
+            selected.append(item)
+            used_chars += estimated_chars
+            if len(selected) >= max(1, self._config.max_strategies):
+                break
+        return selected
 
     def _strategy_selection_metadata(self, strategy: Dict[str, Any]) -> Tuple[int, str]:
         description = (strategy.get("description") or strategy.get("content") or "").strip()
