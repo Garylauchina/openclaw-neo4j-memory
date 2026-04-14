@@ -401,6 +401,7 @@ class SubgraphContext:
         return sorted(
             seen.values(),
             key=lambda item: (
+                -float(item.get("selection_score", 0.0)),
                 item.get("selection_penalty", 0),
                 -(item.get("mention_count", 0) or 0),
                 len(item["name"]),
@@ -409,7 +410,8 @@ class SubgraphContext:
         )
 
     def _selection_score(self, mention_count: int, penalty: int) -> float:
-        return round(float(mention_count or 0) - (penalty * 10.0), 2)
+        base = math.log1p(float(mention_count or 0))
+        return round(base - (penalty * 5.0), 4)
 
     def _node_selection_metadata(self, name: str, entity_type: str, mention_count: int) -> Tuple[int, str]:
         if entity_type == "concept" and len(name) <= 4:
@@ -441,6 +443,7 @@ class SubgraphContext:
         return sorted(
             seen.values(),
             key=lambda item: (
+                -float(item.get("selection_score", 0.0)),
                 item.get("selection_penalty", 0),
                 -(item.get("mention_count", 0) or 0),
                 len(item["name"]),
@@ -490,7 +493,14 @@ class SubgraphContext:
                 )
             )
 
-        edge_records.sort(key=lambda item: (item[0], item[1]["source"], item[1]["target"]))
+        edge_records.sort(
+            key=lambda item: (
+                -float(item[1].get("selection_score", 0.0)),
+                item[0],
+                item[1]["source"],
+                item[1]["target"],
+            )
+        )
         return [item[1] for item in edge_records]
 
     def _meta_selection_metadata(self, name: str, mention_count: int) -> Tuple[int, str]:
