@@ -338,7 +338,7 @@ class SubgraphContext:
         matched_entities: List[str],
         extraction: ExtractionResult,
     ) -> "ContextResult":
-        prepared = self._prepare_subgraph_for_prompt(subgraph)
+        prepared = self._prepare_subgraph_for_prompt(subgraph, matched_entities)
         context_text = self._format_subgraph_as_context(prepared)
         debug_info = self._build_selection_debug_info(prepared)
         return ContextResult(
@@ -349,10 +349,11 @@ class SubgraphContext:
             debug_info=debug_info,
         )
 
-    def _prepare_subgraph_for_prompt(self, subgraph: Dict[str, Any]) -> Dict[str, Any]:
+    def _prepare_subgraph_for_prompt(self, subgraph: Dict[str, Any], matched_entities: Optional[List[str]] = None) -> Dict[str, Any]:
         """对检索子图做预算化裁剪，避免一次注入过多实体和关系。"""
-        nodes = self._sanitize_nodes(subgraph.get("nodes", []))
-        meta_nodes = self._sanitize_meta_nodes(subgraph.get("nodes", []))
+        matched_entity_set = set(matched_entities or [])
+        nodes = self._sanitize_nodes(subgraph.get("nodes", []), matched_entity_set)
+        meta_nodes = self._sanitize_meta_nodes(subgraph.get("nodes", []), matched_entity_set)
         if not nodes and not meta_nodes:
             return {"nodes": [], "edges": [], "meta_nodes": []}
 
@@ -374,7 +375,7 @@ class SubgraphContext:
 
         return {"nodes": kept_nodes, "edges": kept_edges, "meta_nodes": kept_meta_nodes}
 
-    def _sanitize_nodes(self, nodes: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    def _sanitize_nodes(self, nodes: List[Dict[str, Any]], matched_entity_set: Optional[Set[str]] = None) -> List[Dict[str, Any]]:
         seen: Dict[str, Dict[str, Any]] = {}
         for node in nodes:
             name = (node.get("name") or "").strip()
@@ -387,13 +388,14 @@ class SubgraphContext:
             entity_type = node.get("entity_type", "其他") or "其他"
             current = seen.get(name)
             penalty, reason = self._node_selection_metadata(name, entity_type, mention_count)
+            query_boost = 2.5 if name in (matched_entity_set or set()) else 0.0
             candidate = {
                 "name": name,
                 "entity_type": entity_type,
                 "mention_count": mention_count,
                 "selection_penalty": penalty,
                 "selection_reason": reason,
-                "selection_score": self._selection_score(mention_count, penalty),
+                "selection_score": self._selection_score(mention_count, penalty) + query_boost,
             }
             if current is None or mention_count > (current.get("mention_count", 0) or 0):
                 seen[name] = candidate
@@ -421,7 +423,7 @@ class SubgraphContext:
                 return 1, "downranked: sparse short concept"
         return 0, "selected: default entity priority"
 
-    def _sanitize_meta_nodes(self, nodes: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    def _sanitize_meta_nodes(self, nodes: List[Dict[str, Any]], matched_entity_set: Optional[Set[str]] = None) -> List[Dict[str, Any]]:
         seen: Dict[str, Dict[str, Any]] = {}
         for node in nodes:
             name = (node.get("name") or "").strip()
@@ -430,13 +432,14 @@ class SubgraphContext:
             mention_count = node.get("mention_count", 0) or 0
             current = seen.get(name)
             penalty, reason = self._meta_selection_metadata(name, mention_count)
+            query_boost = 0.5 if any(entity and entity in name for entity in (matched_entity_set or set())) else 0.0
             candidate = {
                 "name": name,
                 "entity_type": node.get("entity_type", "meta_knowledge") or "meta_knowledge",
                 "mention_count": mention_count,
                 "selection_penalty": penalty,
                 "selection_reason": reason,
-                "selection_score": self._selection_score(mention_count, penalty),
+                "selection_score": self._selection_score(mention_count, penalty) + query_boost,
             }
             if current is None or mention_count > (current.get("mention_count", 0) or 0):
                 seen[name] = candidate

@@ -201,8 +201,9 @@ class TestSubgraphContextPrompt(unittest.TestCase):
         self.assertLess(node_names.index("AI"), node_names.index("消息总结"))
         self.assertLess(node_names.index("机器学习"), node_names.index("消息总结"))
         low_info = next(n for n in result.subgraph["nodes"] if n["name"] == "消息总结")
+        ai_node = next(n for n in result.subgraph["nodes"] if n["name"] == "AI")
         self.assertEqual(low_info["selection_reason"], "downranked: low-information short concept")
-        self.assertLess(low_info["selection_score"], 100)
+        self.assertGreater(ai_node["selection_score"], low_info["selection_score"])
         self.assertIn("selected_nodes", result.debug_info)
 
     def test_related_to_edges_are_ranked_lower_than_specific_relations(self):
@@ -244,7 +245,7 @@ class TestSubgraphContextPrompt(unittest.TestCase):
                 {"source": "AI", "target": "机器学习", "relation_type": "related_to"},
                 {"source": "机器学习", "target": "神经网络", "relation_type": "part_of"},
             ],
-        })
+        }, matched_entities=["AI"])
         self.assertLessEqual(len(prepared["nodes"]), 3)
         self.assertLessEqual(len(prepared["edges"]), 2)
         self.assertIn("meta_nodes", prepared)
