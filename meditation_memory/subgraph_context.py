@@ -393,6 +393,7 @@ class SubgraphContext:
                 "mention_count": mention_count,
                 "selection_penalty": penalty,
                 "selection_reason": reason,
+                "selection_score": self._selection_score(mention_count, penalty),
             }
             if current is None or mention_count > (current.get("mention_count", 0) or 0):
                 seen[name] = candidate
@@ -406,6 +407,9 @@ class SubgraphContext:
                 item["name"],
             ),
         )
+
+    def _selection_score(self, mention_count: int, penalty: int) -> float:
+        return round(float(mention_count or 0) - (penalty * 10.0), 2)
 
     def _node_selection_metadata(self, name: str, entity_type: str, mention_count: int) -> Tuple[int, str]:
         if entity_type == "concept" and len(name) <= 4:
@@ -430,6 +434,7 @@ class SubgraphContext:
                 "mention_count": mention_count,
                 "selection_penalty": penalty,
                 "selection_reason": reason,
+                "selection_score": self._selection_score(mention_count, penalty),
             }
             if current is None or mention_count > (current.get("mention_count", 0) or 0):
                 seen[name] = candidate
@@ -480,6 +485,7 @@ class SubgraphContext:
                         "relation_type": relation_type,
                         "selection_penalty": penalty,
                         "selection_reason": reason,
+                        "selection_score": self._selection_score(1, penalty),
                     },
                 )
             )
@@ -582,6 +588,7 @@ class SubgraphContext:
                     "mention_count": node.get("mention_count"),
                     "selection_penalty": node.get("selection_penalty", 0),
                     "selection_reason": node.get("selection_reason", ""),
+                    "selection_score": node.get("selection_score", 0.0),
                 }
                 for node in subgraph.get("nodes", [])
             ],
@@ -592,6 +599,7 @@ class SubgraphContext:
                     "relation_type": edge.get("relation_type"),
                     "selection_penalty": edge.get("selection_penalty", 0),
                     "selection_reason": edge.get("selection_reason", ""),
+                    "selection_score": edge.get("selection_score", 0.0),
                 }
                 for edge in subgraph.get("edges", [])
             ],
@@ -601,6 +609,7 @@ class SubgraphContext:
                     "mention_count": node.get("mention_count"),
                     "selection_penalty": node.get("selection_penalty", 0),
                     "selection_reason": node.get("selection_reason", ""),
+                    "selection_score": node.get("selection_score", 0.0),
                 }
                 for node in subgraph.get("meta_nodes", [])
             ],
