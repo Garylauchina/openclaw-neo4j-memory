@@ -17,11 +17,14 @@ Phase 4 新增：
   - 环境变量控制：COGNITIVE_STRATEGY_ENABLED, COGNITIVE_FEEDBACK_ENABLED
 """
 
+import asyncio
 import json
 import logging
 import os
+import subprocess
 import sys
 import time
+from pathlib import Path
 from typing import List, Optional, Dict, Any
 
 from fastapi import FastAPI, HTTPException, BackgroundTasks
@@ -76,6 +79,11 @@ meditation_scheduler = MeditationScheduler(meditation_engine, store, meditation_
 # 存储冥思历史
 meditation_history: List[Dict[str, Any]] = []
 current_run: Optional[MeditationRunResult] = None
+meditation_status_snapshot: Dict[str, Any] = {"status": "idle", "last_run": None}
+MEDITATION_STATUS_PATH = Path(os.environ.get("MEDITATION_STATUS_PATH", "/tmp/openclaw-meditation-status.json"))
+MEDITATION_HISTORY_PATH = Path(os.environ.get("MEDITATION_HISTORY_PATH", "/tmp/openclaw-meditation-history.json"))
+MEDITATION_LOCK_PATH = Path(os.environ.get("MEDITATION_LOCK_PATH", "/tmp/openclaw-meditation.lock"))
+MEDITATION_WORKER_LOG_PATH = Path(os.environ.get("MEDITATION_WORKER_LOG_PATH", "/tmp/openclaw-meditation-worker.log"))
 
 # ========== 数据模型 ==========
 
@@ -312,19 +320,39 @@ async def get_stats():
 @app.post("/meditation/trigger")
 async def trigger_meditation(request: MeditationTriggerRequest, background_tasks: BackgroundTasks):
     """手动触发冥思"""
-    global current_run
-    if current_run and current_run.status == "running":
+    if MEDITATION_LOCK_PATH.exists():
         return {"status": "error", "message": "Meditation is already running."}
 
-    background_tasks.add_task(run_meditation_task, request.mode, request.target_nodes)
-    return {"status": "accepted", "message": "Meditation task started in background."}
+    target_nodes_arg = ",".join(request.target_nodes) if request.target_nodes else ""
+    cmd = [
+        sys.executable,
+        str(Path(__file__).resolve().parent / "scripts" / "run_meditation_worker.py"),
+        "--mode", request.mode,
+    ]
+    if target_nodes_arg:
+        cmd.extend(["--target-nodes", target_nodes_arg])
+
+    env = os.environ.copy()
+    log_handle = open(MEDITATION_WORKER_LOG_PATH, "ab")
+    subprocess.Popen(cmd, stdout=log_handle, stderr=subprocess.STDOUT, env=env)
+    return {"status": "accepted", "message": "Meditation worker started in separate process.", "log_path": str(MEDITATION_WORKER_LOG_PATH)}
 
 @app.get("/meditation/status")
 async def get_meditation_status():
     """查看状态"""
-    if not current_run:
-        return {"status": "idle", "last_run": meditation_history[-1] if meditation_history else None}
-    data = current_run.to_dict()
+    data = {"status": "idle", "last_run": None}
+    if MEDITATION_STATUS_PATH.exists():
+        try:
+            data = json.loads(MEDITATION_STATUS_PATH.read_text())
+        except Exception:
+            data = {"status": "unknown", "error": "failed to read meditation status"}
+    elif MEDITATION_HISTORY_PATH.exists():
+        try:
+            history = json.loads(MEDITATION_HISTORY_PATH.read_text())
+            if history:
+                data = {"status": "idle", "last_run": history[-1]}
+        except Exception:
+            pass
     heartbeat_at = data.get("heartbeat_at") or 0
     if heartbeat_at:
         data["heartbeat_age_sec"] = max(0.0, time.time() - heartbeat_at)
@@ -333,6 +361,12 @@ async def get_meditation_status():
 @app.get("/meditation/history")
 async def get_meditation_history(limit: int = 10):
     """历史记录"""
+    if MEDITATION_HISTORY_PATH.exists():
+        try:
+            history = json.loads(MEDITATION_HISTORY_PATH.read_text())
+            return history[-limit:]
+        except Exception:
+            pass
     return meditation_history[-limit:]
 
 @app.post("/meditation/dry-run")
@@ -637,15 +671,49 @@ async def process_feedback(request: FeedbackRequest):
 # ========== 内部任务 ==========
 
 async def run_meditation_task(mode: str, target_nodes: Optional[List[str]] = None):
-    global current_run
+    global current_run, meditation_status_snapshot
+    poller = None
     try:
-        current_run = await meditation_engine.run_meditation(mode=mode, target_nodes=target_nodes)
-        meditation_history.append(current_run.to_dict())
+        meditation_status_snapshot = {
+            "status": "running",
+            "current_step": "initializing",
+            "started_at": time.time(),
+            "heartbeat_at": time.time(),
+            "dry_run": mode == "dry_run",
+        }
+
+        task = asyncio.create_task(meditation_engine.run_meditation(mode=mode, target_nodes=target_nodes))
+
+        async def _poll_status():
+            while not task.done():
+                run = current_run
+                if run is not None:
+                    meditation_status_snapshot.update(run.to_dict())
+                    meditation_status_snapshot["status"] = run.status
+                    meditation_status_snapshot["heartbeat_at"] = time.time()
+                else:
+                    meditation_status_snapshot["heartbeat_at"] = time.time()
+                await asyncio.sleep(1)
+
+        poller = asyncio.create_task(_poll_status())
+        current_run = await task
+        final = current_run.to_dict()
+        meditation_status_snapshot = final
+        meditation_history.append(final)
         if len(meditation_history) > 100:
             meditation_history.pop(0)
+        meditation_status_snapshot["last_run"] = final
     except Exception as e:
         logger.error(f"Background meditation task failed: {e}")
+        meditation_status_snapshot = {
+            "status": "failed",
+            "error": str(e),
+            "heartbeat_at": time.time(),
+            "last_run": meditation_history[-1] if meditation_history else None,
+        }
     finally:
+        if poller is not None:
+            poller.cancel()
         current_run = None
 
 if __name__ == "__main__":

@@ -464,6 +464,7 @@ class MeditationEngine:
         self.config = config or MeditationConfig()
         self.llm = MeditationLLMClient(self.config)
         self._is_running = False
+        self._current_result: Optional[MeditationRunResult] = None
         self._last_result: Optional[Dict[str, Any]] = None  # 上一次冥思结果，供元学习对比
         # Phase 3: 策略蒸馏器
         if StrategyDistiller is not None:
@@ -502,6 +503,7 @@ class MeditationEngine:
             heartbeat_at=time.time(),
         )
 
+        self._current_result = result
         logger.info(f"Starting meditation run {run_id} (dry_run={dry_run})")
 
         try:
@@ -619,6 +621,7 @@ class MeditationEngine:
                 pass
         finally:
             result.finished_at = datetime.now().isoformat()
+            self._current_result = None
             self._is_running = False
 
         return result
