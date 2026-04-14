@@ -384,11 +384,13 @@ class SubgraphContext:
             mention_count = node.get("mention_count", 0) or 0
             entity_type = node.get("entity_type", "其他") or "其他"
             current = seen.get(name)
+            penalty, reason = self._node_selection_metadata(name, entity_type, mention_count)
             candidate = {
                 "name": name,
                 "entity_type": entity_type,
                 "mention_count": mention_count,
-                "selection_penalty": self._node_selection_penalty(name, entity_type, mention_count),
+                "selection_penalty": penalty,
+                "selection_reason": reason,
             }
             if current is None or mention_count > (current.get("mention_count", 0) or 0):
                 seen[name] = candidate
@@ -403,13 +405,13 @@ class SubgraphContext:
             ),
         )
 
-    def _node_selection_penalty(self, name: str, entity_type: str, mention_count: int) -> int:
+    def _node_selection_metadata(self, name: str, entity_type: str, mention_count: int) -> Tuple[int, str]:
         if entity_type == "concept" and len(name) <= 4:
             if any(keyword in name for keyword in LOW_INFORMATION_CONCEPT_KEYWORDS):
-                return 2
+                return 2, "downranked: low-information short concept"
             if mention_count <= 1:
-                return 1
-        return 0
+                return 1, "downranked: sparse short concept"
+        return 0, "selected: default entity priority"
 
     def _sanitize_meta_nodes(self, nodes: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
         seen: Dict[str, Dict[str, Any]] = {}
@@ -419,11 +421,13 @@ class SubgraphContext:
                 continue
             mention_count = node.get("mention_count", 0) or 0
             current = seen.get(name)
+            penalty, reason = self._meta_selection_metadata(name, mention_count)
             candidate = {
                 "name": name,
                 "entity_type": node.get("entity_type", "meta_knowledge") or "meta_knowledge",
                 "mention_count": mention_count,
-                "selection_penalty": self._meta_selection_penalty(name, mention_count),
+                "selection_penalty": penalty,
+                "selection_reason": reason,
             }
             if current is None or mention_count > (current.get("mention_count", 0) or 0):
                 seen[name] = candidate
@@ -462,8 +466,9 @@ class SubgraphContext:
                 continue
             seen.add(key)
 
-            penalty = self._edge_selection_penalty(relation_type)
+            penalty, reason = self._edge_selection_metadata(relation_type)
             rank = penalty * 1000 + name_rank.get(src, 999) + name_rank.get(tgt, 999)
+            
             edge_records.append(
                 (
                     rank,
@@ -472,6 +477,7 @@ class SubgraphContext:
                         "target": tgt,
                         "relation_type": relation_type,
                         "selection_penalty": penalty,
+                        "selection_reason": reason,
                     },
                 )
             )
@@ -479,20 +485,20 @@ class SubgraphContext:
         edge_records.sort(key=lambda item: (item[0], item[1]["source"], item[1]["target"]))
         return [item[1] for item in edge_records]
 
-    def _meta_selection_penalty(self, name: str, mention_count: int) -> int:
+    def _meta_selection_metadata(self, name: str, mention_count: int) -> Tuple[int, str]:
         if mention_count <= 1:
-            return 1
+            return 1, "downranked: low-support meta knowledge"
         generic_meta_markers = ["系统", "机制", "价值", "稳定性", "范式转移", "核心驱动力"]
         if any(marker in name for marker in generic_meta_markers):
-            return 1
-        return 0
+            return 1, "downranked: generic meta pattern"
+        return 0, "selected: relevant meta knowledge"
 
-    def _edge_selection_penalty(self, relation_type: str) -> int:
+    def _edge_selection_metadata(self, relation_type: str) -> Tuple[int, str]:
         if relation_type == "related_to":
-            return 2
+            return 2, "downranked: generic relation"
         if relation_type.startswith("custom_"):
-            return 1
-        return 0
+            return 1, "downranked: custom relation"
+        return 0, "selected: specific semantic relation"
 
     def _format_subgraph_as_context(self, subgraph: Dict[str, Any]) -> str:
         """将子图数据格式化为预算化自然语言上下文。"""

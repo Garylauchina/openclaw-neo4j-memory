@@ -200,6 +200,8 @@ class TestSubgraphContextPrompt(unittest.TestCase):
         self.assertIn("消息总结", node_names)
         self.assertLess(node_names.index("AI"), node_names.index("消息总结"))
         self.assertLess(node_names.index("机器学习"), node_names.index("消息总结"))
+        low_info = next(n for n in result.subgraph["nodes"] if n["name"] == "消息总结")
+        self.assertEqual(low_info["selection_reason"], "downranked: low-information short concept")
 
     def test_related_to_edges_are_ranked_lower_than_specific_relations(self):
         edges = self.ctx_builder._sanitize_edges(
@@ -212,6 +214,8 @@ class TestSubgraphContextPrompt(unittest.TestCase):
         relation_types = [e["relation_type"] for e in edges]
         self.assertEqual(relation_types[0], "created_by")
         self.assertEqual(relation_types[1], "related_to")
+        self.assertEqual(edges[0]["selection_reason"], "selected: specific semantic relation")
+        self.assertEqual(edges[1]["selection_reason"], "downranked: generic relation")
 
     def test_generic_meta_nodes_are_ranked_lower(self):
         meta_nodes = self.ctx_builder._sanitize_meta_nodes([
@@ -219,6 +223,8 @@ class TestSubgraphContextPrompt(unittest.TestCase):
             {"name": "[META] AI相关知识帮助解释当前问题", "entity_type": "meta_knowledge", "mention_count": 3},
         ])
         self.assertEqual(meta_nodes[0]["name"], "[META] AI相关知识帮助解释当前问题")
+        self.assertEqual(meta_nodes[0]["selection_reason"], "selected: relevant meta knowledge")
+        self.assertEqual(meta_nodes[1]["selection_reason"], "downranked: generic meta pattern")
 
     def test_prepare_subgraph_uses_split_budgets(self):
         self.ctx_builder._config.max_context_chars = 300
