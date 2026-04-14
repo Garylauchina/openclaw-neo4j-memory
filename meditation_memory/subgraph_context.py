@@ -432,7 +432,8 @@ class SubgraphContext:
             mention_count = node.get("mention_count", 0) or 0
             current = seen.get(name)
             penalty, reason = self._meta_selection_metadata(name, mention_count)
-            query_boost = 0.5 if any(entity and entity in name for entity in (matched_entity_set or set())) else 0.0
+            matched_hits = sum(1 for entity in (matched_entity_set or set()) if entity and entity in name)
+            query_boost = min(1.5, matched_hits * 0.5)
             candidate = {
                 "name": name,
                 "entity_type": node.get("entity_type", "meta_knowledge") or "meta_knowledge",
