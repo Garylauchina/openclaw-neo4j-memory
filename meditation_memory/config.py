@@ -108,6 +108,16 @@ class SemanticSearchConfig:
 
 
 @dataclass
+class WriteGuardConfig:
+    """最小可信写入防护配置"""
+
+    enabled: bool = True
+    stable_belief_strength_threshold: float = 0.7
+    stable_min_evidence_count: int = 3
+    stable_min_source_count: int = 2
+
+
+@dataclass
 class MemoryConfig:
     """记忆系统总配置"""
 
@@ -115,3 +125,4 @@ class MemoryConfig:
     llm: LLMConfig = field(default_factory=LLMConfig)
     subgraph: SubgraphConfig = field(default_factory=SubgraphConfig)
     semantic: SemanticSearchConfig = field(default_factory=SemanticSearchConfig)
+    write_guard: WriteGuardConfig = field(default_factory=WriteGuardConfig)

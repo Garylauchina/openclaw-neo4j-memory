@@ -15,10 +15,11 @@ MemorySystem 是对外暴露的统一接口，整合了：
 
 from __future__ import annotations
 
+import hashlib
 from typing import Any, Dict, List, Optional
 
 from .config import MemoryConfig
-from .entity_extractor import EntityExtractor, ExtractionResult
+from .entity_extractor import Entity, EntityExtractor, ExtractionResult
 from .graph_store import GraphStore
 from .subgraph_context import ContextResult, SubgraphContext
 
@@ -91,6 +92,46 @@ class MemorySystem:
 
     # ========== 传统模式：写入接口 ==========
 
+    def _apply_write_guard(self, extraction: ExtractionResult, text: str) -> ExtractionResult:
+        """为实体附加最小可信写入防护元数据。"""
+        cfg = self._config.write_guard
+        if not cfg.enabled:
+            return extraction
+
+        source_context = (text or extraction.raw_text or "").strip()
+        source_id = hashlib.sha1(source_context.encode("utf-8")).hexdigest()[:12] if source_context else "direct"
+
+        guarded_entities: List[Entity] = []
+        for entity in extraction.entities:
+            props = dict(entity.properties or {})
+            props.setdefault("source_context", source_context[:500])
+            props.setdefault("source_id", source_id)
+            evidence_count = int(props.get("evidence_count", 1) or 1)
+            source_count = int(props.get("source_count", 1) or 1)
+            belief_strength = float(props.get("belief_strength", 0.5) or 0.5)
+            knowledge_state = "stable"
+            if (
+                belief_strength < cfg.stable_belief_strength_threshold
+                or evidence_count < cfg.stable_min_evidence_count
+                or source_count < cfg.stable_min_source_count
+            ):
+                knowledge_state = "hypothesis"
+
+            props["evidence_count"] = evidence_count
+            props["source_count"] = source_count
+            props["knowledge_state"] = knowledge_state
+
+            guarded_entities.append(
+                Entity(
+                    name=entity.name,
+                    entity_type=entity.entity_type,
+                    properties=props,
+                )
+            )
+
+        extraction.entities = guarded_entities
+        return extraction
+
     def ingest(self, text: str, use_llm: bool = True) -> IngestResult:
         """
         从文本中抽取实体和关系，写入图数据库。
@@ -107,6 +148,7 @@ class MemorySystem:
         """
         # 抽取实体和关系
         extraction = self._extractor.extract(text, use_llm=use_llm)
+        extraction = self._apply_write_guard(extraction, text)
 
         # 写入实体
         entity_count = self._store.upsert_entities(extraction.entities)
@@ -125,6 +167,7 @@ class MemorySystem:
         直接从已有的抽取结果写入图数据库。
         适用于上层已经完成抽取的场景。
         """
+        extraction = self._apply_write_guard(extraction, extraction.raw_text)
         entity_count = self._store.upsert_entities(extraction.entities)
         relation_count = self._store.upsert_relations(extraction.relations)
 
@@ -230,6 +273,7 @@ class MemorySystem:
         
         # 对完整对话文本进行额外抽取
         final_extraction = self._extractor.extract(conversation_text, use_llm=use_llm)
+        final_extraction = self._apply_write_guard(final_extraction, conversation_text)
         all_entities.extend(final_extraction.entities)
         all_relations.extend(final_extraction.relations)
         

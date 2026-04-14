@@ -246,6 +246,9 @@ class GraphStore:
             e.attention_score = $attention,
             e.belief_type = $belief_type,
             e.belief_strength = $belief_strength,
+            e.knowledge_state = $knowledge_state,
+            e.evidence_count = $evidence_count,
+            e.source_count = $source_count,
             e.needs_meditation = true
         ON MATCH SET
             e.entity_type = $entity_type,
@@ -255,6 +258,9 @@ class GraphStore:
             e.attention_score = $attention,
             e.belief_type = $belief_type,
             e.belief_strength = $belief_strength,
+            e.knowledge_state = $knowledge_state,
+            e.evidence_count = $evidence_count,
+            e.source_count = $source_count,
             e.needs_meditation = true
         RETURN elementId(e) AS eid
         """
@@ -267,6 +273,9 @@ class GraphStore:
                 attention=attention,
                 belief_type=belief_type,
                 belief_strength=belief_strength,
+                knowledge_state=entity.properties.get("knowledge_state", "stable"),
+                evidence_count=entity.properties.get("evidence_count", 1),
+                source_count=entity.properties.get("source_count", 1),
             )
             record = result.single()
             return record["eid"] if record else ""
@@ -291,6 +300,9 @@ class GraphStore:
             e.attention_score = item.attention,
             e.belief_type = item.belief_type,
             e.belief_strength = item.belief_strength,
+            e.knowledge_state = item.knowledge_state,
+            e.evidence_count = item.evidence_count,
+            e.source_count = item.source_count,
             e.needs_meditation = true
         ON MATCH SET
             e.entity_type = item.entity_type,
@@ -300,6 +312,9 @@ class GraphStore:
             e.attention_score = item.attention,
             e.belief_type = item.belief_type,
             e.belief_strength = item.belief_strength,
+            e.knowledge_state = item.knowledge_state,
+            e.evidence_count = item.evidence_count,
+            e.source_count = item.source_count,
             e.needs_meditation = true
         RETURN count(e) AS updated
         """
@@ -322,6 +337,9 @@ class GraphStore:
                 "attention": attention,
                 "belief_type": belief_type,
                 "belief_strength": belief_strength,
+                "knowledge_state": e.properties.get("knowledge_state", "stable"),
+                "evidence_count": e.properties.get("evidence_count", 1),
+                "source_count": e.properties.get("source_count", 1),
             })
         with self.driver.session(database=self._config.database) as session:
             result = session.run(query, batch=batch)

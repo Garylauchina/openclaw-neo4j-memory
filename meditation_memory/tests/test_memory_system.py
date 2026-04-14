@@ -5,7 +5,7 @@
 import unittest
 from unittest.mock import MagicMock, patch
 
-from meditation_memory.config import MemoryConfig, Neo4jConfig, LLMConfig
+from meditation_memory.config import MemoryConfig, Neo4jConfig, LLMConfig, WriteGuardConfig
 from meditation_memory.entity_extractor import Entity, ExtractionResult, Relation
 from meditation_memory.memory_system import IngestResult, MemorySystem
 from meditation_memory.subgraph_context import ContextResult
@@ -93,6 +93,45 @@ class TestMemorySystemIngest(unittest.TestCase):
 
         self.ms.ingest("测试", use_llm=False)
         self.ms._extractor.extract.assert_called_once_with("测试", use_llm=False)
+
+    def test_write_guard_marks_low_evidence_entities_as_hypothesis(self):
+        self.ms._extractor.extract.return_value = ExtractionResult(
+            entities=[Entity(name="张三", entity_type="person", properties={})],
+            relations=[],
+            raw_text="张三最近在研究一个方向",
+        )
+        self.ms._store.upsert_entities.return_value = 1
+        self.ms._store.upsert_relations.return_value = 0
+
+        self.ms.ingest("张三最近在研究一个方向")
+
+        written_entities = self.ms._store.upsert_entities.call_args[0][0]
+        self.assertEqual(written_entities[0].properties["knowledge_state"], "hypothesis")
+        self.assertEqual(written_entities[0].properties["evidence_count"], 1)
+        self.assertEqual(written_entities[0].properties["source_count"], 1)
+
+    def test_write_guard_can_keep_entity_stable_when_thresholds_met(self):
+        config = MemoryConfig(write_guard=WriteGuardConfig(
+            enabled=True,
+            stable_belief_strength_threshold=0.7,
+            stable_min_evidence_count=1,
+            stable_min_source_count=1,
+        ))
+        ms = MemorySystem(config)
+        ms._store = MagicMock()
+        ms._extractor = MagicMock()
+        ms._extractor.extract.return_value = ExtractionResult(
+            entities=[Entity(name="Neo4j", entity_type="technology", properties={"belief_strength": 0.8})],
+            relations=[],
+            raw_text="Neo4j 是图数据库",
+        )
+        ms._store.upsert_entities.return_value = 1
+        ms._store.upsert_relations.return_value = 0
+
+        ms.ingest("Neo4j 是图数据库")
+
+        written_entities = ms._store.upsert_entities.call_args[0][0]
+        self.assertEqual(written_entities[0].properties["knowledge_state"], "stable")
 
 
 class TestMemorySystemRetrieve(unittest.TestCase):
