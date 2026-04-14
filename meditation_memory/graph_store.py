@@ -2585,6 +2585,42 @@ class GraphStore:
             result = session.run(query)
             return [dict(record) for record in result]
 
+    def get_strategies_for_injection(
+        self,
+        limit: int = 10,
+    ) -> List[Dict[str, Any]]:
+        """
+        获取可供 prompt 注入的活跃策略。
+
+        Returns:
+            策略列表，包含名称、描述、适用场景、适应度等字段。
+        """
+        query = """
+        MATCH (s:Strategy)
+        WHERE NOT s:Archived
+        RETURN s.name AS name,
+               s.strategy_type AS strategy_type,
+               s.uses_real_data AS uses_real_data,
+               s.fitness_score AS fitness_score,
+               s.avg_accuracy AS avg_accuracy,
+               s.content AS content,
+               s.description AS description,
+               s.applicable_scenarios AS applicable_scenarios,
+               s.source AS source,
+               s.created_at AS created_at
+        ORDER BY coalesce(s.fitness_score, s.avg_accuracy, 0.0) DESC,
+                 coalesce(s.avg_accuracy, 0.0) DESC,
+                 s.name ASC
+        LIMIT $limit
+        """
+        try:
+            with self.driver.session(database=self._config.database) as session:
+                result = session.run(query, limit=limit)
+                return [dict(record) for record in result]
+        except Exception as e:
+            logger.error("Failed to get strategies for injection: %s", e)
+            return []
+
     def create_causal_chain_node(self, chain_data: Dict[str, Any]) -> str:
         """
         创建因果链元节点。

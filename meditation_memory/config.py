@@ -59,6 +59,10 @@ class SubgraphConfig:
     # 提示词模板中子图上下文的最大 token 数（粗略估计）
     max_context_chars: int = 2000
 
+    # Strategy injection 配置
+    max_strategies: int = 3
+    strategy_chars_budget_ratio: float = 0.2
+
     # 会话级缓存配置
     session_cache_enabled: bool = True
     # 主题变化检测阈值：当前消息的实体与缓存子图实体的重叠度低于此值时，认为主题变化

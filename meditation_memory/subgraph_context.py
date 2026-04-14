@@ -339,6 +339,8 @@ class SubgraphContext:
         extraction: ExtractionResult,
     ) -> "ContextResult":
         prepared = self._prepare_subgraph_for_prompt(subgraph, matched_entities)
+        strategies = self._select_strategies_for_prompt(matched_entities, prepared)
+        prepared["strategies"] = strategies
         context_text = self._format_subgraph_as_context(prepared)
         debug_info = self._build_selection_debug_info(prepared)
         return ContextResult(
@@ -355,7 +357,7 @@ class SubgraphContext:
         nodes = self._sanitize_nodes(subgraph.get("nodes", []), matched_entity_set)
         meta_nodes = self._sanitize_meta_nodes(subgraph.get("nodes", []), matched_entity_set)
         if not nodes and not meta_nodes:
-            return {"nodes": [], "edges": [], "meta_nodes": []}
+            return {"nodes": [], "edges": [], "meta_nodes": [], "strategies": []}
 
         budget_chars = max(200, self._config.max_context_chars)
         node_chars_budget = max(120, int(budget_chars * 0.45))
@@ -373,7 +375,7 @@ class SubgraphContext:
         meta_budget = max(1, min(6, meta_chars_budget // 140))
         kept_meta_nodes = meta_nodes[:meta_budget]
 
-        return {"nodes": kept_nodes, "edges": kept_edges, "meta_nodes": kept_meta_nodes}
+        return {"nodes": kept_nodes, "edges": kept_edges, "meta_nodes": kept_meta_nodes, "strategies": []}
 
     def _sanitize_nodes(self, nodes: List[Dict[str, Any]], matched_entity_set: Optional[Set[str]] = None) -> List[Dict[str, Any]]:
         seen: Dict[str, Dict[str, Any]] = {}
@@ -509,6 +511,69 @@ class SubgraphContext:
         )
         return [item[1] for item in edge_records]
 
+    def _select_strategies_for_prompt(
+        self,
+        matched_entities: Optional[List[str]],
+        prepared_subgraph: Dict[str, Any],
+    ) -> List[Dict[str, Any]]:
+        matched_entity_set = set(matched_entities or [])
+        if not hasattr(self._store, "get_strategies_for_injection"):
+            return []
+
+        limit = max(self._config.max_strategies * 3, self._config.max_strategies)
+        raw_strategies = self._store.get_strategies_for_injection(limit=limit)
+        if not raw_strategies:
+            return []
+
+        node_names = {node.get("name", "") for node in prepared_subgraph.get("nodes", [])}
+        meta_names = {node.get("name", "") for node in prepared_subgraph.get("meta_nodes", [])}
+        context_terms = {term for term in node_names | meta_names | matched_entity_set if term}
+
+        ranked: List[Dict[str, Any]] = []
+        for strategy in raw_strategies:
+            name = (strategy.get("name") or "").strip()
+            if not name:
+                continue
+            description = (strategy.get("description") or strategy.get("content") or "").strip()
+            scenarios = strategy.get("applicable_scenarios") or []
+            penalty, reason = self._strategy_selection_metadata(strategy)
+            query_hits = sum(1 for term in matched_entity_set if term and (
+                term in description or term in name or any(term in scenario for scenario in scenarios)
+            ))
+            context_hits = sum(1 for term in context_terms if term and (
+                term in description or term in name or any(term in scenario for scenario in scenarios)
+            ))
+            fitness = float(strategy.get("fitness_score") or strategy.get("avg_accuracy") or 0.0)
+            selection_score = round(
+                fitness + (query_hits * 1.2) + (context_hits * 0.25) - (penalty * 1.5),
+                4,
+            )
+            strategy_copy = dict(strategy)
+            strategy_copy["selection_penalty"] = penalty
+            strategy_copy["selection_reason"] = reason if query_hits == 0 else f"selected: query-matched strategy ({query_hits} hits)"
+            strategy_copy["selection_score"] = selection_score
+            ranked.append(strategy_copy)
+
+        ranked.sort(
+            key=lambda item: (
+                -float(item.get("selection_score", 0.0)),
+                item.get("selection_penalty", 0),
+                -float(item.get("fitness_score") or item.get("avg_accuracy") or 0.0),
+                item.get("name", ""),
+            )
+        )
+        return ranked[: max(1, self._config.max_strategies)]
+
+    def _strategy_selection_metadata(self, strategy: Dict[str, Any]) -> Tuple[int, str]:
+        description = (strategy.get("description") or strategy.get("content") or "").strip()
+        scenarios = strategy.get("applicable_scenarios") or []
+        fitness = float(strategy.get("fitness_score") or strategy.get("avg_accuracy") or 0.0)
+        if fitness < 0.4:
+            return 1, "downranked: low-confidence strategy"
+        if not description and not scenarios:
+            return 1, "downranked: sparse strategy metadata"
+        return 0, "selected: strategy relevant to current context"
+
     def _meta_selection_metadata(self, name: str, mention_count: int) -> Tuple[int, str]:
         if mention_count <= 1:
             return 1, "downranked: low-support meta knowledge"
@@ -529,8 +594,9 @@ class SubgraphContext:
         nodes = subgraph.get("nodes", [])
         edges = subgraph.get("edges", [])
         meta_nodes = subgraph.get("meta_nodes", [])
+        strategies = subgraph.get("strategies", [])
 
-        if not nodes and not edges and not meta_nodes:
+        if not nodes and not edges and not meta_nodes and not strategies:
             return ""
 
         type_labels = {
@@ -543,7 +609,7 @@ class SubgraphContext:
             "intent": "意图",
         }
 
-        budget = max(200, self._config.max_context_chars)
+        budget = max(40, self._config.max_context_chars)
         current_length = 0
         lines: List[str] = []
 
@@ -588,6 +654,20 @@ class SubgraphContext:
                     if not append_line(f"- {meta_name}"):
                         break
 
+        if strategies:
+            append_line("")
+            if append_line("### 相关策略"):
+                for strategy in strategies:
+                    name = strategy.get("name", "")
+                    description = strategy.get("description") or strategy.get("content") or ""
+                    scenarios = strategy.get("applicable_scenarios") or []
+                    scenario_text = f"（适用场景：{'、'.join(scenarios[:2])}）" if scenarios else ""
+                    line = f"- {name}: {description}{scenario_text}".strip()
+                    if len(line) > 160:
+                        line = line[:157] + "..."
+                    if not append_line(line):
+                        break
+
         if current_length >= budget and lines:
             suffix = "\n..."
             if len(lines[-1]) + len(suffix) <= budget:
@@ -628,6 +708,16 @@ class SubgraphContext:
                     "selection_score": node.get("selection_score", 0.0),
                 }
                 for node in subgraph.get("meta_nodes", [])
+            ],
+            "selected_strategies": [
+                {
+                    "name": strategy.get("name"),
+                    "fitness_score": strategy.get("fitness_score"),
+                    "avg_accuracy": strategy.get("avg_accuracy"),
+                    "selection_reason": strategy.get("selection_reason", ""),
+                    "selection_score": strategy.get("selection_score", 0.0),
+                }
+                for strategy in subgraph.get("strategies", [])
             ],
         }
 

@@ -165,6 +165,15 @@ class TestSubgraphContextPrompt(unittest.TestCase):
             ],
             "edges": [],
         }
+        self.mock_store.get_strategies_for_injection.return_value = [
+            {
+                "name": "distilled_ai_explanation",
+                "description": "先给出定义，再补充关键区别与应用场景",
+                "applicable_scenarios": ["解释 AI 概念", "概念问答"],
+                "fitness_score": 0.82,
+                "avg_accuracy": 0.82,
+            }
+        ]
 
         prompt = self.ctx_builder.build_system_prompt(
             "什么是AI？", base_system_prompt="你是助手"
@@ -175,6 +184,7 @@ class TestSubgraphContextPrompt(unittest.TestCase):
         self.assertIn("相关记忆与知识", prompt)
         self.assertIn("### 已知实体", prompt)
         self.assertIn("### 相关元知识", prompt)
+        self.assertIn("### 相关策略", prompt)
         self.assertIn("AI", prompt)
 
 
@@ -252,12 +262,46 @@ class TestSubgraphContextPrompt(unittest.TestCase):
         self.assertLessEqual(len(prepared["edges"]), 2)
         self.assertIn("meta_nodes", prepared)
 
+    def test_strategy_selection_prefers_query_matched_items(self):
+        self.mock_extractor.extract.return_value = ExtractionResult(
+            entities=[Entity(name="AI", entity_type="concept")],
+        )
+        self.mock_store.find_entity.return_value = {"name": "AI"}
+        self.mock_store.get_subgraph_by_entities.return_value = {
+            "nodes": [
+                {"name": "AI", "entity_type": "concept", "mention_count": 4},
+            ],
+            "edges": [],
+        }
+        self.mock_store.get_strategies_for_injection.return_value = [
+            {
+                "name": "distilled_ai_explanation",
+                "description": "解释 AI 问题时先定义，再举例",
+                "applicable_scenarios": ["AI 概念解释"],
+                "fitness_score": 0.7,
+                "avg_accuracy": 0.7,
+            },
+            {
+                "name": "distilled_market_trend",
+                "description": "市场趋势问题先看时间窗口再做判断",
+                "applicable_scenarios": ["金融趋势分析"],
+                "fitness_score": 0.9,
+                "avg_accuracy": 0.9,
+            },
+        ]
+
+        result = self.ctx_builder.build_context("什么是AI？")
+        strategies = result.subgraph["strategies"]
+        self.assertEqual(strategies[0]["name"], "distilled_ai_explanation")
+        self.assertIn("selected_strategies", result.debug_info)
+        self.assertIn("query-matched", strategies[0]["selection_reason"])
+
     def test_context_result_to_dict_contains_debug_info(self):
         result = ContextResult(
             context_text="测试上下文",
-            subgraph={"nodes": [{"name": "A"}], "edges": [], "meta_nodes": []},
+            subgraph={"nodes": [{"name": "A"}], "edges": [], "meta_nodes": [], "strategies": []},
             matched_entities=["A"],
-            debug_info={"selected_nodes": [{"name": "A", "selection_reason": "selected"}]},
+            debug_info={"selected_nodes": [{"name": "A", "selection_reason": "selected"}], "selected_strategies": []},
         )
         data = result.to_dict()
         self.assertIn("debug_info", data)
