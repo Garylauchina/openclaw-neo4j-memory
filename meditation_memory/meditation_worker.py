@@ -1078,7 +1078,8 @@ class MeditationEngine:
         """从密集子图中提取元知识。"""
         clusters = self.store.get_dense_subgraphs_for_distillation(
             min_cluster_size=self.config.distillation.min_cluster_size,
-            limit=self.config.distillation.max_meta_nodes_per_run
+            limit=self.config.distillation.max_meta_nodes_per_run,
+            skip_recent_seconds=self.config.distillation.skip_recent_seconds,
         )
 
         for cluster in clusters:
@@ -1100,7 +1101,8 @@ class MeditationEngine:
                         summary,
                         [center_name] + neighbor_names,
                         self.config.distillation.meta_knowledge_entity_type,
-                        self.config.distillation.summarizes_relation_type
+                        self.config.distillation.summarizes_relation_type,
+                        center_entity_name=center_name,
                     ):
                         result.meta_knowledge_created += 1
 

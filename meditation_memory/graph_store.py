@@ -1707,6 +1707,7 @@ class GraphStore:
         self,
         min_cluster_size: int = 5,
         limit: int = 10,
+        skip_recent_seconds: int = 0,
     ) -> List[Dict[str, Any]]:
         """
         获取高密度子图用于知识蒸馏。
@@ -1716,6 +1717,11 @@ class GraphStore:
         MATCH (center:Entity)-[r:RELATES_TO]-(neighbor:Entity)
         WHERE NOT center:Archived AND NOT neighbor:Archived
           AND center.entity_type <> "meta_knowledge"
+          AND (
+            $skip_recent_ms <= 0
+            OR center.last_distilled_at IS NULL
+            OR center.last_distilled_at < timestamp() - $skip_recent_ms
+          )
         WITH center, collect(DISTINCT neighbor) AS neighbors, count(DISTINCT r) AS edge_count
         WHERE size(neighbors) >= $min_size
         RETURN center.name AS center_name,
@@ -1727,7 +1733,12 @@ class GraphStore:
         LIMIT $limit
         """
         with self.driver.session(database=self._config.database) as session:
-            result = session.run(query, min_size=min_cluster_size, limit=limit)
+            result = session.run(
+                query,
+                min_size=min_cluster_size,
+                limit=limit,
+                skip_recent_ms=max(0, skip_recent_seconds) * 1000,
+            )
             return [dict(record) for record in result]
 
     def get_cluster_edges(
@@ -1835,6 +1846,7 @@ class GraphStore:
         related_entity_names: List[str],
         meta_entity_type: str = "meta_knowledge",
         summarizes_rel_type: str = "SUMMARIZES",
+        center_entity_name: Optional[str] = None,
     ) -> bool:
         """
         创建元知识节点并建立到底层事实节点的 SUMMARIZES 关系。
@@ -1880,6 +1892,11 @@ class GraphStore:
                 r.properties = "{}"
             RETURN type(r) AS rel_type
             """
+            touch_center_query = """
+            MATCH (e:Entity {name: $center_name})
+            WHERE NOT e:Archived
+            SET e.last_distilled_at = timestamp()
+            """
             try:
                 with self.driver.session(database=self._config.database) as session:
                     session.run(
@@ -1897,6 +1914,8 @@ class GraphStore:
                             entity_name=entity_name,
                             rel_type=summarizes_rel_type,
                         )
+                    if center_entity_name:
+                        session.run(touch_center_query, center_name=center_entity_name)
                 logger.info("Reused similar meta knowledge node: %s", existing_name)
                 return True
             except Exception as e:
@@ -1934,6 +1953,11 @@ class GraphStore:
             r.properties = "{}"
         RETURN type(r) AS rel_type
         """
+        touch_center_query = """
+        MATCH (e:Entity {name: $center_name})
+        WHERE NOT e:Archived
+        SET e.last_distilled_at = timestamp()
+        """
         try:
             with self.driver.session(database=self._config.database) as session:
                 result = session.run(
@@ -1954,6 +1978,8 @@ class GraphStore:
                         entity_name=entity_name,
                         rel_type=summarizes_rel_type,
                     )
+                if center_entity_name:
+                    session.run(touch_center_query, center_name=center_entity_name)
                 return True
         except Exception as e:
             logger.error("Failed to create meta knowledge node: %s", e)

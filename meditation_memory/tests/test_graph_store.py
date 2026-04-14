@@ -195,6 +195,7 @@ class TestGraphStoreOperations(unittest.TestCase):
         ok = self.store.create_meta_knowledge_node(
             summary="张三长期参与项目A并与北京相关资源形成稳定协作。",
             related_entity_names=["张三", "项目A", "北京"],
+            center_entity_name="张三",
         )
 
         self.assertTrue(ok)
@@ -203,6 +204,17 @@ class TestGraphStoreOperations(unittest.TestCase):
 
         reuse_call = self.mock_session.run.call_args_list[0]
         self.assertIn("cluster_signature", reuse_call[1])
+        self.assertTrue(any(call.kwargs.get("center_name") == "张三" for call in self.mock_session.run.call_args_list if hasattr(call, "kwargs")))
+
+    def test_get_dense_subgraphs_for_distillation_passes_recent_skip(self):
+        mock_result = MagicMock()
+        mock_result.__iter__ = MagicMock(return_value=iter([]))
+        self.mock_session.run.return_value = mock_result
+
+        self.store.get_dense_subgraphs_for_distillation(min_cluster_size=3, limit=5, skip_recent_seconds=3600)
+
+        call_args = self.mock_session.run.call_args
+        self.assertEqual(call_args[1]["skip_recent_ms"], 3600 * 1000)
 
     def test_close(self):
         """测试关闭连接"""

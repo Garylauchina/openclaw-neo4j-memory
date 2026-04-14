@@ -302,7 +302,14 @@ class MeditationDistillationConfig:
     # 每次蒸馏生成的元知识节点数上限
     max_meta_nodes_per_run: int = field(
         default_factory=lambda: int(
-            os.environ.get("MEDITATION_MAX_META_NODES", "50")
+            os.environ.get("MEDITATION_MAX_META_NODES", "15")
+        )
+    )
+
+    # 跳过最近刚蒸馏过的簇中心节点（秒）
+    skip_recent_seconds: int = field(
+        default_factory=lambda: int(
+            os.environ.get("MEDITATION_DISTILLATION_COOLDOWN_SECONDS", str(24 * 60 * 60))
         )
     )
 
