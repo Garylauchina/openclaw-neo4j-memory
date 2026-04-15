@@ -230,6 +230,46 @@ class TestGraphStoreOperations(unittest.TestCase):
         call_args = self.mock_session.run.call_args
         self.assertEqual(call_args[1]["ttl_ms"], 3600 * 1000)
 
+    def test_upsert_entity_claim(self):
+        mock_result = MagicMock()
+        mock_result.single.return_value = {"claim_id": "abc123"}
+        self.mock_session.run.return_value = mock_result
+
+        claim_id = self.store.upsert_entity_claim("Apple", "organization")
+        self.assertEqual(claim_id, "abc123")
+
+    def test_get_entity_claims(self):
+        mock_records = [
+            {"claim_id": "c1", "entity_name": "Apple", "claim_kind": "entity_typing", "claimed_value": "organization", "state": "stable", "support_score": 2, "conflict_score": 0, "net_confidence": 2},
+            {"claim_id": "c2", "entity_name": "Apple", "claim_kind": "entity_typing", "claimed_value": "product", "state": "hypothesis", "support_score": 1, "conflict_score": 1, "net_confidence": 0},
+        ]
+        mock_result = MagicMock()
+        mock_result.__iter__ = MagicMock(return_value=iter(mock_records))
+        self.mock_session.run.return_value = mock_result
+
+        claims = self.store.get_entity_claims("Apple")
+        self.assertEqual(len(claims), 2)
+
+    def test_apply_claim_feedback(self):
+        mock_result = MagicMock()
+        mock_result.single.return_value = {"claim_id": "c1"}
+        self.mock_session.run.return_value = mock_result
+
+        ok = self.store.apply_claim_feedback("Apple", "organization", "contradict", delta=1)
+        self.assertTrue(ok)
+
+    def test_sync_entity_type_from_claims(self):
+        self.store.get_entity_claims = MagicMock(return_value=[
+            {"claimed_value": "organization", "state": "stable", "net_confidence": 3},
+            {"claimed_value": "product", "state": "hypothesis", "net_confidence": 0},
+        ])
+        mock_result = MagicMock()
+        mock_result.single.return_value = {"name": "Apple", "entity_type": "organization", "knowledge_state": "stable"}
+        self.mock_session.run.return_value = mock_result
+
+        result = self.store.sync_entity_type_from_claims("Apple")
+        self.assertEqual(result["entity_type"], "organization")
+
     def test_build_meta_cluster_signature_is_order_insensitive(self):
         sig1 = self.store._build_meta_cluster_signature(["张三", "项目A", "北京"])
         sig2 = self.store._build_meta_cluster_signature(["北京", "张三", "项目A", "张三"])

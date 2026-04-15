@@ -140,6 +140,25 @@ class MemorySystem:
         extraction.entities = guarded_entities
         return extraction
 
+    def _sync_entity_claims(self, entities: List[Entity]) -> None:
+        """同步 entity typing claims，并将 dominant claim 回写到实体。"""
+        for entity in entities:
+            props = entity.properties or {}
+            self._store.upsert_entity_claim(
+                entity_name=entity.name,
+                claimed_type=entity.entity_type,
+                source_type="ingest_llm",
+                source_ref=props.get("source_id", ""),
+                initial_state=props.get("knowledge_state", "hypothesis"),
+                support_delta=1,
+                conflict_delta=0,
+            )
+            claims = self._store.get_entity_claims(entity.name)
+            for claim in claims:
+                if claim.get("claimed_value") != entity.entity_type:
+                    self._store.apply_claim_feedback(entity.name, claim.get("claimed_value", ""), "contradict", delta=1)
+            self._store.sync_entity_type_from_claims(entity.name)
+
     def _sync_pending_beliefs(self, entities: List[Entity]) -> None:
         """同步最小 pending belief 生命周期。"""
         if not self._config.write_guard.enabled:
@@ -232,6 +251,7 @@ class MemorySystem:
 
         # 写入实体
         entity_count = self._store.upsert_entities(extraction.entities)
+        self._sync_entity_claims(extraction.entities)
         self._sync_pending_beliefs(extraction.entities)
 
         # 写入关系
@@ -252,6 +272,7 @@ class MemorySystem:
         extraction = self._apply_write_guard(extraction, extraction.raw_text)
         extraction = self._apply_relation_write_guard(extraction, extraction.raw_text)
         entity_count = self._store.upsert_entities(extraction.entities)
+        self._sync_entity_claims(extraction.entities)
         self._sync_pending_beliefs(extraction.entities)
         relation_count = self._store.upsert_relations(extraction.relations)
 
@@ -372,6 +393,7 @@ class MemorySystem:
         
         # 写入图数据库
         entity_count = self._store.upsert_entities(unique_entities)
+        self._sync_entity_claims(unique_entities)
         self._sync_pending_beliefs(unique_entities)
         relation_count = self._store.upsert_relations(unique_relations)
         

@@ -170,6 +170,10 @@ class TestMemorySystemIngest(unittest.TestCase):
             "entity_type": "organization",
             "knowledge_state": "stable",
         } if name == "Apple" else None
+        ms._store.get_entity_claims.return_value = [
+            {"claimed_value": "organization"},
+            {"claimed_value": "product"},
+        ]
         ms._extractor.extract.return_value = ExtractionResult(
             entities=[Entity(name="Apple", entity_type="product", properties={"belief_strength": 0.9})],
             relations=[],
@@ -184,6 +188,9 @@ class TestMemorySystemIngest(unittest.TestCase):
         self.assertEqual(written_entities[0].properties["knowledge_state"], "hypothesis")
         self.assertTrue(written_entities[0].properties["conflict_with_existing"])
         self.assertEqual(written_entities[0].properties["conflict_existing_type"], "organization")
+        ms._store.upsert_entity_claim.assert_called()
+        ms._store.apply_claim_feedback.assert_called_with("Apple", "organization", "contradict", delta=1)
+        ms._store.sync_entity_type_from_claims.assert_called_with("Apple")
 
     def test_hypothesis_entities_are_buffered_as_pending_beliefs(self):
         self.ms._extractor.extract.return_value = ExtractionResult(

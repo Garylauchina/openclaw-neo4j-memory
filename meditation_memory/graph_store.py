@@ -188,6 +188,8 @@ class GraphStore:
             "CREATE INDEX rqs_path_idx IF NOT EXISTS FOR (r:RQSRecord) ON (r.path_id)",
             # Phase 2: 信念节点索引
             "CREATE INDEX belief_content_idx IF NOT EXISTS FOR (b:Belief) ON (b.content)",
+            # Phase 5: Claim 节点索引
+            "CREATE INDEX claim_entity_value_idx IF NOT EXISTS FOR (c:Claim) ON (c.entity_name, c.claim_kind, c.claimed_value)",
             # Phase 3: 因果链索引
             "CREATE INDEX causal_chain_id_idx IF NOT EXISTS FOR (c:CausalChain) ON (c.chain_id)",
             # Phase 4: 反馈节点索引
@@ -2575,6 +2577,152 @@ class GraphStore:
         with self.driver.session(database=self._config.database) as session:
             result = session.run(query)
             return [dict(record) for record in result]
+
+    def upsert_entity_claim(
+        self,
+        entity_name: str,
+        claimed_type: str,
+        source_type: str = "ingest_llm",
+        source_ref: str = "",
+        initial_state: str = "hypothesis",
+        support_delta: int = 1,
+        conflict_delta: int = 0,
+    ) -> str:
+        """创建或更新 entity typing claim。"""
+        query = """
+        MERGE (c:Claim {entity_name: $entity_name, claim_kind: 'entity_typing', claimed_value: $claimed_value})
+        ON CREATE SET
+            c.claim_id = $claim_id,
+            c.target_type = 'entity',
+            c.source_type = $source_type,
+            c.source_ref = $source_ref,
+            c.state = $initial_state,
+            c.support_score = $support_delta,
+            c.conflict_score = $conflict_delta,
+            c.net_confidence = $support_delta - $conflict_delta,
+            c.created_at = timestamp(),
+            c.updated_at = timestamp()
+        ON MATCH SET
+            c.source_type = $source_type,
+            c.source_ref = $source_ref,
+            c.support_score = coalesce(c.support_score, 0) + $support_delta,
+            c.conflict_score = coalesce(c.conflict_score, 0) + $conflict_delta,
+            c.net_confidence = (coalesce(c.support_score, 0) + $support_delta) - (coalesce(c.conflict_score, 0) + $conflict_delta),
+            c.updated_at = timestamp(),
+            c.state = CASE
+                WHEN ((coalesce(c.support_score, 0) + $support_delta) - (coalesce(c.conflict_score, 0) + $conflict_delta)) <= -1 THEN 'contradicted'
+                WHEN ((coalesce(c.support_score, 0) + $support_delta) - (coalesce(c.conflict_score, 0) + $conflict_delta)) >= 2 THEN 'stable'
+                ELSE 'hypothesis'
+            END
+        WITH c
+        MATCH (e:Entity {name: $entity_name})
+        MERGE (c)-[:ABOUT]->(e)
+        RETURN c.claim_id AS claim_id
+        """
+        claim_id = hashlib.md5(f"{entity_name}:entity_typing:{claimed_type}".encode("utf-8")).hexdigest()[:16]
+        with self.driver.session(database=self._config.database) as session:
+            result = session.run(
+                query,
+                entity_name=entity_name,
+                claimed_value=claimed_type,
+                source_type=source_type,
+                source_ref=source_ref,
+                initial_state=initial_state,
+                support_delta=support_delta,
+                conflict_delta=conflict_delta,
+                claim_id=claim_id,
+            )
+            record = result.single()
+            return record["claim_id"] if record else ""
+
+    def get_entity_claims(self, entity_name: str) -> List[Dict[str, Any]]:
+        """获取某个实体的所有 typing claims。"""
+        query = """
+        MATCH (c:Claim {entity_name: $entity_name, claim_kind: 'entity_typing'})
+        RETURN c.claim_id AS claim_id,
+               c.entity_name AS entity_name,
+               c.claim_kind AS claim_kind,
+               c.claimed_value AS claimed_value,
+               c.state AS state,
+               c.support_score AS support_score,
+               c.conflict_score AS conflict_score,
+               c.net_confidence AS net_confidence,
+               c.source_type AS source_type,
+               c.source_ref AS source_ref,
+               c.updated_at AS updated_at
+        ORDER BY c.net_confidence DESC, c.updated_at DESC
+        """
+        with self.driver.session(database=self._config.database) as session:
+            result = session.run(query, entity_name=entity_name)
+            return [dict(record) for record in result]
+
+    def apply_claim_feedback(
+        self,
+        entity_name: str,
+        claimed_type: str,
+        feedback_type: str,
+        delta: int = 1,
+    ) -> bool:
+        """对 entity typing claim 应用反馈。"""
+        support_delta = delta if feedback_type == 'support' else 0
+        conflict_delta = delta if feedback_type == 'weaken' else (2 * delta if feedback_type == 'contradict' else 0)
+        query = """
+        MATCH (c:Claim {entity_name: $entity_name, claim_kind: 'entity_typing', claimed_value: $claimed_value})
+        SET c.support_score = coalesce(c.support_score, 0) + $support_delta,
+            c.conflict_score = coalesce(c.conflict_score, 0) + $conflict_delta,
+            c.net_confidence = (coalesce(c.support_score, 0) + $support_delta) - (coalesce(c.conflict_score, 0) + $conflict_delta),
+            c.updated_at = timestamp(),
+            c.state = CASE
+                WHEN ((coalesce(c.support_score, 0) + $support_delta) - (coalesce(c.conflict_score, 0) + $conflict_delta)) <= -1 THEN 'contradicted'
+                WHEN ((coalesce(c.support_score, 0) + $support_delta) - (coalesce(c.conflict_score, 0) + $conflict_delta)) >= 2 THEN 'stable'
+                ELSE 'hypothesis'
+            END
+        RETURN c.claim_id AS claim_id
+        """
+        with self.driver.session(database=self._config.database) as session:
+            result = session.run(
+                query,
+                entity_name=entity_name,
+                claimed_value=claimed_type,
+                support_delta=support_delta,
+                conflict_delta=conflict_delta,
+            )
+            return result.single() is not None
+
+    def sync_entity_type_from_claims(self, entity_name: str) -> Optional[Dict[str, Any]]:
+        """根据 claims 同步实体当前类型。"""
+        claims = self.get_entity_claims(entity_name)
+        if not claims:
+            return None
+        dominant = claims[0]
+        second = claims[1] if len(claims) > 1 else None
+        dominant_score = dominant.get("net_confidence") or 0
+        second_score = second.get("net_confidence") or -999
+        query = """
+        MATCH (e:Entity {name: $entity_name})
+        SET e.entity_type = CASE
+                WHEN $apply_type THEN $claimed_value
+                ELSE e.entity_type
+            END,
+            e.knowledge_state = $knowledge_state,
+            e.conflict_with_existing = $conflict_with_existing,
+            e.updated_at = timestamp()
+        RETURN e.name AS name, e.entity_type AS entity_type, e.knowledge_state AS knowledge_state
+        """
+        apply_type = dominant.get("state") == "stable" and dominant_score >= second_score + 1
+        knowledge_state = "stable" if apply_type else "hypothesis"
+        conflict_with_existing = not apply_type and len(claims) > 1
+        with self.driver.session(database=self._config.database) as session:
+            result = session.run(
+                query,
+                entity_name=entity_name,
+                claimed_value=dominant.get("claimed_value"),
+                apply_type=apply_type,
+                knowledge_state=knowledge_state,
+                conflict_with_existing=conflict_with_existing,
+            )
+            record = result.single()
+            return dict(record) if record else None
 
     def complete_pending_belief(self, content: str) -> bool:
         """将 pending belief 标记为已稳定/已完成。"""
