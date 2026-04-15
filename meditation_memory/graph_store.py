@@ -1643,9 +1643,10 @@ class GraphStore:
         if not set_clauses or (not description and not new_entity_type):
             return False
 
-        # 追加历史记录
-        for entry in history_entries:
-            set_clauses.append(f"e.history = coalesce(e.history, []) + ['{entry}']")
+        # 追加历史记录（参数化，避免引号/特殊字符破坏 Cypher）
+        if history_entries:
+            set_clauses.append("e.history = coalesce(e.history, []) + $history_entries")
+            params["history_entries"] = history_entries
 
         match_clause = "MATCH (e:Entity {name: $name})"
         if entity_type:
