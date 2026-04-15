@@ -111,6 +111,25 @@ class TestMemorySystemIngest(unittest.TestCase):
         self.assertEqual(written_entities[0].properties["evidence_count"], 1)
         self.assertEqual(written_entities[0].properties["source_count"], 1)
 
+    def test_write_guard_marks_low_evidence_relations_as_hypothesis(self):
+        self.ms._extractor.extract.return_value = ExtractionResult(
+            entities=[
+                Entity(name="张三", entity_type="person", properties={}),
+                Entity(name="北京", entity_type="place", properties={}),
+            ],
+            relations=[Relation(source="张三", target="北京", relation_type="located_in", properties={})],
+            raw_text="张三最近在北京",
+        )
+        self.ms._store.upsert_entities.return_value = 2
+        self.ms._store.upsert_relations.return_value = 1
+
+        self.ms.ingest("张三最近在北京")
+
+        written_relations = self.ms._store.upsert_relations.call_args[0][0]
+        self.assertEqual(written_relations[0].properties["knowledge_state"], "hypothesis")
+        self.assertEqual(written_relations[0].properties["evidence_count"], 1)
+        self.assertEqual(written_relations[0].properties["source_count"], 1)
+
     def test_write_guard_can_keep_entity_stable_when_thresholds_met(self):
         config = MemoryConfig(write_guard=WriteGuardConfig(
             enabled=True,

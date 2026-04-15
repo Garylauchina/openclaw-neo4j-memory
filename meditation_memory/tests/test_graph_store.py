@@ -112,6 +112,7 @@ class TestGraphStoreOperations(unittest.TestCase):
             source="张三",
             target="北京大学",
             relation_type="works_at",
+            properties={"knowledge_state": "hypothesis", "evidence_count": 1, "source_count": 1, "source_id": "src1"},
         )
 
         mock_record = {"rel_type": "RELATES_TO"}
@@ -127,6 +128,10 @@ class TestGraphStoreOperations(unittest.TestCase):
         self.assertEqual(call_args[1]["source"], "张三")
         self.assertEqual(call_args[1]["target"], "北京大学")
         self.assertEqual(call_args[1]["relation_type"], "works_at")
+        self.assertEqual(call_args[1]["knowledge_state"], "hypothesis")
+        self.assertEqual(call_args[1]["evidence_count"], 1)
+        self.assertEqual(call_args[1]["source_count"], 1)
+        self.assertEqual(call_args[1]["source_id"], "src1")
 
     def test_upsert_relation_no_match(self):
         """测试关系写入时实体不存在"""

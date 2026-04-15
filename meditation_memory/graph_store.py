@@ -580,11 +580,34 @@ class GraphStore:
             r.properties = $properties,
             r.created_at = timestamp(),
             r.updated_at = timestamp(),
-            r.mention_count = 1
+            r.mention_count = 1,
+            r.knowledge_state = $knowledge_state,
+            r.evidence_count = $evidence_count,
+            r.source_count = $source_count,
+            r.last_source_id = $source_id
         ON MATCH SET
             r.properties = $properties,
             r.updated_at = timestamp(),
-            r.mention_count = coalesce(r.mention_count, 0) + 1
+            r.mention_count = coalesce(r.mention_count, 0) + 1,
+            r.evidence_count = coalesce(r.evidence_count, 0) + $evidence_count,
+            r.source_count = CASE
+                WHEN $source_id IS NOT NULL AND $source_id <> '' AND coalesce(r.last_source_id, '') <> $source_id
+                    THEN coalesce(r.source_count, 0) + $source_count
+                ELSE coalesce(r.source_count, 0)
+            END,
+            r.last_source_id = $source_id,
+            r.knowledge_state = CASE
+                WHEN (coalesce(r.evidence_count, 0) + $evidence_count) >= $stable_min_evidence_count
+                 AND (
+                    CASE
+                        WHEN $source_id IS NOT NULL AND $source_id <> '' AND coalesce(r.last_source_id, '') <> $source_id
+                            THEN coalesce(r.source_count, 0) + $source_count
+                        ELSE coalesce(r.source_count, 0)
+                    END
+                 ) >= $stable_min_source_count
+                THEN 'stable'
+                ELSE $knowledge_state
+            END
         RETURN type(r) AS rel_type
         """
         with self.driver.session(database=self._config.database) as session:
@@ -594,6 +617,12 @@ class GraphStore:
                 target=relation.target,
                 relation_type=relation.relation_type,
                 properties=json.dumps(relation.properties, ensure_ascii=False),
+                knowledge_state=relation.properties.get("knowledge_state", "hypothesis"),
+                evidence_count=relation.properties.get("evidence_count", 1),
+                source_count=relation.properties.get("source_count", 1),
+                source_id=relation.properties.get("source_id", ""),
+                stable_min_evidence_count=3,
+                stable_min_source_count=2,
             )
             record = result.single()
             return record is not None

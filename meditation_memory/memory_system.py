@@ -19,7 +19,7 @@ import hashlib
 from typing import Any, Dict, List, Optional
 
 from .config import MemoryConfig
-from .entity_extractor import Entity, EntityExtractor, ExtractionResult
+from .entity_extractor import Entity, EntityExtractor, ExtractionResult, Relation
 from .graph_store import GraphStore
 from .subgraph_context import ContextResult, SubgraphContext
 
@@ -154,6 +154,43 @@ class MemorySystem:
             else:
                 self._store.complete_pending_belief(pending_content)
 
+    def _apply_relation_write_guard(self, extraction: ExtractionResult, text: str) -> ExtractionResult:
+        """为关系附加最小可信写入防护元数据。"""
+        cfg = self._config.write_guard
+        if not cfg.enabled:
+            return extraction
+
+        source_context = (text or extraction.raw_text or "").strip()
+        source_id = hashlib.sha1(source_context.encode("utf-8")).hexdigest()[:12] if source_context else "direct"
+        guarded_relations = []
+        for relation in extraction.relations:
+            props = dict(relation.properties or {})
+            props.setdefault("source_context", source_context[:500])
+            props.setdefault("source_id", source_id)
+            evidence_count = int(props.get("evidence_count", 1) or 1)
+            source_count = int(props.get("source_count", 1) or 1)
+            belief_strength = float(props.get("belief_strength", 0.5) or 0.5)
+            knowledge_state = "stable"
+            if (
+                belief_strength < cfg.stable_belief_strength_threshold
+                or evidence_count < cfg.stable_min_evidence_count
+                or source_count < cfg.stable_min_source_count
+            ):
+                knowledge_state = "hypothesis"
+            props["evidence_count"] = evidence_count
+            props["source_count"] = source_count
+            props["knowledge_state"] = knowledge_state
+            guarded_relations.append(
+                Relation(
+                    source=relation.source,
+                    target=relation.target,
+                    relation_type=relation.relation_type,
+                    properties=props,
+                )
+            )
+        extraction.relations = guarded_relations
+        return extraction
+
     def _expire_stale_pending_beliefs(self) -> None:
         """清理超过 TTL 的待验证 belief。"""
         if not self._config.write_guard.enabled:
@@ -183,6 +220,7 @@ class MemorySystem:
         # 抽取实体和关系
         extraction = self._extractor.extract(text, use_llm=use_llm)
         extraction = self._apply_write_guard(extraction, text)
+        extraction = self._apply_relation_write_guard(extraction, text)
 
         # 写入实体
         entity_count = self._store.upsert_entities(extraction.entities)
@@ -204,6 +242,7 @@ class MemorySystem:
         """
         self._expire_stale_pending_beliefs()
         extraction = self._apply_write_guard(extraction, extraction.raw_text)
+        extraction = self._apply_relation_write_guard(extraction, extraction.raw_text)
         entity_count = self._store.upsert_entities(extraction.entities)
         self._sync_pending_beliefs(extraction.entities)
         relation_count = self._store.upsert_relations(extraction.relations)
@@ -313,6 +352,7 @@ class MemorySystem:
         # 对完整对话文本进行额外抽取
         final_extraction = self._extractor.extract(conversation_text, use_llm=use_llm)
         final_extraction = self._apply_write_guard(final_extraction, conversation_text)
+        final_extraction = self._apply_relation_write_guard(final_extraction, conversation_text)
         all_entities.extend(final_extraction.entities)
         all_relations.extend(final_extraction.relations)
         
