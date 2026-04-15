@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
-"""Audit meditation outcomes for a source-scoped probe.
+"""Audit meditation/distillation outcomes for a source-scoped probe.
 
 This is a read-only probe helper. It compares:
 - source-scoped imported entities
 - source-scoped relations
-- global meta-knowledge nodes mentioning those imported entities
+- claim / strategy / belief nodes connected to those imported entities
 
 Goal: provide a first bridge between online ingest retention and meditation-side outcomes.
 """
@@ -39,16 +39,18 @@ def fetch_source_relations(store: GraphStore, source_tag: str, import_batch: str
         return [dict(record) for record in session.run(query, source_tag=source_tag, import_batch=import_batch, limit=limit)]
 
 
-def fetch_related_meta_knowledge(store: GraphStore, entity_names: List[str], limit: int) -> List[Dict[str, Any]]:
+def fetch_related_outcomes(store: GraphStore, entity_names: List[str], limit: int) -> List[Dict[str, Any]]:
     if not entity_names:
         return []
     query = """
-    MATCH (m:MetaKnowledge)-[:ABOUT|RELATES_TO|DERIVED_FROM*1..2]-(e:Entity)
-    WHERE e.name IN $entity_names AND NOT m:Archived
-    RETURN m.id AS id,
-           coalesce(m.name, m.title, m.content, m.description, '') AS content,
+    MATCH (n)-[r]-(e:Entity)
+    WHERE e.name IN $entity_names
+      AND ANY(label IN labels(n) WHERE label IN ['Claim', 'Strategy', 'Belief'])
+    RETURN labels(n) AS labels,
+           type(r) AS rel_type,
+           coalesce(n.content, n.description, n.name, '') AS content,
            count(DISTINCT e) AS matched_entities
-    ORDER BY matched_entities DESC, content ASC
+    ORDER BY matched_entities DESC, rel_type ASC, content ASC
     LIMIT $limit
     """
     with store.driver.session(database=store._config.database) as session:
@@ -69,7 +71,7 @@ def main() -> int:
         entities = fetch_source_entities(store, args.source_tag, args.import_batch, args.entity_limit)
         relations = fetch_source_relations(store, args.source_tag, args.import_batch, args.relation_limit)
         entity_names = [row["name"] for row in entities]
-        meta_nodes = fetch_related_meta_knowledge(store, entity_names, args.meta_limit)
+        outcome_nodes = fetch_related_outcomes(store, entity_names, args.meta_limit)
     finally:
         store.close()
 
@@ -78,7 +80,7 @@ def main() -> int:
     print(f"import_batch={args.import_batch}")
     print(f"source_entities={len(entities)}")
     print(f"source_relations={len(relations)}")
-    print(f"matched_meta_knowledge={len(meta_nodes)}")
+    print(f"matched_outcome_nodes={len(outcome_nodes)}")
 
     print("\n--- Sample source entities ---")
     for row in entities[:20]:
@@ -88,10 +90,10 @@ def main() -> int:
     for row in relations[:20]:
         print(f"{row['source']}\t[{row['relation_type']}]\t{row['target']}")
 
-    print("\n--- Related meta knowledge ---")
-    for row in meta_nodes[:20]:
+    print("\n--- Related meditation/distillation outcomes ---")
+    for row in outcome_nodes[:20]:
         content = (row.get('content') or '').replace('\n', ' ')[:160]
-        print(f"matched={row['matched_entities']}\t{content}")
+        print(f"labels={row['labels']}\trel={row['rel_type']}\tmatched={row['matched_entities']}\t{content}")
     return 0
 
 
