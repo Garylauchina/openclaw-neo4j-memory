@@ -88,22 +88,57 @@ When testing external corpora, use this order:
 bash scripts/neo4j_backup_restore.sh backup
 ```
 
+### List existing backups
+
+```bash
+bash scripts/neo4j_backup_restore.sh list
+```
+
 ### Dry-run corpus import
 
 ```bash
 python scripts/test_corpus_import.py ./sample-corpus --dry-run
 ```
 
-### Real import
+### Small real import
 
 ```bash
-python scripts/test_corpus_import.py ./sample-corpus --limit-files 5
+python scripts/test_corpus_import.py ./sample-corpus --limit-files 5 --chunk-chars 1200
+```
+
+### Single-file import
+
+```bash
+python scripts/test_corpus_import.py ./sample-corpus/example.md
 ```
 
 ### Restore
 
 ```bash
 bash scripts/neo4j_backup_restore.sh restore backups/<your-dump>.dump
+```
+
+## Minimal usage examples
+
+### Example A: safe first experiment
+
+```bash
+bash scripts/neo4j_backup_restore.sh backup
+python scripts/test_corpus_import.py ./sample-corpus --dry-run
+python scripts/test_corpus_import.py ./sample-corpus --limit-files 3
+```
+
+### Example B: restore after a noisy import
+
+```bash
+bash scripts/neo4j_backup_restore.sh list
+bash scripts/neo4j_backup_restore.sh restore backups/neo4j-20260415-153000.dump
+```
+
+### Example C: import without LLM extraction
+
+```bash
+python scripts/test_corpus_import.py ./sample-corpus --no-llm --limit-files 2
 ```
 
 These helpers are intentionally for MVP experimentation, not a final production migration pipeline.
