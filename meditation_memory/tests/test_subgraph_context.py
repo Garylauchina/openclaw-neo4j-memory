@@ -160,7 +160,8 @@ class TestSubgraphContextPrompt(unittest.TestCase):
         self.mock_store.find_entity.return_value = {"name": "AI"}
         self.mock_store.get_subgraph_by_entities.return_value = {
             "nodes": [
-                {"name": "AI", "entity_type": "concept", "mention_count": 1},
+                {"name": "AI", "entity_type": "concept", "mention_count": 1, "knowledge_state": "stable"},
+                {"name": "AI Agent", "entity_type": "concept", "mention_count": 1, "knowledge_state": "hypothesis"},
                 {"name": "[META] AI相关知识帮助解释当前问题", "entity_type": "meta_knowledge", "mention_count": 3},
             ],
             "edges": [],
@@ -183,6 +184,7 @@ class TestSubgraphContextPrompt(unittest.TestCase):
         self.assertIn("用户当前问题：什么是AI？", prompt)
         self.assertIn("相关记忆与知识", prompt)
         self.assertIn("### 已知实体", prompt)
+        self.assertIn("### 待验证记忆", prompt)
         self.assertIn("### 相关元知识", prompt)
         self.assertIn("### 相关策略", prompt)
         self.assertIn("AI", prompt)

@@ -659,6 +659,17 @@ class SubgraphContext:
                 if not append_line(f"- {label}：{'、'.join(unique_names)}"):
                     break
 
+        hypothesis_nodes = [node for node in nodes if (node.get("knowledge_state") or "stable") == "hypothesis"]
+        if hypothesis_nodes:
+            append_line("")
+            if append_line("### 待验证记忆"):
+                for node in hypothesis_nodes[:3]:
+                    name = node.get("name", "")
+                    label = type_labels.get(node.get("entity_type", "其他"), node.get("entity_type", "其他"))
+                    reason = node.get("selection_reason", "待更多证据确认")
+                    if not append_line(f"- {label}：{name}（待验证，{reason}）"):
+                        break
+
         if edges:
             append_line("")
             if append_line("### 已知关系"):
