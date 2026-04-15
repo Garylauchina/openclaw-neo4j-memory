@@ -140,6 +140,7 @@ class TestMemorySystemIngest(unittest.TestCase):
         ms = MemorySystem(config)
         ms._store = MagicMock()
         ms._extractor = MagicMock()
+        ms._store.find_entity.return_value = None
         ms._extractor.extract.return_value = ExtractionResult(
             entities=[Entity(name="Neo4j", entity_type="technology", properties={"belief_strength": 0.8})],
             relations=[],
@@ -153,6 +154,36 @@ class TestMemorySystemIngest(unittest.TestCase):
         written_entities = ms._store.upsert_entities.call_args[0][0]
         self.assertEqual(written_entities[0].properties["knowledge_state"], "stable")
         ms._store.upsert_belief_node.assert_not_called()
+
+    def test_conflicting_entity_type_is_downgraded_to_hypothesis(self):
+        config = MemoryConfig(write_guard=WriteGuardConfig(
+            enabled=True,
+            stable_belief_strength_threshold=0.7,
+            stable_min_evidence_count=1,
+            stable_min_source_count=1,
+        ))
+        ms = MemorySystem(config)
+        ms._store = MagicMock()
+        ms._extractor = MagicMock()
+        ms._store.find_entity.side_effect = lambda name: {
+            "name": "Apple",
+            "entity_type": "organization",
+            "knowledge_state": "stable",
+        } if name == "Apple" else None
+        ms._extractor.extract.return_value = ExtractionResult(
+            entities=[Entity(name="Apple", entity_type="product", properties={"belief_strength": 0.9})],
+            relations=[],
+            raw_text="Apple 是一款产品",
+        )
+        ms._store.upsert_entities.return_value = 1
+        ms._store.upsert_relations.return_value = 0
+
+        ms.ingest("Apple 是一款产品")
+
+        written_entities = ms._store.upsert_entities.call_args[0][0]
+        self.assertEqual(written_entities[0].properties["knowledge_state"], "hypothesis")
+        self.assertTrue(written_entities[0].properties["conflict_with_existing"])
+        self.assertEqual(written_entities[0].properties["conflict_existing_type"], "organization")
 
     def test_hypothesis_entities_are_buffered_as_pending_beliefs(self):
         self.ms._extractor.extract.return_value = ExtractionResult(

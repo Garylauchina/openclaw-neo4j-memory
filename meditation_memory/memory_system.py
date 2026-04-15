@@ -117,6 +117,14 @@ class MemorySystem:
             ):
                 knowledge_state = "hypothesis"
 
+            existing_entity = self._store.find_entity(entity.name)
+            existing_type = (existing_entity or {}).get("entity_type") if existing_entity else None
+            existing_state = ((existing_entity or {}).get("knowledge_state") or "").lower() if existing_entity else ""
+            if existing_entity and existing_type and existing_type != entity.entity_type and existing_state == "stable":
+                knowledge_state = "hypothesis"
+                props["conflict_with_existing"] = True
+                props["conflict_existing_type"] = existing_type
+
             props["evidence_count"] = evidence_count
             props["source_count"] = source_count
             props["knowledge_state"] = knowledge_state
