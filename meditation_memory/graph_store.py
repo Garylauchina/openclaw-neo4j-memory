@@ -2660,6 +2660,25 @@ class GraphStore:
             result = session.run(query, entity_name=entity_name)
             return [dict(record) for record in result]
 
+    def get_claim_runtime_signal(self, entity_name: str) -> Dict[str, Any]:
+        """获取实体 claim 层对 runtime 的最小信号。"""
+        claims = self.get_entity_claims(entity_name)
+        if not claims:
+            return {
+                "has_competing_claims": False,
+                "conflict_score": 0,
+                "dominant_claim_state": None,
+                "dominant_claimed_value": None,
+            }
+        dominant = claims[0]
+        total_conflict = sum(int(c.get("conflict_score") or 0) for c in claims)
+        return {
+            "has_competing_claims": len(claims) > 1,
+            "conflict_score": total_conflict,
+            "dominant_claim_state": dominant.get("state"),
+            "dominant_claimed_value": dominant.get("claimed_value"),
+        }
+
     def apply_claim_feedback(
         self,
         entity_name: str,

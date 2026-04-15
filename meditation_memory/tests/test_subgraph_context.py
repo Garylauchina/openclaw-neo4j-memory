@@ -219,6 +219,7 @@ class TestSubgraphContextPrompt(unittest.TestCase):
         self.assertIn("selected_nodes", result.debug_info)
 
     def test_stable_entities_are_ranked_above_hypothesis_entities(self):
+        self.mock_store.get_claim_runtime_signal.return_value = {}
         nodes = self.ctx_builder._sanitize_nodes([
             {"name": "AI", "entity_type": "concept", "mention_count": 2, "knowledge_state": "hypothesis"},
             {"name": "机器学习", "entity_type": "concept", "mention_count": 2, "knowledge_state": "stable"},
@@ -227,6 +228,20 @@ class TestSubgraphContextPrompt(unittest.TestCase):
         self.assertEqual(nodes[0]["selection_reason"], "selected: stable entity priority")
         self.assertEqual(nodes[1]["selection_reason"], "downranked: hypothesis memory pending validation")
         self.assertGreater(nodes[0]["selection_score"], nodes[1]["selection_score"])
+
+    def test_competing_claims_downrank_entities_for_cautious_use(self):
+        self.mock_store.get_claim_runtime_signal.side_effect = lambda name: {
+            "AI": {"has_competing_claims": True, "conflict_score": 2, "dominant_claim_state": "stable", "dominant_claimed_value": "concept"},
+            "机器学习": {"has_competing_claims": False, "conflict_score": 0, "dominant_claim_state": "stable", "dominant_claimed_value": "concept"},
+        }.get(name, {})
+        nodes = self.ctx_builder._sanitize_nodes([
+            {"name": "AI", "entity_type": "concept", "mention_count": 4, "knowledge_state": "stable"},
+            {"name": "机器学习", "entity_type": "concept", "mention_count": 4, "knowledge_state": "stable"},
+        ], matched_entity_set=None)
+        ai_node = next(n for n in nodes if n["name"] == "AI")
+        ml_node = next(n for n in nodes if n["name"] == "机器学习")
+        self.assertEqual(ai_node["selection_reason"], "downranked: competing claims require cautious use")
+        self.assertLess(ai_node["selection_score"], ml_node["selection_score"])
 
     def test_related_to_edges_are_ranked_lower_than_specific_relations(self):
         edges = self.ctx_builder._sanitize_edges(

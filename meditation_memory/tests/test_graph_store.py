@@ -294,6 +294,16 @@ class TestGraphStoreOperations(unittest.TestCase):
         upd_id = self.store.record_belief_update("Apple", "organization", "contradict", 1, "Competing type observed")
         self.assertEqual(upd_id, "upd1")
 
+    def test_get_claim_runtime_signal(self):
+        self.store.get_entity_claims = MagicMock(return_value=[
+            {"claimed_value": "organization", "state": "stable", "conflict_score": 1},
+            {"claimed_value": "product", "state": "hypothesis", "conflict_score": 2},
+        ])
+        signal = self.store.get_claim_runtime_signal("Apple")
+        self.assertTrue(signal["has_competing_claims"])
+        self.assertEqual(signal["conflict_score"], 3)
+        self.assertEqual(signal["dominant_claimed_value"], "organization")
+
     def test_build_meta_cluster_signature_is_order_insensitive(self):
         sig1 = self.store._build_meta_cluster_signature(["张三", "项目A", "北京"])
         sig2 = self.store._build_meta_cluster_signature(["北京", "张三", "项目A", "张三"])

@@ -391,18 +391,23 @@ class SubgraphContext:
             mention_count = node.get("mention_count", 0) or 0
             entity_type = node.get("entity_type", "其他") or "其他"
             knowledge_state = (node.get("knowledge_state") or "stable").lower()
+            claim_signal = self._store.get_claim_runtime_signal(name) if hasattr(self._store, "get_claim_runtime_signal") else {}
+            if not isinstance(claim_signal, dict):
+                claim_signal = {}
             current = seen.get(name)
-            penalty, reason = self._node_selection_metadata(name, entity_type, mention_count, knowledge_state)
+            penalty, reason = self._node_selection_metadata(name, entity_type, mention_count, knowledge_state, claim_signal)
             query_boost = 2.5 if name in (matched_entity_set or set()) else 0.0
             state_boost = 0.6 if knowledge_state == "stable" else -1.2
+            claim_penalty = -0.8 if claim_signal.get("has_competing_claims") and (claim_signal.get("conflict_score", 0) >= 1) else 0.0
             candidate = {
                 "name": name,
                 "entity_type": entity_type,
                 "mention_count": mention_count,
                 "knowledge_state": knowledge_state,
+                "claim_runtime_signal": claim_signal,
                 "selection_penalty": penalty,
                 "selection_reason": reason,
-                "selection_score": self._selection_score(mention_count, penalty) + query_boost + state_boost,
+                "selection_score": self._selection_score(mention_count, penalty) + query_boost + state_boost + claim_penalty,
             }
             if current is None or mention_count > (current.get("mention_count", 0) or 0):
                 seen[name] = candidate
@@ -422,7 +427,10 @@ class SubgraphContext:
         base = math.log1p(float(mention_count or 0))
         return round(base - (penalty * 5.0), 4)
 
-    def _node_selection_metadata(self, name: str, entity_type: str, mention_count: int, knowledge_state: str = "stable") -> Tuple[int, str]:
+    def _node_selection_metadata(self, name: str, entity_type: str, mention_count: int, knowledge_state: str = "stable", claim_signal: Optional[Dict[str, Any]] = None) -> Tuple[int, str]:
+        claim_signal = claim_signal or {}
+        if claim_signal.get("has_competing_claims") and (claim_signal.get("conflict_score", 0) >= 1):
+            return 2, "downranked: competing claims require cautious use"
         if knowledge_state == "hypothesis":
             if entity_type == "concept" and len(name) <= 4 and mention_count <= 1:
                 return 3, "downranked: hypothesis low-support short concept"
