@@ -65,6 +65,20 @@ This step does not yet include:
 
 It is only the first sample-adaptation step.
 
+## Current baseline status
+
+The current mainline baseline is:
+- `source_tag=longmemeval-probe-v6`
+- `import_batch=longmemeval-oracle-run-006`
+- default no-scaffolding export
+- current `rules / no-llm` ingest path
+
+Current observed baseline behavior:
+- source-scoped entity retention is visible and auditable
+- source-scoped relation retention is effectively zero
+- claim layer appears as the first structured cognitive shell
+- higher-order meditation outcomes are not yet visible on this baseline
+
 ## Why scaffolding is excluded by default
 
 The benchmark question / reference answer / sample title are useful for human inspection,
