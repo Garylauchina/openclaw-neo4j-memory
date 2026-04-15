@@ -229,6 +229,23 @@ class MemorySystem:
             else:
                 self._store.complete_pending_belief(pending_content)
 
+    def _anchor_import_batch(self, entities: List[Entity]) -> None:
+        """将本次导入锚定到 ImportBatch，供 probe/source 审计。"""
+        if not entities or not hasattr(self._store, "anchor_entities_to_import_batch"):
+            return
+        first_props = entities[0].properties or {}
+        import_batch = first_props.get("import_batch", "")
+        source_tag = first_props.get("source_tag", "")
+        source_path = first_props.get("source_path", "")
+        if not import_batch:
+            return
+        self._store.anchor_entities_to_import_batch(
+            entities,
+            source_tag=source_tag,
+            import_batch=import_batch,
+            source_path=source_path,
+        )
+
     def _apply_relation_write_guard(self, extraction: ExtractionResult, text: str) -> ExtractionResult:
         """为关系附加最小可信写入防护元数据。"""
         cfg = self._config.write_guard
@@ -301,6 +318,7 @@ class MemorySystem:
         entity_count = self._store.upsert_entities(extraction.entities)
         self._sync_entity_claims(extraction.entities)
         self._sync_pending_beliefs(extraction.entities)
+        self._anchor_import_batch(extraction.entities)
 
         # 写入关系
         relation_count = self._store.upsert_relations(extraction.relations)
@@ -322,6 +340,7 @@ class MemorySystem:
         entity_count = self._store.upsert_entities(extraction.entities)
         self._sync_entity_claims(extraction.entities)
         self._sync_pending_beliefs(extraction.entities)
+        self._anchor_import_batch(extraction.entities)
         relation_count = self._store.upsert_relations(extraction.relations)
 
         return IngestResult(
@@ -443,6 +462,7 @@ class MemorySystem:
         entity_count = self._store.upsert_entities(unique_entities)
         self._sync_entity_claims(unique_entities)
         self._sync_pending_beliefs(unique_entities)
+        self._anchor_import_batch(unique_entities)
         relation_count = self._store.upsert_relations(unique_relations)
         
         return IngestResult(

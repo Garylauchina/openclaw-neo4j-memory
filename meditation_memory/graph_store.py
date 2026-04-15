@@ -199,6 +199,8 @@ class GraphStore:
             "CREATE INDEX observation_id_idx IF NOT EXISTS FOR (o:Observation) ON (o.observation_id)",
             "CREATE INDEX outcome_id_idx IF NOT EXISTS FOR (o:Outcome) ON (o.outcome_id)",
             "CREATE INDEX belief_update_id_idx IF NOT EXISTS FOR (u:BeliefUpdate) ON (u.update_id)",
+            "CREATE INDEX import_batch_idx IF NOT EXISTS FOR (b:ImportBatch) ON (b.import_batch)",
+            "CREATE INDEX import_batch_source_tag_idx IF NOT EXISTS FOR (b:ImportBatch) ON (b.source_tag)",
         ]
         with self.driver.session(database=self._config.database) as session:
             for query in queries:
@@ -402,23 +404,66 @@ class GraphStore:
             record = result.single()
             return record["updated"] if record else 0
 
+    def anchor_entities_to_import_batch(self, entities: List[Entity], source_tag: str = "", import_batch: str = "", source_path: str = "") -> int:
+        """为本次 probe/import 建立 ImportBatch 锚点和 SEEN_IN 关系。"""
+        if not entities or not import_batch:
+            return 0
+        batch = []
+        seen = set()
+        for entity in entities:
+            key = (entity.name, source_path or entity.properties.get("source_path", ""))
+            if key in seen:
+                continue
+            seen.add(key)
+            batch.append({
+                "name": entity.name,
+                "source_path": source_path or entity.properties.get("source_path", ""),
+            })
+        query = """
+        MERGE (b:ImportBatch {import_batch: $import_batch})
+        ON CREATE SET
+            b.source_tag = $source_tag,
+            b.source_path = $source_path,
+            b.created_at = timestamp(),
+            b.updated_at = timestamp()
+        ON MATCH SET
+            b.source_tag = CASE WHEN $source_tag <> '' THEN $source_tag ELSE b.source_tag END,
+            b.source_path = CASE WHEN $source_path <> '' THEN $source_path ELSE b.source_path END,
+            b.updated_at = timestamp()
+        WITH b
+        UNWIND $batch AS item
+        MATCH (e:Entity {name: item.name})
+        MERGE (e)-[:SEEN_IN]->(b)
+        RETURN count(e) AS linked
+        """
+        with self.driver.session(database=self._config.database) as session:
+            result = session.run(
+                query,
+                import_batch=import_batch,
+                source_tag=source_tag,
+                source_path=source_path,
+                batch=batch,
+            )
+            record = result.single()
+            return int(record["linked"]) if record and record.get("linked") is not None else 0
+
     def get_entities_by_source(self, source_tag: str = "", import_batch: str = "", limit: int = 50) -> List[Dict[str, Any]]:
         """按 source_tag / import_batch 查询实体，供实验审计使用。"""
         clauses = []
         if source_tag:
-            clauses.append("e.source_tag = $source_tag")
+            clauses.append("b.source_tag = $source_tag")
         if import_batch:
-            clauses.append("e.import_batch = $import_batch")
+            clauses.append("b.import_batch = $import_batch")
         where_clause = " AND ".join(clauses) if clauses else "true"
         query = f"""
-        MATCH (e:Entity)
+        MATCH (e:Entity)-[:SEEN_IN]->(b:ImportBatch)
         WHERE {where_clause}
         RETURN e.name AS name,
                e.entity_type AS entity_type,
                e.mention_count AS mention_count,
-               e.source_tag AS source_tag,
-               e.import_batch AS import_batch,
-               e.source_path AS source_path
+               b.source_tag AS source_tag,
+               b.import_batch AS import_batch,
+               b.source_path AS source_path
         ORDER BY e.mention_count DESC, e.name ASC
         LIMIT $limit
         """

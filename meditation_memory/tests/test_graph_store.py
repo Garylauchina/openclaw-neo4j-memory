@@ -316,6 +316,19 @@ class TestGraphStoreOperations(unittest.TestCase):
         self.assertEqual(signal["support_score"], 4)
         self.assertEqual(signal["dominant_claimed_value"], "organization")
 
+    def test_anchor_entities_to_import_batch(self):
+        mock_result = MagicMock()
+        mock_result.single.return_value = {"linked": 1}
+        self.mock_session.run.return_value = mock_result
+
+        count = self.store.anchor_entities_to_import_batch(
+            [Entity(name="Probe", entity_type="concept", properties={"source_path": "/tmp/sample.md"})],
+            source_tag="longmemeval-sample",
+            import_batch="run-001",
+            source_path="/tmp/sample.md",
+        )
+        self.assertEqual(count, 1)
+
     def test_get_entities_by_source(self):
         mock_records = [
             {"name": "Probe", "entity_type": "concept", "mention_count": 3, "source_tag": "longmemeval-sample", "import_batch": "run-001", "source_path": "/tmp/sample.md"},

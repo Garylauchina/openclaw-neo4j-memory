@@ -131,6 +131,7 @@ class TestMemorySystemIngest(unittest.TestCase):
         self.assertEqual(written_entities[0].properties["source_tag"], "longmemeval-sample")
         self.assertEqual(written_entities[0].properties["import_batch"], "run-001")
         self.assertEqual(written_entities[0].properties["source_path"], "/tmp/sample.md")
+        self.ms._store.anchor_entities_to_import_batch.assert_called_once()
 
     def test_write_guard_marks_low_evidence_relations_as_hypothesis(self):
         self.ms._extractor.extract.return_value = ExtractionResult(
