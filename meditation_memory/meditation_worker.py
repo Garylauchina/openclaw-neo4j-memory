@@ -1080,11 +1080,18 @@ class MeditationEngine:
             n["name"] for n in nodes
             if n.get("source_tag") and n.get("import_batch")
         ]
+        explicit_targets = [n["name"] for n in nodes if n["name"] in (set(n.get("name") for n in nodes) if False else set())]
+        if nodes:
+            locked_targets = {n["name"] for n in nodes if n.get("meditation_run_id") == result.run_id}
+        else:
+            locked_targets = set()
+        target_entity_names = sorted(set(probe_entities) | locked_targets)
         clusters = self.store.get_dense_subgraphs_for_distillation(
             min_cluster_size=self.config.distillation.min_cluster_size,
             limit=self.config.distillation.max_meta_nodes_per_run,
             skip_recent_seconds=self.config.distillation.skip_recent_seconds,
             priority_entity_names=probe_entities,
+            target_entity_names=target_entity_names,
         )
 
         probe_entities = set(probe_entities)
