@@ -216,6 +216,16 @@ class TestSubgraphContextPrompt(unittest.TestCase):
         self.assertGreater(ai_node["selection_score"], low_info["selection_score"])
         self.assertIn("selected_nodes", result.debug_info)
 
+    def test_stable_entities_are_ranked_above_hypothesis_entities(self):
+        nodes = self.ctx_builder._sanitize_nodes([
+            {"name": "AI", "entity_type": "concept", "mention_count": 2, "knowledge_state": "hypothesis"},
+            {"name": "机器学习", "entity_type": "concept", "mention_count": 2, "knowledge_state": "stable"},
+        ], matched_entity_set=None)
+        self.assertEqual(nodes[0]["name"], "机器学习")
+        self.assertEqual(nodes[0]["selection_reason"], "selected: stable entity priority")
+        self.assertEqual(nodes[1]["selection_reason"], "downranked: hypothesis memory pending validation")
+        self.assertGreater(nodes[0]["selection_score"], nodes[1]["selection_score"])
+
     def test_related_to_edges_are_ranked_lower_than_specific_relations(self):
         edges = self.ctx_builder._sanitize_edges(
             [
@@ -329,9 +339,9 @@ class TestSubgraphContextPrompt(unittest.TestCase):
     def test_context_result_to_dict_contains_debug_info(self):
         result = ContextResult(
             context_text="测试上下文",
-            subgraph={"nodes": [{"name": "A"}], "edges": [], "meta_nodes": [], "strategies": []},
+            subgraph={"nodes": [{"name": "A", "knowledge_state": "hypothesis"}], "edges": [], "meta_nodes": [], "strategies": []},
             matched_entities=["A"],
-            debug_info={"selected_nodes": [{"name": "A", "selection_reason": "selected"}], "selected_strategies": []},
+            debug_info={"selected_nodes": [{"name": "A", "knowledge_state": "hypothesis", "selection_reason": "selected"}], "selected_strategies": []},
         )
         data = result.to_dict()
         self.assertIn("debug_info", data)

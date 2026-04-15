@@ -390,16 +390,19 @@ class SubgraphContext:
 
             mention_count = node.get("mention_count", 0) or 0
             entity_type = node.get("entity_type", "其他") or "其他"
+            knowledge_state = (node.get("knowledge_state") or "stable").lower()
             current = seen.get(name)
-            penalty, reason = self._node_selection_metadata(name, entity_type, mention_count)
+            penalty, reason = self._node_selection_metadata(name, entity_type, mention_count, knowledge_state)
             query_boost = 2.5 if name in (matched_entity_set or set()) else 0.0
+            state_boost = 0.6 if knowledge_state == "stable" else -1.2
             candidate = {
                 "name": name,
                 "entity_type": entity_type,
                 "mention_count": mention_count,
+                "knowledge_state": knowledge_state,
                 "selection_penalty": penalty,
                 "selection_reason": reason,
-                "selection_score": self._selection_score(mention_count, penalty) + query_boost,
+                "selection_score": self._selection_score(mention_count, penalty) + query_boost + state_boost,
             }
             if current is None or mention_count > (current.get("mention_count", 0) or 0):
                 seen[name] = candidate
@@ -419,13 +422,17 @@ class SubgraphContext:
         base = math.log1p(float(mention_count or 0))
         return round(base - (penalty * 5.0), 4)
 
-    def _node_selection_metadata(self, name: str, entity_type: str, mention_count: int) -> Tuple[int, str]:
+    def _node_selection_metadata(self, name: str, entity_type: str, mention_count: int, knowledge_state: str = "stable") -> Tuple[int, str]:
+        if knowledge_state == "hypothesis":
+            if entity_type == "concept" and len(name) <= 4 and mention_count <= 1:
+                return 3, "downranked: hypothesis low-support short concept"
+            return 1, "downranked: hypothesis memory pending validation"
         if entity_type == "concept" and len(name) <= 4:
             if any(keyword in name for keyword in LOW_INFORMATION_CONCEPT_KEYWORDS):
                 return 2, "downranked: low-information short concept"
             if mention_count <= 1:
                 return 1, "downranked: sparse short concept"
-        return 0, "selected: default entity priority"
+        return 0, "selected: stable entity priority"
 
     def _sanitize_meta_nodes(self, nodes: List[Dict[str, Any]], matched_entity_set: Optional[Set[str]] = None) -> List[Dict[str, Any]]:
         seen: Dict[str, Dict[str, Any]] = {}
@@ -698,6 +705,7 @@ class SubgraphContext:
                     "name": node.get("name"),
                     "entity_type": node.get("entity_type"),
                     "mention_count": node.get("mention_count"),
+                    "knowledge_state": node.get("knowledge_state", "stable"),
                     "selection_penalty": node.get("selection_penalty", 0),
                     "selection_reason": node.get("selection_reason", ""),
                     "selection_score": node.get("selection_score", 0.0),
