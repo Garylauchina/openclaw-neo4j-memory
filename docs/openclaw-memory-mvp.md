@@ -141,4 +141,6 @@ bash scripts/neo4j_backup_restore.sh restore backups/neo4j-20260415-153000.dump
 python scripts/test_corpus_import.py ./sample-corpus --no-llm --limit-files 2
 ```
 
+Note: the backup/restore helper uses an offline `neo4j-admin` dump/load flow against the docker volume, so it will briefly stop Neo4j during backup and restore.
+
 These helpers are intentionally for MVP experimentation, not a final production migration pipeline.

@@ -35,15 +35,26 @@ backup_db() {
   local dump_name="${1:-$DUMP_NAME_DEFAULT}"
   local dump_path="$BACKUP_DIR/$dump_name"
 
-  echo "[1/3] stopping memory-api and mcp-server"
+  echo "[1/4] stopping memory-api and mcp-server"
   docker compose -f "$PROJECT_DIR/docker-compose.yml" stop memory-api mcp-server >/dev/null
 
-  echo "[2/3] creating dump: $dump_path"
-  docker exec "$CONTAINER_NAME" neo4j-admin database dump "$DATABASE_NAME" --to-path=/tmp >/dev/null
-  docker cp "$CONTAINER_NAME:/tmp/${DATABASE_NAME}.dump" "$dump_path"
-  docker exec "$CONTAINER_NAME" rm -f "/tmp/${DATABASE_NAME}.dump"
+  echo "[2/4] stopping neo4j for offline dump"
+  docker compose -f "$PROJECT_DIR/docker-compose.yml" stop neo4j >/dev/null
 
-  echo "[3/3] restarting memory-api and mcp-server"
+  echo "[3/4] creating offline dump via one-shot neo4j-admin: $dump_path"
+  docker run --rm \
+    -v neo4j-memory_neo4j_data:/data \
+    -v "$BACKUP_DIR:/backups" \
+    neo4j:5.26-community \
+    neo4j-admin database dump "$DATABASE_NAME" --to-path=/backups --overwrite-destination=true >/dev/null
+
+  if [[ "$dump_name" != "${DATABASE_NAME}.dump" ]]; then
+    mv "$BACKUP_DIR/${DATABASE_NAME}.dump" "$dump_path"
+  fi
+
+  echo "[4/4] restarting services"
+  docker compose -f "$PROJECT_DIR/docker-compose.yml" up -d neo4j >/dev/null
+  sleep 8
   docker compose -f "$PROJECT_DIR/docker-compose.yml" start memory-api mcp-server >/dev/null
 
   echo "Backup created: $dump_path"
@@ -64,17 +75,18 @@ restore_db() {
   echo "[1/4] stopping services"
   docker compose -f "$PROJECT_DIR/docker-compose.yml" stop memory-api mcp-server neo4j >/dev/null
 
-  echo "[2/4] starting neo4j only"
-  docker compose -f "$PROJECT_DIR/docker-compose.yml" up -d neo4j >/dev/null
-  sleep 8
+  echo "[2/4] preparing dump for offline load"
+  cp "$source_dump" "$BACKUP_DIR/${DATABASE_NAME}.dump"
 
-  echo "[3/4] loading dump from $source_dump"
-  docker cp "$source_dump" "$CONTAINER_NAME:/tmp/${DATABASE_NAME}.dump"
-  docker exec "$CONTAINER_NAME" neo4j-admin database load "$DATABASE_NAME" --from-path=/tmp --overwrite-destination=true >/dev/null
-  docker exec "$CONTAINER_NAME" rm -f "/tmp/${DATABASE_NAME}.dump"
+  echo "[3/4] loading dump via one-shot neo4j-admin"
+  docker run --rm \
+    -v neo4j-memory_neo4j_data:/data \
+    -v "$BACKUP_DIR:/backups" \
+    neo4j:5.26-community \
+    neo4j-admin database load "$DATABASE_NAME" --from-path=/backups --overwrite-destination=true >/dev/null
 
   echo "[4/4] restarting all services"
-  docker compose -f "$PROJECT_DIR/docker-compose.yml" restart neo4j >/dev/null
+  docker compose -f "$PROJECT_DIR/docker-compose.yml" up -d neo4j >/dev/null
   sleep 8
   docker compose -f "$PROJECT_DIR/docker-compose.yml" start memory-api mcp-server >/dev/null
 
