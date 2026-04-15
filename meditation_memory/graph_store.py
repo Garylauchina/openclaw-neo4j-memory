@@ -2071,6 +2071,11 @@ class GraphStore:
         meta_entity_type: str = "meta_knowledge",
         summarizes_rel_type: str = "SUMMARIZES",
         center_entity_name: Optional[str] = None,
+        meditation_run_id: Optional[str] = None,
+        source_tag: Optional[str] = None,
+        import_batch: Optional[str] = None,
+        probe_entity_names: Optional[List[str]] = None,
+        probe_overlap_count: int = 0,
     ) -> bool:
         """
         创建元知识节点并建立到底层事实节点的 SUMMARIZES 关系。
@@ -2101,7 +2106,12 @@ class GraphStore:
             SET m.description = $summary,
                 m.updated_at = timestamp(),
                 m.cluster_signature = $cluster_signature,
-                m.mention_count = coalesce(m.mention_count, 0) + 1
+                m.mention_count = coalesce(m.mention_count, 0) + 1,
+                m.meditation_run_id = coalesce($meditation_run_id, m.meditation_run_id),
+                m.source_tag = coalesce($source_tag, m.source_tag),
+                m.import_batch = coalesce($import_batch, m.import_batch),
+                m.probe_entity_names = coalesce($probe_entity_names, m.probe_entity_names),
+                m.probe_overlap_count = CASE WHEN $probe_overlap_count > 0 THEN $probe_overlap_count ELSE coalesce(m.probe_overlap_count, 0) END
             RETURN elementId(m) AS eid
             """
             link_query = """
@@ -2113,7 +2123,15 @@ class GraphStore:
                 r.created_at = timestamp(),
                 r.updated_at = timestamp(),
                 r.mention_count = 1,
-                r.properties = "{}"
+                r.properties = "{}",
+                r.meditation_run_id = $meditation_run_id,
+                r.source_tag = $source_tag,
+                r.import_batch = $import_batch
+            ON MATCH SET
+                r.updated_at = timestamp(),
+                r.meditation_run_id = coalesce($meditation_run_id, r.meditation_run_id),
+                r.source_tag = coalesce($source_tag, r.source_tag),
+                r.import_batch = coalesce($import_batch, r.import_batch)
             RETURN type(r) AS rel_type
             """
             touch_center_query = """
@@ -2129,6 +2147,11 @@ class GraphStore:
                         entity_type=meta_entity_type,
                         summary=summary,
                         cluster_signature=cluster_signature,
+                        meditation_run_id=meditation_run_id,
+                        source_tag=source_tag,
+                        import_batch=import_batch,
+                        probe_entity_names=probe_entity_names,
+                        probe_overlap_count=probe_overlap_count,
                     )
                     for entity_name in related_entity_names:
                         session.run(
@@ -2137,6 +2160,9 @@ class GraphStore:
                             entity_type=meta_entity_type,
                             entity_name=entity_name,
                             rel_type=summarizes_rel_type,
+                            meditation_run_id=meditation_run_id,
+                            source_tag=source_tag,
+                            import_batch=import_batch,
                         )
                     if center_entity_name:
                         session.run(touch_center_query, center_name=center_entity_name)
@@ -2158,11 +2184,21 @@ class GraphStore:
             m.cluster_signature = $cluster_signature,
             m.mention_count = 1,
             m.created_by = "meditation",
-            m.activation_level = 1.0
+            m.activation_level = 1.0,
+            m.meditation_run_id = $meditation_run_id,
+            m.source_tag = $source_tag,
+            m.import_batch = $import_batch,
+            m.probe_entity_names = $probe_entity_names,
+            m.probe_overlap_count = $probe_overlap_count
         ON MATCH SET
             m.description = $summary,
             m.updated_at = timestamp(),
-            m.cluster_signature = $cluster_signature
+            m.cluster_signature = $cluster_signature,
+            m.meditation_run_id = coalesce($meditation_run_id, m.meditation_run_id),
+            m.source_tag = coalesce($source_tag, m.source_tag),
+            m.import_batch = coalesce($import_batch, m.import_batch),
+            m.probe_entity_names = coalesce($probe_entity_names, m.probe_entity_names),
+            m.probe_overlap_count = CASE WHEN $probe_overlap_count > 0 THEN $probe_overlap_count ELSE coalesce(m.probe_overlap_count, 0) END
         RETURN elementId(m) AS eid
         """
         link_query = """
@@ -2190,6 +2226,11 @@ class GraphStore:
                     entity_type=meta_entity_type,
                     summary=summary,
                     cluster_signature=cluster_signature,
+                    meditation_run_id=meditation_run_id,
+                    source_tag=source_tag,
+                    import_batch=import_batch,
+                    probe_entity_names=probe_entity_names,
+                    probe_overlap_count=probe_overlap_count,
                 )
                 if not result.single():
                     return False
@@ -2201,6 +2242,9 @@ class GraphStore:
                         entity_type=meta_entity_type,
                         entity_name=entity_name,
                         rel_type=summarizes_rel_type,
+                        meditation_run_id=meditation_run_id,
+                        source_tag=source_tag,
+                        import_batch=import_batch,
                     )
                 if center_entity_name:
                     session.run(touch_center_query, center_name=center_entity_name)

@@ -1082,10 +1082,20 @@ class MeditationEngine:
             skip_recent_seconds=self.config.distillation.skip_recent_seconds,
         )
 
+        probe_entities = {
+            n["name"] for n in nodes
+            if n.get("source_tag") and n.get("import_batch")
+        }
         for cluster in clusters:
             center_name = cluster["center_name"]
             neighbor_names = [n["name"] for n in cluster["neighbor_list"]]
             edges = self.store.get_cluster_edges(center_name, neighbor_names)
+            source_tags = {n.get("source_tag") for n in [cluster, *cluster["neighbor_list"]] if n.get("source_tag")}
+            import_batches = {n.get("import_batch") for n in [cluster, *cluster["neighbor_list"]] if n.get("import_batch")}
+            source_tag = next(iter(source_tags)) if len(source_tags) == 1 else None
+            import_batch = next(iter(import_batches)) if len(import_batches) == 1 else None
+            related_probe_entity_names = [name for name in [center_name, *neighbor_names] if name in probe_entities][:20]
+            probe_overlap_count = len(related_probe_entity_names)
 
             summary = self.llm.distill_knowledge(center_name, cluster["neighbor_list"], edges)
             if summary:
@@ -1103,6 +1113,11 @@ class MeditationEngine:
                         self.config.distillation.meta_knowledge_entity_type,
                         self.config.distillation.summarizes_relation_type,
                         center_entity_name=center_name,
+                        meditation_run_id=result.run_id,
+                        source_tag=source_tag,
+                        import_batch=import_batch,
+                        probe_entity_names=related_probe_entity_names or None,
+                        probe_overlap_count=probe_overlap_count,
                     ):
                         result.meta_knowledge_created += 1
 
