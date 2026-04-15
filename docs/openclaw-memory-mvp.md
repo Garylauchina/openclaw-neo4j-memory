@@ -69,3 +69,41 @@ This MVP does not include:
 - minimal wrapper: `openclaw_memory_mvp.py`
 - MVP mapping doc: `docs/openclaw-memory-mvp.md`
 - skill guidance update: `skills/neo4j-memory.md`
+- external corpus test import script: `scripts/test_corpus_import.py`
+- local backup/restore helper: `scripts/neo4j_backup_restore.sh`
+
+## Safe experiment flow for external corpora
+
+When testing external corpora, use this order:
+
+1. create a backup
+2. run a dry-run corpus import
+3. run a small real import
+4. validate retrieval / stats
+5. restore if the experiment polluted the graph
+
+### Backup
+
+```bash
+bash scripts/neo4j_backup_restore.sh backup
+```
+
+### Dry-run corpus import
+
+```bash
+python scripts/test_corpus_import.py ./sample-corpus --dry-run
+```
+
+### Real import
+
+```bash
+python scripts/test_corpus_import.py ./sample-corpus --limit-files 5
+```
+
+### Restore
+
+```bash
+bash scripts/neo4j_backup_restore.sh restore backups/<your-dump>.dump
+```
+
+These helpers are intentionally for MVP experimentation, not a final production migration pipeline.
