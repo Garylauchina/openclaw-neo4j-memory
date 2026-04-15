@@ -182,3 +182,15 @@ python scripts/test_corpus_import.py tmp/longmemeval-sample \
 
 See also:
 - `docs/longmemeval-sample-plan.md`
+
+## Source-scoped probe audit
+
+After a source-tagged import probe, you can inspect the resulting entity shape with:
+
+```bash
+python scripts/audit_source_entities.py \
+  --source-tag longmemeval-probe-v4 \
+  --import-batch longmemeval-oracle-run-004
+```
+
+This is intended for probe analysis, not graph mutation.
