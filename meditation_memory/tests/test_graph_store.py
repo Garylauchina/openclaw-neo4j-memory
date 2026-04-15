@@ -270,6 +270,17 @@ class TestGraphStoreOperations(unittest.TestCase):
         result = self.store.sync_entity_type_from_claims("Apple")
         self.assertEqual(result["entity_type"], "organization")
 
+    def test_sync_entity_type_from_single_claim(self):
+        self.store.get_entity_claims = MagicMock(return_value=[
+            {"claimed_value": "organization", "state": "stable", "net_confidence": 3},
+        ])
+        mock_result = MagicMock()
+        mock_result.single.return_value = {"name": "Apple", "entity_type": "organization", "knowledge_state": "stable"}
+        self.mock_session.run.return_value = mock_result
+
+        result = self.store.sync_entity_type_from_claims("Apple")
+        self.assertEqual(result["entity_type"], "organization")
+
     def test_record_claim_observation(self):
         mock_result = MagicMock()
         mock_result.single.return_value = {"observation_id": "obs1"}

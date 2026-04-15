@@ -2723,7 +2723,7 @@ class GraphStore:
         dominant = claims[0]
         second = claims[1] if len(claims) > 1 else None
         dominant_score = dominant.get("net_confidence") or 0
-        second_score = second.get("net_confidence") or -999
+        second_score = (second.get("net_confidence") or -999) if second else -999
         query = """
         MATCH (e:Entity {name: $entity_name})
         SET e.entity_type = CASE
