@@ -211,3 +211,14 @@ python scripts/diagnose_rule_relation_retention.py \
   --chunk-chars 1200 \
   --limit-chunks 5
 ```
+
+## Current practical boundary for LongMemEval-style probes
+
+For LongMemEval-style long-dialogue probes, the current `rules` / `no-llm` path is best treated as a **material-retention baseline**:
+- useful for source-scoped entity retention and audit
+- useful for low-information contamination diagnosis
+- **not** a reliable path for meaningful relation retention on this corpus shape
+
+In practice, relation / experience / strategy structure on this kind of input should be expected to come more from:
+- LLM extraction paths
+- or later asynchronous meditation / distillation
