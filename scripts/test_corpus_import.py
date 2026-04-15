@@ -44,6 +44,8 @@ def main() -> int:
     parser.add_argument("--limit-files", type=int, default=0, help="Max number of files to process (0 = unlimited)")
     parser.add_argument("--dry-run", action="store_true", help="Preview only, do not write")
     parser.add_argument("--no-llm", action="store_true", help="Disable LLM extraction")
+    parser.add_argument("--source-tag", default="external_corpus_test", help="Source tag for this import batch")
+    parser.add_argument("--import-batch", default="", help="Explicit import batch id")
     args = parser.parse_args()
 
     target = Path(args.input).expanduser().resolve()
@@ -63,6 +65,7 @@ def main() -> int:
     total_chunks = 0
     total_entities = 0
     total_relations = 0
+    import_batch = args.import_batch or f"{target.name}-{target.stat().st_mtime_ns}"
 
     memory = None
     if not args.dry_run:
@@ -82,6 +85,8 @@ def main() -> int:
                 total_chunks += 1
                 metadata = {
                     "source_path": str(file_path),
+                    "source_tag": args.source_tag,
+                    "import_batch": import_batch,
                     "chunk_index": idx,
                     "chunk_total": len(chunks),
                     "import_mode": "test_corpus_import",
@@ -102,6 +107,8 @@ def main() -> int:
             memory.close()
 
     print("\n=== Summary ===")
+    print(f"source_tag={args.source_tag}")
+    print(f"import_batch={import_batch}")
     print(f"files={total_files}")
     print(f"chunks={total_chunks}")
     if not args.dry_run:

@@ -103,7 +103,7 @@ python scripts/test_corpus_import.py ./sample-corpus --dry-run
 ### Small real import
 
 ```bash
-python scripts/test_corpus_import.py ./sample-corpus --limit-files 5 --chunk-chars 1200
+python scripts/test_corpus_import.py ./sample-corpus --limit-files 5 --chunk-chars 1200 --source-tag my-test-corpus
 ```
 
 ### Single-file import
@@ -124,8 +124,8 @@ bash scripts/neo4j_backup_restore.sh restore backups/<your-dump>.dump
 
 ```bash
 bash scripts/neo4j_backup_restore.sh backup
-python scripts/test_corpus_import.py ./sample-corpus --dry-run
-python scripts/test_corpus_import.py ./sample-corpus --limit-files 3
+python scripts/test_corpus_import.py ./sample-corpus --dry-run --source-tag my-test-corpus
+python scripts/test_corpus_import.py ./sample-corpus --limit-files 3 --source-tag my-test-corpus
 ```
 
 ### Example B: restore after a noisy import
@@ -138,8 +138,26 @@ bash scripts/neo4j_backup_restore.sh restore backups/neo4j-20260415-153000.dump
 ### Example C: import without LLM extraction
 
 ```bash
-python scripts/test_corpus_import.py ./sample-corpus --no-llm --limit-files 2
+python scripts/test_corpus_import.py ./sample-corpus --no-llm --limit-files 2 --source-tag my-test-corpus
 ```
+
+## Minimal source scoping
+
+The MVP import script now supports minimal experiment tracking metadata:
+
+- `--source-tag` to label the corpus or experiment
+- `--import-batch` to force a stable batch id when needed
+
+Example:
+
+```bash
+python scripts/test_corpus_import.py ./sample-corpus \
+  --limit-files 2 \
+  --source-tag longtest-dialogue-v1 \
+  --import-batch run-001
+```
+
+This does not provide full graph isolation yet. It only ensures experiment metadata is attached consistently during import.
 
 Note: the backup/restore helper uses an offline `neo4j-admin` dump/load flow against the docker volume, so it will briefly stop Neo4j during backup and restore.
 

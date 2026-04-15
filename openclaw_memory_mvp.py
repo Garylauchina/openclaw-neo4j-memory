@@ -31,21 +31,26 @@ class OpenClawMemoryMVP:
             self._initialized = False
 
     def ingest_memory(self, text: str, metadata: Optional[Dict[str, Any]] = None, use_llm: bool = True) -> Dict[str, Any]:
+        metadata = dict(metadata or {})
         payload = text if not metadata else f"{text}\n\n[metadata]\n{metadata}"
         result = self._memory.ingest(payload, use_llm=use_llm)
+        data = result.to_dict()
+        data["ingest_metadata"] = metadata
         return {
             "status": "success",
             "tool": "ingest_memory",
-            "data": result.to_dict(),
+            "data": data,
         }
 
     def retrieve_context(self, query: str, options: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
         options = options or {}
         result = self._memory.retrieve_context(query, use_llm=options.get("use_llm", True))
+        data = result.to_dict()
+        data["source_filter"] = options.get("source_filter")
         return {
             "status": "success",
             "tool": "retrieve_context",
-            "data": result.to_dict(),
+            "data": data,
         }
 
     def build_prompt_context(self, query: str, options: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
