@@ -132,6 +132,26 @@ class MemorySystem:
         extraction.entities = guarded_entities
         return extraction
 
+    def _sync_pending_beliefs(self, entities: List[Entity]) -> None:
+        """将待验证实体同步为最小 pending belief 记录。"""
+        if not self._config.write_guard.enabled:
+            return
+        for entity in entities:
+            props = entity.properties or {}
+            if props.get("knowledge_state", "stable") != "hypothesis":
+                continue
+            source_context = props.get("source_context") or entity.name
+            source_id = props.get("source_id", "direct")
+            self._store.upsert_belief_node({
+                "content": f"pending::{entity.entity_type}::{entity.name}",
+                "belief_strength": props.get("belief_strength", 0.5),
+                "confidence": props.get("belief_strength", 0.5),
+                "state": "HYPOTHESIS",
+                "evidence_count": props.get("evidence_count", 1),
+                "source": source_id,
+                "context_text": source_context[:500],
+            })
+
     def ingest(self, text: str, use_llm: bool = True) -> IngestResult:
         """
         从文本中抽取实体和关系，写入图数据库。
@@ -152,6 +172,7 @@ class MemorySystem:
 
         # 写入实体
         entity_count = self._store.upsert_entities(extraction.entities)
+        self._sync_pending_beliefs(extraction.entities)
 
         # 写入关系
         relation_count = self._store.upsert_relations(extraction.relations)
@@ -169,6 +190,7 @@ class MemorySystem:
         """
         extraction = self._apply_write_guard(extraction, extraction.raw_text)
         entity_count = self._store.upsert_entities(extraction.entities)
+        self._sync_pending_beliefs(extraction.entities)
         relation_count = self._store.upsert_relations(extraction.relations)
 
         return IngestResult(
@@ -285,6 +307,7 @@ class MemorySystem:
         
         # 写入图数据库
         entity_count = self._store.upsert_entities(unique_entities)
+        self._sync_pending_beliefs(unique_entities)
         relation_count = self._store.upsert_relations(unique_relations)
         
         return IngestResult(

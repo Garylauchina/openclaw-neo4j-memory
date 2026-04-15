@@ -132,6 +132,24 @@ class TestMemorySystemIngest(unittest.TestCase):
 
         written_entities = ms._store.upsert_entities.call_args[0][0]
         self.assertEqual(written_entities[0].properties["knowledge_state"], "stable")
+        ms._store.upsert_belief_node.assert_not_called()
+
+    def test_hypothesis_entities_are_buffered_as_pending_beliefs(self):
+        self.ms._extractor.extract.return_value = ExtractionResult(
+            entities=[Entity(name="张三", entity_type="person", properties={})],
+            relations=[],
+            raw_text="张三最近在研究一个方向",
+        )
+        self.ms._store.upsert_entities.return_value = 1
+        self.ms._store.upsert_relations.return_value = 0
+
+        self.ms.ingest("张三最近在研究一个方向")
+
+        self.ms._store.upsert_belief_node.assert_called_once()
+        belief_payload = self.ms._store.upsert_belief_node.call_args[0][0]
+        self.assertEqual(belief_payload["content"], "pending::person::张三")
+        self.assertEqual(belief_payload["state"], "HYPOTHESIS")
+        self.assertEqual(belief_payload["evidence_count"], 1)
 
 
 class TestMemorySystemRetrieve(unittest.TestCase):
