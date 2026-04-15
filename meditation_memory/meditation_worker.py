@@ -1076,16 +1076,18 @@ class MeditationEngine:
 
     async def _step_6_distillation(self, result: MeditationRunResult, nodes: List[Dict[str, Any]]):
         """从密集子图中提取元知识。"""
+        probe_entities = [
+            n["name"] for n in nodes
+            if n.get("source_tag") and n.get("import_batch")
+        ]
         clusters = self.store.get_dense_subgraphs_for_distillation(
             min_cluster_size=self.config.distillation.min_cluster_size,
             limit=self.config.distillation.max_meta_nodes_per_run,
             skip_recent_seconds=self.config.distillation.skip_recent_seconds,
+            priority_entity_names=probe_entities,
         )
 
-        probe_entities = {
-            n["name"] for n in nodes
-            if n.get("source_tag") and n.get("import_batch")
-        }
+        probe_entities = set(probe_entities)
         for cluster in clusters:
             center_name = cluster["center_name"]
             neighbor_names = [n["name"] for n in cluster["neighbor_list"]]

@@ -1932,6 +1932,7 @@ class GraphStore:
         min_cluster_size: int = 5,
         limit: int = 10,
         skip_recent_seconds: int = 0,
+        priority_entity_names: Optional[List[str]] = None,
     ) -> List[Dict[str, Any]]:
         """
         获取高密度子图用于知识蒸馏。
@@ -1948,12 +1949,15 @@ class GraphStore:
           )
         WITH center, collect(DISTINCT neighbor) AS neighbors, count(DISTINCT r) AS edge_count
         WHERE size(neighbors) >= $min_size
+        WITH center, neighbors, edge_count,
+             size([n IN neighbors WHERE n.name IN $priority_names]) + CASE WHEN center.name IN $priority_names THEN 1 ELSE 0 END AS priority_overlap
         RETURN center.name AS center_name,
                center.entity_type AS center_type,
-               [n IN neighbors | {name: n.name, type: n.entity_type}] AS neighbor_list,
+               [n IN neighbors | {name: n.name, type: n.entity_type, source_tag: coalesce(n.source_tag, ''), import_batch: coalesce(n.import_batch, '')}] AS neighbor_list,
                edge_count,
-               size(neighbors) AS neighbor_count
-        ORDER BY edge_count DESC
+               size(neighbors) AS neighbor_count,
+               priority_overlap
+        ORDER BY priority_overlap DESC, edge_count DESC
         LIMIT $limit
         """
         with self.driver.session(database=self._config.database) as session:
@@ -1962,6 +1966,7 @@ class GraphStore:
                 min_size=min_cluster_size,
                 limit=limit,
                 skip_recent_ms=max(0, skip_recent_seconds) * 1000,
+                priority_names=priority_entity_names or [],
             )
             return [dict(record) for record in result]
 
