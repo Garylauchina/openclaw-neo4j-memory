@@ -24,15 +24,28 @@ LOW_INFO_WORDS = {
     "Need", "Make", "Take", "Try", "Best", "Help", "Learn", "Start", "Find", "Check",
 }
 
+PLAUSIBLE_KEYWORDS = {
+    "Python", "Tableau", "Matplotlib", "Seaborn", "Microsoft", "Coursera", "Power BI",
+    "DataCamp", "RescueTime", "SelfControl", "StayFocusd", "Khan Academy", "HubSpot Academy",
+    "Google Calendar", "Google News", "LinkedIn Learning", "Open Culture", "Power BI Service",
+    "Data Visualization", "Data Analysis", "Effective Time Management", "Pomodoro Timer",
+}
+
 
 def is_low_information(name: str, entity_type: str) -> bool:
     if not name:
         return True
+    if name in PLAUSIBLE_KEYWORDS:
+        return False
+    if any(keyword in name for keyword in PLAUSIBLE_KEYWORDS):
+        return False
     if entity_type.lower() == "concept" and name in LOW_INFO_WORDS:
         return True
-    if entity_type.lower() == "concept" and len(name) <= 3 and name.isalpha():
+    if entity_type.lower() == "concept" and len(name) <= 3 and name.isalpha() and name.upper() not in {"API", "CSS", "HTML", "SDK", "MIT"}:
         return True
     if len(name.split()) == 1 and name[:1].isupper() and name[1:].islower() and entity_type.lower() == "concept":
+        return True
+    if name.startswith("Evaluation Question") or name.startswith("LongMemEval Sample"):
         return True
     return False
 
