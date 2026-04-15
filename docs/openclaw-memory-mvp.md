@@ -194,3 +194,11 @@ python scripts/audit_source_entities.py \
 ```
 
 This is intended for probe analysis, not graph mutation.
+
+You can also inspect whether a probe retained any non-anchoring graph relations:
+
+```bash
+python scripts/audit_source_relations.py \
+  --source-tag longmemeval-probe-v6 \
+  --import-batch longmemeval-oracle-run-006
+```
