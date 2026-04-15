@@ -29,20 +29,29 @@ def render_session(session_idx: int, turns: List[Dict[str, Any]], session_date: 
     return "\n".join(lines)
 
 
-def render_instance(instance: Dict[str, Any]) -> str:
-    lines = [
-        f"# LongMemEval Sample {instance.get('question_id', 'unknown')}",
-        f"question_type: {instance.get('question_type', '')}",
-        f"question_date: {instance.get('question_date', '')}",
-        "",
-        "## Evaluation Question",
-        instance.get("question", ""),
-        "",
-        "## Reference Answer",
-        instance.get("answer", ""),
-        "",
-        "## Conversation History",
-    ]
+def render_instance(instance: Dict[str, Any], include_scaffolding: bool = False) -> str:
+    lines = []
+    if include_scaffolding:
+        lines.extend([
+            f"# LongMemEval Sample {instance.get('question_id', 'unknown')}",
+            f"question_type: {instance.get('question_type', '')}",
+            f"question_date: {instance.get('question_date', '')}",
+            "",
+            "## Evaluation Question",
+            instance.get("question", ""),
+            "",
+            "## Reference Answer",
+            instance.get("answer", ""),
+            "",
+            "## Conversation History",
+        ])
+    else:
+        lines.extend([
+            f"question_type: {instance.get('question_type', '')}",
+            f"question_date: {instance.get('question_date', '')}",
+            "",
+            "## Conversation History",
+        ])
 
     sessions = instance.get("haystack_sessions", [])
     dates = instance.get("haystack_dates", [])
@@ -60,6 +69,7 @@ def main() -> int:
     parser.add_argument("--output-dir", default="tmp/longmemeval-sample", help="Output directory")
     parser.add_argument("--limit", type=int, default=2, help="Number of instances to export")
     parser.add_argument("--question-type", default="", help="Optional question_type filter")
+    parser.add_argument("--include-scaffolding", action="store_true", help="Keep evaluation question / answer scaffolding in exported files")
     args = parser.parse_args()
 
     input_path = Path(args.input).expanduser().resolve()
@@ -82,7 +92,7 @@ def main() -> int:
     for item in selected:
         qid = item.get("question_id", f"sample-{len(manifest)+1}")
         file_path = output_dir / f"{qid}.md"
-        file_path.write_text(render_instance(item), encoding="utf-8")
+        file_path.write_text(render_instance(item, include_scaffolding=args.include_scaffolding), encoding="utf-8")
         manifest.append({
             "question_id": qid,
             "question_type": item.get("question_type"),

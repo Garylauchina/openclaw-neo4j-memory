@@ -20,7 +20,7 @@ Compared with JRE or large open chat corpora, LongMemEval is a better first long
 ## Minimal plan
 
 1. obtain `longmemeval_oracle.json` or a tiny subset of `longmemeval_s_cleaned.json`
-2. export 1-2 instances into markdown files
+2. export 1-2 instances into markdown files, by default **without evaluation scaffolding**
 3. inspect the generated sample files manually
 4. run `test_corpus_import.py` in dry-run mode with:
    - `--source-tag longmemeval-sample`
@@ -33,6 +33,12 @@ Use:
 
 ```bash
 python scripts/prepare_longmemeval_sample.py path/to/longmemeval_oracle.json --limit 2
+```
+
+If you explicitly want to keep benchmark framing text for manual inspection only:
+
+```bash
+python scripts/prepare_longmemeval_sample.py path/to/longmemeval_oracle.json --limit 2 --include-scaffolding
 ```
 
 This creates:
@@ -58,3 +64,8 @@ This step does not yet include:
 - large-scale dataset download automation
 
 It is only the first sample-adaptation step.
+
+## Why scaffolding is excluded by default
+
+The benchmark question / reference answer / sample title are useful for human inspection,
+but they are not ideal as online memory input. By default, the helper now exports only the conversation-history-oriented content for import probing.
