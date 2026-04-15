@@ -1976,6 +1976,39 @@ class GraphStore:
             )
             return [dict(record) for record in result]
 
+    def get_target_local_subgraphs(
+        self,
+        target_entity_names: List[str],
+        neighbor_limit: int = 12,
+    ) -> List[Dict[str, Any]]:
+        """Build local distillation subgraphs centered on explicit target nodes."""
+        if not target_entity_names:
+            return []
+        query = """
+        UNWIND $target_names AS target_name
+        MATCH (center:Entity {name: target_name})-[r:RELATES_TO]-(neighbor:Entity)
+        WHERE NOT center:Archived AND NOT neighbor:Archived
+        WITH center, neighbor, count(r) AS rel_weight
+        ORDER BY rel_weight DESC, neighbor.mention_count DESC
+        WITH center, collect({
+            name: neighbor.name,
+            type: neighbor.entity_type,
+            source_tag: coalesce(neighbor.source_tag, ''),
+            import_batch: coalesce(neighbor.import_batch, '')
+        })[..$neighbor_limit] AS neighbors
+        RETURN center.name AS center_name,
+               center.entity_type AS center_type,
+               coalesce(center.source_tag, '') AS source_tag,
+               coalesce(center.import_batch, '') AS import_batch,
+               neighbors AS neighbor_list,
+               size(neighbors) AS neighbor_count,
+               size(neighbors) AS edge_count,
+               size(neighbors) + 1 AS target_overlap
+        """
+        with self.driver.session(database=self._config.database) as session:
+            result = session.run(query, target_names=target_entity_names, neighbor_limit=neighbor_limit)
+            return [dict(record) for record in result if record.get('neighbor_count', 0) > 0]
+
     def get_cluster_edges(
         self,
         center_name: str,

@@ -1086,13 +1086,19 @@ class MeditationEngine:
         else:
             locked_targets = set()
         target_entity_names = sorted(set(probe_entities) | locked_targets)
-        clusters = self.store.get_dense_subgraphs_for_distillation(
-            min_cluster_size=self.config.distillation.min_cluster_size,
-            limit=self.config.distillation.max_meta_nodes_per_run,
-            skip_recent_seconds=self.config.distillation.skip_recent_seconds,
-            priority_entity_names=probe_entities,
-            target_entity_names=target_entity_names,
-        )
+        if target_entity_names:
+            clusters = self.store.get_target_local_subgraphs(
+                target_entity_names=target_entity_names[: self.config.distillation.max_meta_nodes_per_run],
+                neighbor_limit=max(self.config.distillation.min_cluster_size, 12),
+            )
+        else:
+            clusters = self.store.get_dense_subgraphs_for_distillation(
+                min_cluster_size=self.config.distillation.min_cluster_size,
+                limit=self.config.distillation.max_meta_nodes_per_run,
+                skip_recent_seconds=self.config.distillation.skip_recent_seconds,
+                priority_entity_names=probe_entities,
+                target_entity_names=target_entity_names,
+            )
 
         probe_entities = set(probe_entities)
         for cluster in clusters:
