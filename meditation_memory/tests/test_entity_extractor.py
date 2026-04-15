@@ -140,6 +140,13 @@ class TestEntityExtractorRules(unittest.TestCase):
         result = self.extractor.extract(text, use_llm=False)
         self.assertEqual(result.raw_text, text)
 
+    def test_minimal_english_relation_heuristic(self):
+        text = "Alice uses Python and Bob uses Tableau"
+        result = self.extractor.extract(text, use_llm=False)
+        relation_keys = {(r.source, r.target, r.relation_type) for r in result.relations}
+        self.assertTrue(any(target == "Python" and rel_type == "uses" for _, target, rel_type in relation_keys))
+        self.assertTrue(any(target == "Tableau" and rel_type == "uses" for _, target, rel_type in relation_keys))
+
 
 class TestEntityExtractorLLM(unittest.TestCase):
     """LLM 模式抽取测试（使用 mock）"""

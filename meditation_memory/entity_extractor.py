@@ -207,6 +207,11 @@ _ORG_INDICATORS = {"公司", "集团", "大学", "学院", "机构", "组织", "
 _INTENT_INDICATORS = {"想要", "目标", "计划", "期望", "希望", "打算",
                       "需求", "意图", "目的", "追求"}
 
+_EN_RELATION_PATTERNS = [
+    (re.compile(r"\b(?P<source>[A-Z][A-Za-z0-9.+\-]*)\s+uses\s+(?P<target>Python|Tableau|Power\s+BI|Matplotlib|Seaborn|Coursera|Microsoft)\b"), "uses"),
+    (re.compile(r"\b(?P<source>[A-Z][A-Za-z0-9.+\-]*)\s+(?:using|with)\s+(?P<target>Python|Tableau|Power\s+BI|Matplotlib|Seaborn|Coursera|Microsoft)\b"), "uses"),
+]
+
 
 # ========== 抽取器实现 ==========
 
@@ -456,6 +461,29 @@ class EntityExtractor:
                 entity_type="concept",
                 properties={"extraction_mode": "rules"},
             ))
+
+        # 最小英文关系启发式实验
+        known_names = {entity.name for entity in entities}
+        seen_relation_keys = {(rel.source, rel.target, rel.relation_type) for rel in relations}
+        for pattern, relation_type in _EN_RELATION_PATTERNS:
+            for match in pattern.finditer(text):
+                source = match.group("source").strip()
+                target = match.group("target").strip()
+                if not _is_valid_name(target):
+                    continue
+                if source == target:
+                    continue
+                if source not in known_names and len(source) >= 3 and len(entities) < 20:
+                    entities.append(Entity(name=source, entity_type="concept", properties={"extraction_mode": "rules"}))
+                    known_names.add(source)
+                if target not in known_names and len(entities) < 20:
+                    entities.append(Entity(name=target, entity_type="concept", properties={"extraction_mode": "rules"}))
+                    known_names.add(target)
+                relation_key = (source, target, relation_type)
+                if relation_key in seen_relation_keys:
+                    continue
+                relations.append(Relation(source=source, target=target, relation_type=relation_type))
+                seen_relation_keys.add(relation_key)
 
         return ExtractionResult(
             entities=entities,
