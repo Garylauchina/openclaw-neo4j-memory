@@ -215,6 +215,16 @@ class TestGraphStoreOperations(unittest.TestCase):
         count = self.store.get_pending_belief_count()
         self.assertEqual(count, 4)
 
+    def test_expire_pending_beliefs(self):
+        mock_result = MagicMock()
+        mock_result.single.return_value = {"count": 2}
+        self.mock_session.run.return_value = mock_result
+
+        count = self.store.expire_pending_beliefs(3600)
+        self.assertEqual(count, 2)
+        call_args = self.mock_session.run.call_args
+        self.assertEqual(call_args[1]["ttl_ms"], 3600 * 1000)
+
     def test_build_meta_cluster_signature_is_order_insensitive(self):
         sig1 = self.store._build_meta_cluster_signature(["张三", "项目A", "北京"])
         sig2 = self.store._build_meta_cluster_signature(["北京", "张三", "项目A", "张三"])

@@ -154,6 +154,16 @@ class MemorySystem:
             else:
                 self._store.complete_pending_belief(pending_content)
 
+    def _expire_stale_pending_beliefs(self) -> None:
+        """清理超过 TTL 的待验证 belief。"""
+        if not self._config.write_guard.enabled:
+            return
+        ttl_seconds = getattr(self._config.write_guard, "pending_belief_ttl_seconds", 0)
+        if ttl_seconds <= 0:
+            return
+        if hasattr(self._store, "expire_pending_beliefs"):
+            self._store.expire_pending_beliefs(ttl_seconds)
+
     def ingest(self, text: str, use_llm: bool = True) -> IngestResult:
         """
         从文本中抽取实体和关系，写入图数据库。
@@ -168,6 +178,8 @@ class MemorySystem:
         Returns:
             IngestResult 包含写入统计
         """
+        self._expire_stale_pending_beliefs()
+
         # 抽取实体和关系
         extraction = self._extractor.extract(text, use_llm=use_llm)
         extraction = self._apply_write_guard(extraction, text)
@@ -190,6 +202,7 @@ class MemorySystem:
         直接从已有的抽取结果写入图数据库。
         适用于上层已经完成抽取的场景。
         """
+        self._expire_stale_pending_beliefs()
         extraction = self._apply_write_guard(extraction, extraction.raw_text)
         entity_count = self._store.upsert_entities(extraction.entities)
         self._sync_pending_beliefs(extraction.entities)
@@ -284,6 +297,8 @@ class MemorySystem:
         Returns:
             IngestResult 包含写入统计
         """
+        self._expire_stale_pending_beliefs()
+
         # 获取会话中收集的所有抽取结果
         session_extractions = self._context_builder.end_session()
         

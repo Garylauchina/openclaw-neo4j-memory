@@ -2572,6 +2572,23 @@ class GraphStore:
             record = result.single()
             return int(record["count"]) if record and record.get("count") is not None else 0
 
+    def expire_pending_beliefs(self, ttl_seconds: int) -> int:
+        """将超过 TTL 的 pending belief 标记为 EXPIRED。"""
+        query = """
+        MATCH (b:Belief)
+        WHERE b.content STARTS WITH 'pending::'
+          AND coalesce(b.state, 'HYPOTHESIS') = 'HYPOTHESIS'
+          AND coalesce(b.updated_at, b.created_at, timestamp()) < timestamp() - $ttl_ms
+        SET b.state = 'EXPIRED',
+            b.expired_at = timestamp(),
+            b.updated_at = timestamp()
+        RETURN count(b) AS count
+        """
+        with self.driver.session(database=self._config.database) as session:
+            result = session.run(query, ttl_ms=max(ttl_seconds, 0) * 1000)
+            record = result.single()
+            return int(record["count"]) if record and record.get("count") is not None else 0
+
     # ================================================================
     # Phase 3: 策略蒸馏与进化方法
     # ================================================================

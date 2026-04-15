@@ -115,6 +115,7 @@ class WriteGuardConfig:
     stable_belief_strength_threshold: float = 0.7
     stable_min_evidence_count: int = 3
     stable_min_source_count: int = 2
+    pending_belief_ttl_seconds: int = 7 * 24 * 60 * 60
 
 
 @dataclass

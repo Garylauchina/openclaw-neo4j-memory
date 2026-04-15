@@ -61,6 +61,7 @@ class TestMemorySystemIngest(unittest.TestCase):
         self.assertIsInstance(result, IngestResult)
         self.assertEqual(result.entities_written, 2)
         self.assertEqual(result.relations_written, 1)
+        self.ms._store.expire_pending_beliefs.assert_called_once()
         self.ms._extractor.extract.assert_called_once_with("张三住在北京", use_llm=True)
 
     def test_ingest_empty_text(self):
@@ -174,6 +175,26 @@ class TestMemorySystemIngest(unittest.TestCase):
 
         ms._store.complete_pending_belief.assert_called_once_with("pending::technology::Neo4j")
         ms._store.upsert_belief_node.assert_not_called()
+
+    def test_zero_ttl_skips_pending_expiration(self):
+        config = MemoryConfig(write_guard=WriteGuardConfig(
+            enabled=True,
+            pending_belief_ttl_seconds=0,
+        ))
+        ms = MemorySystem(config)
+        ms._store = MagicMock()
+        ms._extractor = MagicMock()
+        ms._extractor.extract.return_value = ExtractionResult(
+            entities=[],
+            relations=[],
+            raw_text="",
+        )
+        ms._store.upsert_entities.return_value = 0
+        ms._store.upsert_relations.return_value = 0
+
+        ms.ingest("")
+
+        ms._store.expire_pending_beliefs.assert_not_called()
 
 
 class TestMemorySystemRetrieve(unittest.TestCase):
