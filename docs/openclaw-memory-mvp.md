@@ -162,3 +162,23 @@ This does not provide full graph isolation yet. It only ensures experiment metad
 Note: the backup/restore helper uses an offline `neo4j-admin` dump/load flow against the docker volume, so it will briefly stop Neo4j during backup and restore.
 
 These helpers are intentionally for MVP experimentation, not a final production migration pipeline.
+
+## LongMemEval sample preparation
+
+A minimal preparation helper is available for the first long-memory benchmark entry:
+
+```bash
+python scripts/prepare_longmemeval_sample.py path/to/longmemeval_oracle.json --limit 2
+```
+
+Then run a dry-run import:
+
+```bash
+python scripts/test_corpus_import.py tmp/longmemeval-sample \
+  --dry-run \
+  --source-tag longmemeval-sample \
+  --import-batch longmemeval-oracle-run-001
+```
+
+See also:
+- `docs/longmemeval-sample-plan.md`
