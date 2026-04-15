@@ -199,6 +199,22 @@ class TestGraphStoreOperations(unittest.TestCase):
         self.assertEqual(stats["node_count"], 10)
         self.assertEqual(stats["edge_count"], 15)
 
+    def test_complete_pending_belief(self):
+        mock_result = MagicMock()
+        mock_result.single.return_value = {"content": "pending::concept::AI"}
+        self.mock_session.run.return_value = mock_result
+
+        ok = self.store.complete_pending_belief("pending::concept::AI")
+        self.assertTrue(ok)
+
+    def test_get_pending_belief_count(self):
+        mock_result = MagicMock()
+        mock_result.single.return_value = {"count": 4}
+        self.mock_session.run.return_value = mock_result
+
+        count = self.store.get_pending_belief_count()
+        self.assertEqual(count, 4)
+
     def test_build_meta_cluster_signature_is_order_insensitive(self):
         sig1 = self.store._build_meta_cluster_signature(["张三", "项目A", "北京"])
         sig2 = self.store._build_meta_cluster_signature(["北京", "张三", "项目A", "张三"])

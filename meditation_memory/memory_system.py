@@ -133,24 +133,26 @@ class MemorySystem:
         return extraction
 
     def _sync_pending_beliefs(self, entities: List[Entity]) -> None:
-        """将待验证实体同步为最小 pending belief 记录。"""
+        """同步最小 pending belief 生命周期。"""
         if not self._config.write_guard.enabled:
             return
         for entity in entities:
             props = entity.properties or {}
-            if props.get("knowledge_state", "stable") != "hypothesis":
-                continue
-            source_context = props.get("source_context") or entity.name
-            source_id = props.get("source_id", "direct")
-            self._store.upsert_belief_node({
-                "content": f"pending::{entity.entity_type}::{entity.name}",
-                "belief_strength": props.get("belief_strength", 0.5),
-                "confidence": props.get("belief_strength", 0.5),
-                "state": "HYPOTHESIS",
-                "evidence_count": props.get("evidence_count", 1),
-                "source": source_id,
-                "context_text": source_context[:500],
-            })
+            pending_content = f"pending::{entity.entity_type}::{entity.name}"
+            if props.get("knowledge_state", "stable") == "hypothesis":
+                source_context = props.get("source_context") or entity.name
+                source_id = props.get("source_id", "direct")
+                self._store.upsert_belief_node({
+                    "content": pending_content,
+                    "belief_strength": props.get("belief_strength", 0.5),
+                    "confidence": props.get("belief_strength", 0.5),
+                    "state": "HYPOTHESIS",
+                    "evidence_count": props.get("evidence_count", 1),
+                    "source": source_id,
+                    "context_text": source_context[:500],
+                })
+            else:
+                self._store.complete_pending_belief(pending_content)
 
     def ingest(self, text: str, use_llm: bool = True) -> IngestResult:
         """
@@ -325,9 +327,13 @@ class MemorySystem:
     def get_stats(self) -> Dict[str, Any]:
         """获取记忆系统统计信息"""
         db_stats = self._store.get_stats()
+        pending_belief_count = 0
+        if self._config.write_guard.enabled and hasattr(self._store, "get_pending_belief_count"):
+            pending_belief_count = self._store.get_pending_belief_count()
         return {
             "initialized": self._initialized,
             "connected": self.is_connected(),
+            "pending_belief_count": pending_belief_count,
             **db_stats,
         }
 

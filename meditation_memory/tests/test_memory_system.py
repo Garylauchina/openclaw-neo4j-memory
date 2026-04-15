@@ -146,10 +146,34 @@ class TestMemorySystemIngest(unittest.TestCase):
         self.ms.ingest("张三最近在研究一个方向")
 
         self.ms._store.upsert_belief_node.assert_called_once()
+        self.ms._store.complete_pending_belief.assert_not_called()
         belief_payload = self.ms._store.upsert_belief_node.call_args[0][0]
         self.assertEqual(belief_payload["content"], "pending::person::张三")
         self.assertEqual(belief_payload["state"], "HYPOTHESIS")
         self.assertEqual(belief_payload["evidence_count"], 1)
+
+    def test_stable_entities_complete_pending_beliefs(self):
+        config = MemoryConfig(write_guard=WriteGuardConfig(
+            enabled=True,
+            stable_belief_strength_threshold=0.7,
+            stable_min_evidence_count=1,
+            stable_min_source_count=1,
+        ))
+        ms = MemorySystem(config)
+        ms._store = MagicMock()
+        ms._extractor = MagicMock()
+        ms._extractor.extract.return_value = ExtractionResult(
+            entities=[Entity(name="Neo4j", entity_type="technology", properties={"belief_strength": 0.8})],
+            relations=[],
+            raw_text="Neo4j 是图数据库",
+        )
+        ms._store.upsert_entities.return_value = 1
+        ms._store.upsert_relations.return_value = 0
+
+        ms.ingest("Neo4j 是图数据库")
+
+        ms._store.complete_pending_belief.assert_called_once_with("pending::technology::Neo4j")
+        ms._store.upsert_belief_node.assert_not_called()
 
 
 class TestMemorySystemRetrieve(unittest.TestCase):
@@ -189,11 +213,13 @@ class TestMemorySystemStats(unittest.TestCase):
     def test_get_stats(self):
         """测试获取统计信息"""
         self.ms._store.get_stats.return_value = {"node_count": 10, "edge_count": 5}
+        self.ms._store.get_pending_belief_count.return_value = 3
         self.ms._store.verify_connectivity.return_value = True
 
         stats = self.ms.get_stats()
         self.assertEqual(stats["node_count"], 10)
         self.assertEqual(stats["edge_count"], 5)
+        self.assertEqual(stats["pending_belief_count"], 3)
         self.assertTrue(stats["connected"])
 
     def test_search_entities(self):

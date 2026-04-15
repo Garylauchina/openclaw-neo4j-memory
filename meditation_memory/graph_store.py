@@ -2547,6 +2547,31 @@ class GraphStore:
             result = session.run(query)
             return [dict(record) for record in result]
 
+    def complete_pending_belief(self, content: str) -> bool:
+        """将 pending belief 标记为已稳定/已完成。"""
+        query = """
+        MATCH (b:Belief {content: $content})
+        SET b.state = 'STABLE',
+            b.completed_at = timestamp(),
+            b.updated_at = timestamp()
+        RETURN b.content AS content
+        """
+        with self.driver.session(database=self._config.database) as session:
+            result = session.run(query, content=content)
+            return result.single() is not None
+
+    def get_pending_belief_count(self) -> int:
+        """获取当前待验证 belief 数量。"""
+        query = """
+        MATCH (b:Belief)
+        WHERE b.content STARTS WITH 'pending::' AND coalesce(b.state, 'HYPOTHESIS') = 'HYPOTHESIS'
+        RETURN count(b) AS count
+        """
+        with self.driver.session(database=self._config.database) as session:
+            result = session.run(query)
+            record = result.single()
+            return int(record["count"]) if record and record.get("count") is not None else 0
+
     # ================================================================
     # Phase 3: 策略蒸馏与进化方法
     # ================================================================
