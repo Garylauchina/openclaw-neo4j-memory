@@ -9,6 +9,8 @@ BACKUP_DIR="${PROJECT_DIR}/backups"
 SERVICE_NAME="neo4j"
 CONTAINER_NAME="neo4j-memory"
 DATABASE_NAME="${NEO4J_DATABASE:-neo4j}"
+COMPOSE_PROJECT_NAME="$(basename "$PROJECT_DIR")"
+NEO4J_DATA_VOLUME="${COMPOSE_PROJECT_NAME}_neo4j_data"
 TIMESTAMP="$(date +%Y%m%d-%H%M%S)"
 DUMP_NAME_DEFAULT="${DATABASE_NAME}-${TIMESTAMP}.dump"
 
@@ -43,7 +45,7 @@ backup_db() {
 
   echo "[3/4] creating offline dump via one-shot neo4j-admin: $dump_path"
   docker run --rm \
-    -v neo4j-memory_neo4j_data:/data \
+    -v "${NEO4J_DATA_VOLUME}:/data" \
     -v "$BACKUP_DIR:/backups" \
     neo4j:5.26-community \
     neo4j-admin database dump "$DATABASE_NAME" --to-path=/backups --overwrite-destination=true >/dev/null
@@ -80,7 +82,7 @@ restore_db() {
 
   echo "[3/4] loading dump via one-shot neo4j-admin"
   docker run --rm \
-    -v neo4j-memory_neo4j_data:/data \
+    -v "${NEO4J_DATA_VOLUME}:/data" \
     -v "$BACKUP_DIR:/backups" \
     neo4j:5.26-community \
     neo4j-admin database load "$DATABASE_NAME" --from-path=/backups --overwrite-destination=true >/dev/null
