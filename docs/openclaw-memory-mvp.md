@@ -222,3 +222,11 @@ For LongMemEval-style long-dialogue probes, the current `rules` / `no-llm` path 
 In practice, relation / experience / strategy structure on this kind of input should be expected to come more from:
 - LLM extraction paths
 - or later asynchronous meditation / distillation
+
+To start auditing the meditation side against a source-scoped probe, use:
+
+```bash
+python scripts/audit_meditation_outcomes.py \
+  --source-tag longmemeval-probe-v6 \
+  --import-batch longmemeval-oracle-run-006
+```
