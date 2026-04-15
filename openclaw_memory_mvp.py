@@ -32,8 +32,17 @@ class OpenClawMemoryMVP:
 
     def ingest_memory(self, text: str, metadata: Optional[Dict[str, Any]] = None, use_llm: bool = True) -> Dict[str, Any]:
         metadata = dict(metadata or {})
-        payload = text if not metadata else f"{text}\n\n[metadata]\n{metadata}"
-        result = self._memory.ingest(payload, use_llm=use_llm)
+        extraction = self._memory.extractor.extract(text, use_llm=use_llm)
+        for entity in extraction.entities:
+            props = dict(entity.properties or {})
+            props.update(metadata)
+            entity.properties = props
+        for relation in extraction.relations:
+            props = dict(relation.properties or {})
+            props.update(metadata)
+            relation.properties = props
+        extraction.raw_text = text
+        result = self._memory.ingest_from_extraction(extraction)
         data = result.to_dict()
         data["ingest_metadata"] = metadata
         return {

@@ -9,6 +9,7 @@ from meditation_memory.config import MemoryConfig, Neo4jConfig, LLMConfig, Write
 from meditation_memory.entity_extractor import Entity, ExtractionResult, Relation
 from meditation_memory.memory_system import IngestResult, MemorySystem
 from meditation_memory.subgraph_context import ContextResult
+from openclaw_memory_mvp import OpenClawMemoryMVP
 
 
 class TestMemorySystemInit(unittest.TestCase):
@@ -330,6 +331,27 @@ class TestMemorySystemIngest(unittest.TestCase):
         ms.ingest("")
 
         ms._store.expire_pending_beliefs.assert_not_called()
+
+
+class TestOpenClawMemoryMVP(unittest.TestCase):
+    def test_ingest_memory_injects_metadata_into_extraction(self):
+        mvp = OpenClawMemoryMVP()
+        mvp._memory = MagicMock()
+        mvp._memory.extractor.extract.return_value = ExtractionResult(
+            entities=[Entity(name="Probe", entity_type="concept", properties={})],
+            relations=[],
+            raw_text="Probe text",
+        )
+        mock_result = MagicMock()
+        mock_result.to_dict.return_value = {"entities_written": 1, "relations_written": 0}
+        mvp._memory.ingest_from_extraction.return_value = mock_result
+
+        result = mvp.ingest_memory("Probe text", metadata={"source_tag": "probe", "import_batch": "run-1"}, use_llm=False)
+
+        extraction = mvp._memory.ingest_from_extraction.call_args[0][0]
+        self.assertEqual(extraction.entities[0].properties["source_tag"], "probe")
+        self.assertEqual(extraction.entities[0].properties["import_batch"], "run-1")
+        self.assertEqual(result["data"]["ingest_metadata"]["source_tag"], "probe")
 
 
 class TestMemorySystemRetrieve(unittest.TestCase):
