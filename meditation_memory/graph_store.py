@@ -255,6 +255,9 @@ class GraphStore:
             e.knowledge_state = $knowledge_state,
             e.evidence_count = $evidence_count,
             e.source_count = $source_count,
+            e.source_tag = $source_tag,
+            e.import_batch = $import_batch,
+            e.source_path = $source_path,
             e.needs_meditation = true
         ON MATCH SET
             e.entity_type = $entity_type,
@@ -267,6 +270,9 @@ class GraphStore:
             e.knowledge_state = $knowledge_state,
             e.evidence_count = $evidence_count,
             e.source_count = $source_count,
+            e.source_tag = CASE WHEN $source_tag <> '' THEN $source_tag ELSE e.source_tag END,
+            e.import_batch = CASE WHEN $import_batch <> '' THEN $import_batch ELSE e.import_batch END,
+            e.source_path = CASE WHEN $source_path <> '' THEN $source_path ELSE e.source_path END,
             e.needs_meditation = true
         RETURN elementId(e) AS eid
         """
@@ -282,6 +288,9 @@ class GraphStore:
                 knowledge_state=entity.properties.get("knowledge_state", "stable"),
                 evidence_count=entity.properties.get("evidence_count", 1),
                 source_count=entity.properties.get("source_count", 1),
+                source_tag=entity.properties.get("source_tag", ""),
+                import_batch=entity.properties.get("import_batch", ""),
+                source_path=entity.properties.get("source_path", ""),
             )
             record = result.single()
             return record["eid"] if record else ""
@@ -309,6 +318,9 @@ class GraphStore:
             e.knowledge_state = item.knowledge_state,
             e.evidence_count = item.evidence_count,
             e.source_count = item.source_count,
+            e.source_tag = item.source_tag,
+            e.import_batch = item.import_batch,
+            e.source_path = item.source_path,
             e.needs_meditation = true
         ON MATCH SET
             e.entity_type = item.entity_type,
@@ -327,6 +339,9 @@ class GraphStore:
                     THEN coalesce(e.source_count, 0) + item.source_count
                 ELSE coalesce(e.source_count, 0)
             END,
+            e.source_tag = CASE WHEN item.source_tag <> '' THEN item.source_tag ELSE e.source_tag END,
+            e.import_batch = CASE WHEN item.import_batch <> '' THEN item.import_batch ELSE e.import_batch END,
+            e.source_path = CASE WHEN item.source_path <> '' THEN item.source_path ELSE e.source_path END,
             e.last_source_id = item.source_id,
             e.knowledge_state = CASE
                 WHEN (
@@ -372,6 +387,9 @@ class GraphStore:
                 "evidence_count": e.properties.get("evidence_count", 1),
                 "source_count": e.properties.get("source_count", 1),
                 "source_id": e.properties.get("source_id", ""),
+                "source_tag": e.properties.get("source_tag", ""),
+                "import_batch": e.properties.get("import_batch", ""),
+                "source_path": e.properties.get("source_path", ""),
             })
         with self.driver.session(database=self._config.database) as session:
             result = session.run(
@@ -383,6 +401,30 @@ class GraphStore:
             )
             record = result.single()
             return record["updated"] if record else 0
+
+    def get_entities_by_source(self, source_tag: str = "", import_batch: str = "", limit: int = 50) -> List[Dict[str, Any]]:
+        """按 source_tag / import_batch 查询实体，供实验审计使用。"""
+        clauses = []
+        if source_tag:
+            clauses.append("e.source_tag = $source_tag")
+        if import_batch:
+            clauses.append("e.import_batch = $import_batch")
+        where_clause = " AND ".join(clauses) if clauses else "true"
+        query = f"""
+        MATCH (e:Entity)
+        WHERE {where_clause}
+        RETURN e.name AS name,
+               e.entity_type AS entity_type,
+               e.mention_count AS mention_count,
+               e.source_tag AS source_tag,
+               e.import_batch AS import_batch,
+               e.source_path AS source_path
+        ORDER BY e.mention_count DESC, e.name ASC
+        LIMIT $limit
+        """
+        with self.driver.session(database=self._config.database) as session:
+            result = session.run(query, source_tag=source_tag, import_batch=import_batch, limit=limit)
+            return [dict(r) for r in result]
 
     def get_top_entities_by_attention(
         self, limit: int = 30, min_score: float = 0.0

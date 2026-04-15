@@ -316,6 +316,19 @@ class TestGraphStoreOperations(unittest.TestCase):
         self.assertEqual(signal["support_score"], 4)
         self.assertEqual(signal["dominant_claimed_value"], "organization")
 
+    def test_get_entities_by_source(self):
+        mock_records = [
+            {"name": "Probe", "entity_type": "concept", "mention_count": 3, "source_tag": "longmemeval-sample", "import_batch": "run-001", "source_path": "/tmp/sample.md"},
+        ]
+        mock_result = MagicMock()
+        mock_result.__iter__ = MagicMock(return_value=iter(mock_records))
+        self.mock_session.run.return_value = mock_result
+
+        rows = self.store.get_entities_by_source(source_tag="longmemeval-sample", import_batch="run-001", limit=10)
+        self.assertEqual(len(rows), 1)
+        self.assertEqual(rows[0]["source_tag"], "longmemeval-sample")
+        self.assertEqual(rows[0]["import_batch"], "run-001")
+
     def test_build_meta_cluster_signature_is_order_insensitive(self):
         sig1 = self.store._build_meta_cluster_signature(["张三", "项目A", "北京"])
         sig2 = self.store._build_meta_cluster_signature(["北京", "张三", "项目A", "张三"])

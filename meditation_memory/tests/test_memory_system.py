@@ -111,6 +111,27 @@ class TestMemorySystemIngest(unittest.TestCase):
         self.assertEqual(written_entities[0].properties["evidence_count"], 1)
         self.assertEqual(written_entities[0].properties["source_count"], 1)
 
+    def test_write_guard_preserves_source_scoping_metadata(self):
+        extraction = ExtractionResult(
+            entities=[Entity(name="Probe", entity_type="concept", properties={
+                "source_tag": "longmemeval-sample",
+                "import_batch": "run-001",
+                "source_path": "/tmp/sample.md",
+            })],
+            relations=[],
+            raw_text="Probe text",
+        )
+        self.ms._extractor.extract.return_value = extraction
+        self.ms._store.upsert_entities.return_value = 1
+        self.ms._store.upsert_relations.return_value = 0
+
+        self.ms.ingest("Probe text")
+
+        written_entities = self.ms._store.upsert_entities.call_args[0][0]
+        self.assertEqual(written_entities[0].properties["source_tag"], "longmemeval-sample")
+        self.assertEqual(written_entities[0].properties["import_batch"], "run-001")
+        self.assertEqual(written_entities[0].properties["source_path"], "/tmp/sample.md")
+
     def test_write_guard_marks_low_evidence_relations_as_hypothesis(self):
         self.ms._extractor.extract.return_value = ExtractionResult(
             entities=[
