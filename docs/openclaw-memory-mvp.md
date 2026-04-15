@@ -202,3 +202,12 @@ python scripts/audit_source_relations.py \
   --source-tag longmemeval-probe-v6 \
   --import-batch longmemeval-oracle-run-006
 ```
+
+To diagnose whether the rules extractor produced any relations before ingest, use:
+
+```bash
+python scripts/diagnose_rule_relation_retention.py \
+  tmp/longmemeval-sample-noscaffold/gpt4_2487a7cb.md \
+  --chunk-chars 1200 \
+  --limit-chunks 5
+```
