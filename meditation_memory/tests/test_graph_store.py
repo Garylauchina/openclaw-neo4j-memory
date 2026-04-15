@@ -296,12 +296,13 @@ class TestGraphStoreOperations(unittest.TestCase):
 
     def test_get_claim_runtime_signal(self):
         self.store.get_entity_claims = MagicMock(return_value=[
-            {"claimed_value": "organization", "state": "stable", "conflict_score": 1},
-            {"claimed_value": "product", "state": "hypothesis", "conflict_score": 2},
+            {"claimed_value": "organization", "state": "stable", "support_score": 3, "conflict_score": 1},
+            {"claimed_value": "product", "state": "hypothesis", "support_score": 1, "conflict_score": 2},
         ])
         signal = self.store.get_claim_runtime_signal("Apple")
         self.assertTrue(signal["has_competing_claims"])
         self.assertEqual(signal["conflict_score"], 3)
+        self.assertEqual(signal["support_score"], 4)
         self.assertEqual(signal["dominant_claimed_value"], "organization")
 
     def test_build_meta_cluster_signature_is_order_insensitive(self):

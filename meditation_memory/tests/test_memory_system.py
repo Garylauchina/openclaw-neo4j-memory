@@ -243,6 +243,13 @@ class TestMemorySystemIngest(unittest.TestCase):
         ms = MemorySystem(config)
         ms._store = MagicMock()
         ms._extractor = MagicMock()
+        ms._store.get_claim_runtime_signal.return_value = {
+            "has_competing_claims": False,
+            "conflict_score": 0,
+            "support_score": 2,
+            "dominant_claim_state": "stable",
+            "dominant_claimed_value": "technology",
+        }
         ms._extractor.extract.return_value = ExtractionResult(
             entities=[Entity(name="Neo4j", entity_type="technology", properties={"belief_strength": 0.8})],
             relations=[],
@@ -253,8 +260,34 @@ class TestMemorySystemIngest(unittest.TestCase):
 
         ms.ingest("Neo4j 是图数据库")
 
+        written_entities = ms._store.upsert_entities.call_args[0][0]
+        self.assertEqual(written_entities[0].properties["knowledge_state"], "stable")
+        self.assertEqual(written_entities[0].properties["feedback_state"], "reinforced")
         ms._store.complete_pending_belief.assert_called_once_with("pending::technology::Neo4j")
         ms._store.upsert_belief_node.assert_not_called()
+
+    def test_feedback_conflict_keeps_entity_hypothesis(self):
+        self.ms._store.get_claim_runtime_signal.return_value = {
+            "has_competing_claims": True,
+            "conflict_score": 2,
+            "support_score": 1,
+            "dominant_claim_state": "hypothesis",
+            "dominant_claimed_value": "product",
+        }
+        self.ms._extractor.extract.return_value = ExtractionResult(
+            entities=[Entity(name="Apple", entity_type="product", properties={})],
+            relations=[],
+            raw_text="Apple 是一款产品",
+        )
+        self.ms._store.upsert_entities.return_value = 1
+        self.ms._store.upsert_relations.return_value = 0
+
+        self.ms.ingest("Apple 是一款产品")
+
+        written_entities = self.ms._store.upsert_entities.call_args[0][0]
+        self.assertEqual(written_entities[0].properties["knowledge_state"], "hypothesis")
+        self.assertEqual(written_entities[0].properties["feedback_state"], "conflicted")
+        self.assertTrue(written_entities[0].properties["conflict_with_existing"])
 
     def test_zero_ttl_skips_pending_expiration(self):
         config = MemoryConfig(write_guard=WriteGuardConfig(

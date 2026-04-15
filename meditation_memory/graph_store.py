@@ -2667,14 +2667,17 @@ class GraphStore:
             return {
                 "has_competing_claims": False,
                 "conflict_score": 0,
+                "support_score": 0,
                 "dominant_claim_state": None,
                 "dominant_claimed_value": None,
             }
         dominant = claims[0]
         total_conflict = sum(int(c.get("conflict_score") or 0) for c in claims)
+        total_support = sum(int(c.get("support_score") or 0) for c in claims)
         return {
             "has_competing_claims": len(claims) > 1,
             "conflict_score": total_conflict,
+            "support_score": total_support,
             "dominant_claim_state": dominant.get("state"),
             "dominant_claimed_value": dominant.get("claimed_value"),
         }

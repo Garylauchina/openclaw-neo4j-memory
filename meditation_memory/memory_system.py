@@ -182,6 +182,30 @@ class MemorySystem:
                     )
                     self._store.apply_claim_feedback(entity.name, conflicting_type, "contradict", delta=1)
             self._store.sync_entity_type_from_claims(entity.name)
+            self._apply_feedback_entity_state(entity)
+
+    def _apply_feedback_entity_state(self, entity: Entity) -> Entity:
+        """让 claim feedback 的最小聚合结果回流到 entity state policy。"""
+        props = dict(entity.properties or {})
+        signal = self._store.get_claim_runtime_signal(entity.name) if hasattr(self._store, "get_claim_runtime_signal") else {}
+        if not isinstance(signal, dict):
+            signal = {}
+
+        dominant_state = signal.get("dominant_claim_state")
+        conflict_score = int(signal.get("conflict_score") or 0)
+        support_score = int(signal.get("support_score") or 0)
+        has_competing = bool(signal.get("has_competing_claims"))
+
+        if dominant_state == "stable" and support_score >= max(conflict_score + 1, 2) and not has_competing:
+            props["knowledge_state"] = "stable"
+            props["feedback_state"] = "reinforced"
+        elif conflict_score >= max(support_score, 1) and has_competing:
+            props["knowledge_state"] = "hypothesis"
+            props["feedback_state"] = "conflicted"
+            props["conflict_with_existing"] = True
+
+        entity.properties = props
+        return entity
 
     def _sync_pending_beliefs(self, entities: List[Entity]) -> None:
         """同步最小 pending belief 生命周期。"""
