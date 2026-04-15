@@ -156,7 +156,31 @@ class MemorySystem:
             claims = self._store.get_entity_claims(entity.name)
             for claim in claims:
                 if claim.get("claimed_value") != entity.entity_type:
-                    self._store.apply_claim_feedback(entity.name, claim.get("claimed_value", ""), "contradict", delta=1)
+                    conflicting_type = claim.get("claimed_value", "")
+                    self._store.record_claim_observation(
+                        entity_name=entity.name,
+                        claimed_type=conflicting_type,
+                        observation_type="later_text_evidence",
+                        content=f"Observed competing entity typing: {entity.entity_type}",
+                        source=props.get("source_id", "ingest_llm"),
+                        polarity="contradict",
+                        confidence=1.0,
+                    )
+                    self._store.record_claim_outcome(
+                        entity_name=entity.name,
+                        claimed_type=conflicting_type,
+                        status="contradicted",
+                        summary=f"Competing entity type observed: {entity.entity_type}",
+                        confidence=1.0,
+                    )
+                    self._store.record_belief_update(
+                        entity_name=entity.name,
+                        claimed_type=conflicting_type,
+                        update_type="contradict",
+                        delta=1,
+                        reason=f"Competing entity type {entity.entity_type} observed",
+                    )
+                    self._store.apply_claim_feedback(entity.name, conflicting_type, "contradict", delta=1)
             self._store.sync_entity_type_from_claims(entity.name)
 
     def _sync_pending_beliefs(self, entities: List[Entity]) -> None:

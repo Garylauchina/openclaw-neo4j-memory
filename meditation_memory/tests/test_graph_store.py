@@ -270,6 +270,30 @@ class TestGraphStoreOperations(unittest.TestCase):
         result = self.store.sync_entity_type_from_claims("Apple")
         self.assertEqual(result["entity_type"], "organization")
 
+    def test_record_claim_observation(self):
+        mock_result = MagicMock()
+        mock_result.single.return_value = {"observation_id": "obs1"}
+        self.mock_session.run.return_value = mock_result
+
+        obs_id = self.store.record_claim_observation("Apple", "organization", "later_text_evidence", "Observed competing type", "src1", "contradict")
+        self.assertEqual(obs_id, "obs1")
+
+    def test_record_claim_outcome(self):
+        mock_result = MagicMock()
+        mock_result.single.return_value = {"outcome_id": "out1"}
+        self.mock_session.run.return_value = mock_result
+
+        out_id = self.store.record_claim_outcome("Apple", "organization", "contradicted", "Competing type observed")
+        self.assertEqual(out_id, "out1")
+
+    def test_record_belief_update(self):
+        mock_result = MagicMock()
+        mock_result.single.return_value = {"update_id": "upd1"}
+        self.mock_session.run.return_value = mock_result
+
+        upd_id = self.store.record_belief_update("Apple", "organization", "contradict", 1, "Competing type observed")
+        self.assertEqual(upd_id, "upd1")
+
     def test_build_meta_cluster_signature_is_order_insensitive(self):
         sig1 = self.store._build_meta_cluster_signature(["张三", "项目A", "北京"])
         sig2 = self.store._build_meta_cluster_signature(["北京", "张三", "项目A", "张三"])

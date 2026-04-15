@@ -195,6 +195,10 @@ class GraphStore:
             # Phase 4: 反馈节点索引
             "CREATE INDEX feedback_query_ts_idx IF NOT EXISTS FOR (f:Feedback) ON (f.query, f.timestamp)",
             "CREATE INDEX feedback_success_idx IF NOT EXISTS FOR (f:Feedback) ON (f.success)",
+            # Phase 5: world model nodes
+            "CREATE INDEX observation_id_idx IF NOT EXISTS FOR (o:Observation) ON (o.observation_id)",
+            "CREATE INDEX outcome_id_idx IF NOT EXISTS FOR (o:Outcome) ON (o.outcome_id)",
+            "CREATE INDEX belief_update_id_idx IF NOT EXISTS FOR (u:BeliefUpdate) ON (u.update_id)",
         ]
         with self.driver.session(database=self._config.database) as session:
             for query in queries:
@@ -2736,6 +2740,117 @@ class GraphStore:
         with self.driver.session(database=self._config.database) as session:
             result = session.run(query, content=content)
             return result.single() is not None
+
+    def record_claim_observation(
+        self,
+        entity_name: str,
+        claimed_type: str,
+        observation_type: str,
+        content: str,
+        source: str,
+        polarity: str,
+        confidence: float = 1.0,
+    ) -> str:
+        """记录针对 claim 的最小 Observation。"""
+        observation_id = hashlib.md5(f"obs:{entity_name}:{claimed_type}:{content}:{source}".encode("utf-8")).hexdigest()[:16]
+        query = """
+        MERGE (o:Observation {observation_id: $observation_id})
+        ON CREATE SET
+            o.observation_type = $observation_type,
+            o.content = $content,
+            o.source = $source,
+            o.polarity = $polarity,
+            o.confidence = $confidence,
+            o.created_at = timestamp()
+        WITH o
+        MATCH (c:Claim {entity_name: $entity_name, claim_kind: 'entity_typing', claimed_value: $claimed_value})
+        MERGE (o)-[:OBSERVES]->(c)
+        RETURN o.observation_id AS observation_id
+        """
+        with self.driver.session(database=self._config.database) as session:
+            result = session.run(
+                query,
+                observation_id=observation_id,
+                observation_type=observation_type,
+                content=content,
+                source=source,
+                polarity=polarity,
+                confidence=confidence,
+                entity_name=entity_name,
+                claimed_value=claimed_type,
+            )
+            record = result.single()
+            return record["observation_id"] if record else ""
+
+    def record_claim_outcome(
+        self,
+        entity_name: str,
+        claimed_type: str,
+        status: str,
+        summary: str,
+        confidence: float = 1.0,
+    ) -> str:
+        """记录针对 claim 的最小 Outcome。"""
+        outcome_id = hashlib.md5(f"out:{entity_name}:{claimed_type}:{status}:{summary}".encode("utf-8")).hexdigest()[:16]
+        query = """
+        MERGE (o:Outcome {outcome_id: $outcome_id})
+        ON CREATE SET
+            o.status = $status,
+            o.summary = $summary,
+            o.confidence = $confidence,
+            o.created_at = timestamp()
+        WITH o
+        MATCH (c:Claim {entity_name: $entity_name, claim_kind: 'entity_typing', claimed_value: $claimed_value})
+        MERGE (o)-[:EVALUATES]->(c)
+        RETURN o.outcome_id AS outcome_id
+        """
+        with self.driver.session(database=self._config.database) as session:
+            result = session.run(
+                query,
+                outcome_id=outcome_id,
+                status=status,
+                summary=summary,
+                confidence=confidence,
+                entity_name=entity_name,
+                claimed_value=claimed_type,
+            )
+            record = result.single()
+            return record["outcome_id"] if record else ""
+
+    def record_belief_update(
+        self,
+        entity_name: str,
+        claimed_type: str,
+        update_type: str,
+        delta: int,
+        reason: str,
+    ) -> str:
+        """记录针对 claim 的最小 BeliefUpdate。"""
+        update_id = hashlib.md5(f"upd:{entity_name}:{claimed_type}:{update_type}:{reason}:{delta}".encode("utf-8")).hexdigest()[:16]
+        query = """
+        MERGE (u:BeliefUpdate {update_id: $update_id})
+        ON CREATE SET
+            u.update_type = $update_type,
+            u.delta = $delta,
+            u.reason = $reason,
+            u.created_at = timestamp()
+        WITH u
+        MATCH (c:Claim {entity_name: $entity_name, claim_kind: 'entity_typing', claimed_value: $claimed_value})
+        MERGE (u)-[:UPDATES]->(c)
+        RETURN u.update_id AS update_id
+        """
+        with self.driver.session(database=self._config.database) as session:
+            result = session.run(
+                query,
+                update_id=update_id,
+                update_type=update_type,
+                delta=delta,
+                reason=reason,
+                entity_name=entity_name,
+                claimed_value=claimed_type,
+            )
+            record = result.single()
+            return record["update_id"] if record else ""
 
     def get_pending_belief_count(self) -> int:
         """获取当前待验证 belief 数量。"""

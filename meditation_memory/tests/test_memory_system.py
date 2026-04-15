@@ -189,6 +189,29 @@ class TestMemorySystemIngest(unittest.TestCase):
         self.assertTrue(written_entities[0].properties["conflict_with_existing"])
         self.assertEqual(written_entities[0].properties["conflict_existing_type"], "organization")
         ms._store.upsert_entity_claim.assert_called()
+        ms._store.record_claim_observation.assert_called_with(
+            entity_name="Apple",
+            claimed_type="organization",
+            observation_type="later_text_evidence",
+            content="Observed competing entity typing: product",
+            source=written_entities[0].properties["source_id"],
+            polarity="contradict",
+            confidence=1.0,
+        )
+        ms._store.record_claim_outcome.assert_called_with(
+            entity_name="Apple",
+            claimed_type="organization",
+            status="contradicted",
+            summary="Competing entity type observed: product",
+            confidence=1.0,
+        )
+        ms._store.record_belief_update.assert_called_with(
+            entity_name="Apple",
+            claimed_type="organization",
+            update_type="contradict",
+            delta=1,
+            reason="Competing entity type product observed",
+        )
         ms._store.apply_claim_feedback.assert_called_with("Apple", "organization", "contradict", delta=1)
         ms._store.sync_entity_type_from_claims.assert_called_with("Apple")
 
