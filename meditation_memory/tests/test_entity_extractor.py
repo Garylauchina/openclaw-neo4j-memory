@@ -60,6 +60,16 @@ class TestRelation(unittest.TestCase):
         self.assertEqual(r.relation_type, "works_at")
 
 
+class TestEntityNameValidation(unittest.TestCase):
+    def test_low_information_english_words_are_filtered(self):
+        from meditation_memory.entity_extractor import _is_valid_name
+        self.assertFalse(_is_valid_name("Here"))
+        self.assertFalse(_is_valid_name("Remember"))
+        self.assertFalse(_is_valid_name("Create"))
+        self.assertTrue(_is_valid_name("Python"))
+        self.assertTrue(_is_valid_name("Tableau"))
+
+
 class TestEntityExtractorRules(unittest.TestCase):
     """规则模式抽取测试"""
 

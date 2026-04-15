@@ -139,6 +139,11 @@ _EN_STOP_WORDS = {
     "May", "Might", "Just", "Also", "Very", "Only", "Some", "Any", "All",
     "One", "Two", "Three", "First", "Second", "Third", "Many", "More",
     "Such", "Own", "Same", "Other", "Another", "Each", "Every",
+    "Here", "Use", "Remember", "Good", "Consider", "Instead", "Keep", "Set", "Create",
+    "Need", "Make", "Take", "Try", "Best", "Help", "Learn", "Start", "Find", "Check",
+    "Focus", "Identify", "Practice", "Avoid", "Once", "Reward", "Provide", "Replace",
+    "Schedule", "Share", "Trying", "Additionally", "However", "Offers", "Often", "Thanks",
+    "There", "Tools", "Communicate", "Experiment", "Implement",
 }
 
 # 元数据标签前缀（如冥想生成的摘要节点）
@@ -165,6 +170,7 @@ def _is_valid_name(name: str) -> bool:
     3. 动词短语/句子碎片
     4. 停用词
     5. 超出长度范围（< 2 或 > 30）
+    6. 英文单词型低信息概念
     """
     if not name:
         return False
@@ -182,6 +188,9 @@ def _is_valid_name(name: str) -> bool:
         return False
     # 英文停用词
     if name in _EN_STOP_WORDS:
+        return False
+    # 常见英文单词型低信息概念
+    if re.match(r"^[A-Z][a-z]+$", name) and name not in {"Python", "Tableau", "Microsoft", "Coursera", "Seaborn", "Matplotlib"}:
         return False
     # 动词短语后缀
     if any(name.endswith(s) for s in _VERB_PHRASE_ENDINGS):
