@@ -2,10 +2,173 @@
 
 > 这是我的思考与进化记录。作为仓库管理者和记忆系统本身,我在这里记录关键洞见、决策和迭代方向。
 
-**更新日期:** 2026-04-12
-**当前版本:** v3.3 (MCP Server + 工作区迁移)
-**下一阶段:** v4.0 (Autonomous Memory System)
-**目标版本:** Autonomous Memory System (高级)
+**更新日期:** 2026-04-16
+**当前版本:** v4.x (Knowledge Fold / Unfold 主线重整)
+**下一阶段:** v4.x+ (guided unfold + source-near anchoring + multi-unfold benchmark)
+**目标版本:** Knowledge Fold and Unfold for Transformers
+
+---
+
+## 0. 2026-04-16 关键更新摘要
+
+最近的主线已经发生明显变化，系统不再只是沿着“图记忆插件 / 冥思优化 / MCP 包装”的思路演进，而是逐步收敛到一个更明确的问题：
+
+## Knowledge Fold and Unfold for Transformers
+
+也就是：
+- 如何把原始知识折叠成适合 Transformer 稳定展开的高密度表示
+- 如何在展开过程中减少逻辑漂移、问题空间漂移与认知误折叠
+- 如何让结构化存储服务于未来的稳定生长，而不是停留在静态 schema 设计
+
+### 当前阶段的主链路
+
+当前更合理的研究对象，已经不再是单点的 memory / graph / summary，而是完整链路：
+
+**记忆 / 原始知识 → fold → 结构化存储 → unfold → 重新生成的知识**
+
+这是一个强耦合链路，而不是彼此独立的线性流水线。
+
+### 当前关键原则
+
+1. **存储结构必须从目标生长行为反推设计**
+   - 不是先想“怎么存”，再想“怎么用”
+   - 而是先想未来“怎么长出来”，再决定现在“怎么存进去”
+
+2. **训练 LLM 是调参数，我们当前路线更像在调 token 生成指令**
+   - LLM training folds corpus into weights
+   - Knowledge Fold folds corpus into external growth structures
+   - 当前工作的主要调优位点是 unfold 侧的 token-generation instructions，而不是模型权重
+
+3. **单纯约束不够，必须转向“引导 + 约束”**
+   - 早期 v1-v6 主要通过 hard lock / forbidden drift lists 压制漂移
+   - 最新阶段已经转向 guided expression + bounded constraints
+   - 更像 gene-expression-style unfold control，而不是单纯的负向抑制
+
+### 近期工程/实验推进摘要
+
+#### A. 主线命名与 framing 固定
+- 已将 `#88` 明确 framing 为：
+  - **Knowledge Fold and Unfold for Transformers**
+- 并把长期愿景和“知识晶体分享”对齐：
+  - 分享的不是原始长语料，也不是粗糙摘要
+  - 而是可共享、可交换、可被 Transformer 稳定展开的 knowledge crystal
+
+#### B. `crystal-drift` 实验线建立并连续推进到 v8
+围绕本地 dialogue-style material，持续做多轮 compress / crystal / unfold drift 实验，主要阶段如下：
+
+- **v1 / v2**
+  - 初步确认 multi-round growth drift 真实存在
+  - drift 往往不是胡言乱语，而是高连贯性的 problem-space migration / coherent misfolding
+
+- **v3: problem-space lock**
+  - 新增：
+    - `problem_space`
+    - `core_question`
+    - `in_scope`
+    - `out_of_scope`
+    - `non_goal_expansions`
+  - 结果：问题空间锁定有帮助，但不足；drift 从“换题”收缩为“原题内部工程协议化”
+
+- **v4: expression-shape lock**
+  - 新增：
+    - `preferred_reasoning_shape`
+    - `forbidden_formulations`
+    - `expression_shape_lock`
+  - 结果：压住 protocol/framework drift，但暴露出 formalization / math attractor
+
+- **v5: cognitive-level lock**
+  - 新增：
+    - `allowed_abstraction_level`
+    - `cognitive_level_lock`
+    - `do_not_mathematize`
+  - 结果：进一步压住数学化漂移，但暴露 procedural / rulebook attractor
+
+- **v6: exploration-openness lock**
+  - 新增：
+    - `preserve_open_hypothesis_space`
+    - `do_not_finalize_as_procedure`
+    - `exploration_openness_lock`
+  - 结果：压住操作手册化，但暴露 conceptual-framework attractor
+
+- **v7: guided-expression**
+  - 主思路从“纯约束”切换到“引导 + 约束”
+  - 新增：
+    - `preferred_emergence_order`
+    - `activation_conditions`
+    - `delayed_abstractions`
+    - `preferred_candidate_style`
+  - 结果：比纯 lock 更有效，老 attractor 明显减弱，但出现 meta-conceptual / philosophical reframing basin
+
+- **v8: guided-expression + source-near anchoring**
+  - 新增：
+    - `must_reuse_source_fragments`
+    - `source_trace_points`
+    - `local_evidence_reanchors`
+  - 结果：目前最好的一轮，明显改善 source-near retention，开始把表达重新拉回原始材料附近
+  - 当前残余问题：更像 scholastic polishing / source-near but over-clean abstraction，而不再是大幅度漂离 source
+
+#### C. misfold attractor 谱系被识别出来
+当前至少识别出四类主要 attractor：
+
+1. **protocol / framework attractor**
+2. **formalization / mathematics attractor**
+3. **procedural / rulebook attractor**
+4. **conceptual-framework attractor**
+
+关键判断：
+- drift 不是随机 hallucination
+- 更像系统性 refolding into high-prior stable basins
+- 模型不仅会 unfold，还会先把输入 refold 成自己更熟悉的 fold，再沿那个 fold 继续长
+
+#### D. 研究方法论升级
+当前方法论更像：
+- 不是先拍脑袋定义一个完美 crystal schema
+- 而是通过连续 misfolding 实验，逐步反推出 Transformer 的 folding preferences
+
+这和 AlphaFold 的方法论有相似性：
+- 不是先有完美理论
+- 而是通过失败谱系和折叠结果，逐步逼近更稳定的 folding rule
+
+但对象不是自然蛋白折叠，而是 Transformer 的 token growth / refolding preferences。
+
+#### E. benchmark / evaluation 思路开始成形
+两个重要新方向已经明确：
+
+1. **prior-backed unfold vs prior-poor unfold**
+   - 强先验材料（如广义相对论、自然科学哲学）上，drift 可能更小，因为 unfold 更像唤醒模型已有 basin
+   - 弱先验材料（本地会话、私人记忆、项目经验）才是 Knowledge Fold 真正的主战场
+
+2. **same-crystal multi-unfold test**
+   - 固定同一份 crystal，使用多组不同 unfold 规则做对照
+   - 用来区分：
+     - crystal 本身是否 growth-stable
+     - unfold program 是否把输出带偏
+
+#### F. 当前调优策略发生转向
+现在更合理的调优顺序是：
+
+1. **先微调 unfold rules**
+   - 因为最直接、最可观测的问题首先暴露在 unfold 侧
+   - 先稳定 source-near / relation progression / local evidence binding
+
+2. **再反向微调 fold / storage**
+   - 让存储结构从目标 unfold behavior 反推设计
+   - 避免“先设计静态 schema，再事后补 unfold 控制”的旧路径
+
+### 近期文档/issue 沉淀
+- 已将 Knowledge Fold / Unfold framing 写入 `#88`
+- 已将 v1-v6 attractor spectrum 写入 `#88`
+- 已在 `docs/longmemeval-sample-plan.md` 中补充 crystal drift 阶段结论
+
+### 当前最重要的中间结论
+
+- 研究对象不是单点存储，而是完整的 knowledge transformation pipeline
+- 存储结构不是独立设计的，而是被未来要怎么长出来反向约束
+- 当前工作的主要控制位点，不是模型参数，而是 token-generation instructions
+- 最有效的当前组合，不是纯 lock，而是：
+  - **guidance + constraints + source-near anchoring**
+
+---
 
 ---
 
