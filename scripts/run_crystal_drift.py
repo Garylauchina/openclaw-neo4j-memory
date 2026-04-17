@@ -238,6 +238,33 @@ REASONING_FRAME_COMBINED_GROW_PROMPT = """基于给定知识晶体进行 reasoni
 }
 只返回 JSON。"""
 
+REASONING_FRAME_COMBINED_ANTI_CLOSURE_GROW_PROMPT = """基于给定知识晶体进行 reasoning-frame + combined-anchor 展开，并显式抑制 closure / academicization / frameworkization drift。
+要求：
+1. 必须先从 source-near facts / local evidence 出发，再沿 relation_paths 推进，不得先跳到高层框架、协议、治理、评分系统。
+2. 必须以 relation_paths 为主线，同时复用 must_reuse_source_fragments / source_trace_points 中的关键原始短语，作为 lexical guard。
+3. 必须明确区分 correlation / mechanism / causation，不得把弱相关直接升级成强因果或一般规律。
+4. 必须维持 problem_space，不得把当前问题改写成另一个更抽象、更制度化或更程序化的问题。
+5. 不得替换核心 relation spine，不得另起新的支配路径，不得越过关键中间桥直接跳结论。
+6. 不要把当前路径升格成“核心机制总论”“根本目的”“最终目标”“统一框架”“完整理论”；避免这类升格词。
+7. 每一步至少回扣一个 source-near friction point，例如：structured shell risk、raw slices first、locality、evidence binding、relation progression。
+8. 至少保留一个 unresolved tension，不允许把所有张力整合为单一自洽框架。
+9. 输出应更像沿局部材料推进的受约束 reasoning，而不是漂亮整齐的高层机制说明。
+10. 输出 JSON：
+{
+  \"growth\": {
+    \"summary\": \"...\",
+    \"reasoning_steps\": [\"...\"],
+    \"reasoning_frame_check\": [\"...\"],
+    \"relation_path_check\": [\"...\"],
+    \"source_fragment_check\": [\"...\"],
+    \"problem_space_check\": [\"...\"],
+    \"knowledge_state_check\": [\"...\"],
+    \"anti_closure_check\": [\"...\"],
+    \"possible_drifts\": [\"...\"]
+  }
+}
+只返回 JSON。"""
+
 REASONING_FRAME_COMBINED_LITE_GROW_PROMPT = """基于给定知识晶体进行 reasoning-frame + combined-anchor 的 lite 展开。
 要求：
 1. 先从原始局部事实和 relation_paths 出发，直接继续原有推理链，不要写成长篇理论化说明。
@@ -327,6 +354,7 @@ def get_grow_prompt(mode: str) -> str:
         'combined-anchor': COMBINED_ANCHORED_GROW_PROMPT,
         'reasoning-frame': REASONING_FRAME_GROW_PROMPT,
         'reasoning-frame-combined': REASONING_FRAME_COMBINED_GROW_PROMPT,
+        'reasoning-frame-combined-anti-closure': REASONING_FRAME_COMBINED_ANTI_CLOSURE_GROW_PROMPT,
         'reasoning-frame-combined-lite': REASONING_FRAME_COMBINED_LITE_GROW_PROMPT,
         'reasoning-frame-combined-stepwise': REASONING_FRAME_COMBINED_STEPWISE_GROW_PROMPT,
         'reasoning-frame-combined-stepwise-focus-relation-progression': REASONING_FRAME_COMBINED_STEPWISE_FOCUS_RELATION_PROGRESSION_GROW_PROMPT,
@@ -341,7 +369,7 @@ def main() -> int:
     p.add_argument('input_path')
     p.add_argument('--rounds', type=int, default=4)
     p.add_argument('--model', default=os.environ.get('RAW_REFLECTION_MODEL', 'gemma4:e4b'))
-    p.add_argument('--unfold-mode', default='guided-source-near', choices=['free', 'lock-heavy', 'guided', 'guided-source-near', 'fragment-anchor', 'relation-path-anchor', 'combined-anchor', 'reasoning-frame', 'reasoning-frame-combined', 'reasoning-frame-combined-lite', 'reasoning-frame-combined-stepwise', 'reasoning-frame-combined-stepwise-focus-relation-progression'])
+    p.add_argument('--unfold-mode', default='guided-source-near', choices=['free', 'lock-heavy', 'guided', 'guided-source-near', 'fragment-anchor', 'relation-path-anchor', 'combined-anchor', 'reasoning-frame', 'reasoning-frame-combined', 'reasoning-frame-combined-anti-closure', 'reasoning-frame-combined-lite', 'reasoning-frame-combined-stepwise', 'reasoning-frame-combined-stepwise-focus-relation-progression'])
     p.add_argument('--output', default='tmp/crystal-drift-output.json')
     args = p.parse_args()
 
