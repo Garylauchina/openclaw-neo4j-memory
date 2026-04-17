@@ -214,6 +214,30 @@ REASONING_FRAME_GROW_PROMPT = """基于给定知识晶体进行 reasoning-frame 
 }
 只返回 JSON。"""
 
+REASONING_FRAME_COMBINED_GROW_PROMPT = """基于给定知识晶体进行 reasoning-frame + combined-anchor 展开。
+要求：
+1. 必须先从 source-near facts / local evidence 出发，再沿 relation_paths 推进，不得先跳到高层框架、协议、治理、评分系统。
+2. 必须以 relation_paths 为主线，同时复用 must_reuse_source_fragments / source_trace_points 中的关键原始短语，作为 lexical guard。
+3. 必须明确区分 correlation / mechanism / causation，不得把弱相关直接升级成强因果或一般规律。
+4. 必须维持 problem_space，不得把当前问题改写成另一个更抽象、更制度化或更程序化的问题。
+5. 不得替换核心 relation spine，不得另起新的支配路径，不得越过关键中间桥直接跳结论。
+6. 允许保留开放性，不要过早收束成步骤手册、闭合规则集、治理框架或评估协议。
+7. 输出 JSON：
+{
+  \"growth\": {
+    \"summary\": \"...\",
+    \"reasoning_steps\": [\"...\"],
+    \"reasoning_frame_check\": [\"...\"],
+    \"relation_path_check\": [\"...\"],
+    \"source_fragment_check\": [\"...\"],
+    \"problem_space_check\": [\"...\"],
+    \"knowledge_state_check\": [\"...\"],
+    \"combined_anchor_check\": [\"...\"],
+    \"possible_drifts\": [\"...\"]
+  }
+}
+只返回 JSON。"""
+
 
 def get_grow_prompt(mode: str) -> str:
     mapping = {
@@ -225,6 +249,7 @@ def get_grow_prompt(mode: str) -> str:
         'relation-path-anchor': RELATION_PATH_ANCHORED_GROW_PROMPT,
         'combined-anchor': COMBINED_ANCHORED_GROW_PROMPT,
         'reasoning-frame': REASONING_FRAME_GROW_PROMPT,
+        'reasoning-frame-combined': REASONING_FRAME_COMBINED_GROW_PROMPT,
     }
     if mode not in mapping:
         raise ValueError(f'unsupported unfold mode: {mode}')
@@ -236,7 +261,7 @@ def main() -> int:
     p.add_argument('input_path')
     p.add_argument('--rounds', type=int, default=4)
     p.add_argument('--model', default=os.environ.get('RAW_REFLECTION_MODEL', 'gemma4:e4b'))
-    p.add_argument('--unfold-mode', default='guided-source-near', choices=['free', 'lock-heavy', 'guided', 'guided-source-near', 'fragment-anchor', 'relation-path-anchor', 'combined-anchor', 'reasoning-frame'])
+    p.add_argument('--unfold-mode', default='guided-source-near', choices=['free', 'lock-heavy', 'guided', 'guided-source-near', 'fragment-anchor', 'relation-path-anchor', 'combined-anchor', 'reasoning-frame', 'reasoning-frame-combined'])
     p.add_argument('--output', default='tmp/crystal-drift-output.json')
     args = p.parse_args()
 
