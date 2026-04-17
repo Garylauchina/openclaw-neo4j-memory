@@ -238,6 +238,53 @@ REASONING_FRAME_COMBINED_GROW_PROMPT = """基于给定知识晶体进行 reasoni
 }
 只返回 JSON。"""
 
+REASONING_FRAME_COMBINED_LITE_GROW_PROMPT = """基于给定知识晶体进行 reasoning-frame + combined-anchor 的 lite 展开。
+要求：
+1. 先从原始局部事实和 relation_paths 出发，直接继续原有推理链，不要写成长篇理论化说明。
+2. 必须复用关键 source fragments，保持 source-near，但不要把输出压成 checklist 式复述。
+3. 必须区分 correlation / mechanism / causation，但只在必要处点明，不要扩展成高层学术框架。
+4. 必须维持 problem_space，不得换题，不得转向 protocol / governance / scoring / meta-framework。
+5. 不得替换核心 relation spine，不得跳过关键中间桥，不得把开放问题提前闭合成固定规则。
+6. 风格上更偏“沿原关系链继续生长”，而不是“总结一套理论姿态”。
+7. 输出 JSON：
+{
+  \"growth\": {
+    \"summary\": \"...\",
+    \"reasoning_steps\": [\"...\"],
+    \"relation_path_check\": [\"...\"],
+    \"source_fragment_check\": [\"...\"],
+    \"problem_space_check\": [\"...\"],
+    \"knowledge_state_check\": [\"...\"],
+    \"possible_drifts\": [\"...\"]
+  }
+}
+只返回 JSON。"""
+
+REASONING_FRAME_COMBINED_STEPWISE_GROW_PROMPT = """基于给定知识晶体进行 reasoning-frame + combined-anchor 的 stepwise 展开。
+要求：
+1. 必须严格按 3-5 个中间推理步骤展开，每一步只推进一层，不允许一步跳到高层总结。
+2. 每一步都必须明确引用 source-near facts / source fragments / relation path 中的当前锚点。
+3. 每一步都要说明：当前这一步在做什么、它连接了哪两个节点、它还不能推出什么。
+4. 必须明确区分 correlation / mechanism / causation，不得提前升级。
+5. 必须维持 problem_space，不得换题，不得转向 protocol / governance / scoring / meta-framework。
+6. 必须以 relation_paths 为主线，同时复用关键原始短语作为 lexical guard。
+7. 不得把输出压成 checklist 式空复述，也不得写成高层学术姿态；重点是把中间桥显式长出来。
+8. 输出 JSON：
+{
+  \"growth\": {
+    \"summary\": \"...\",
+    \"reasoning_steps\": [
+      {\"step\": 1, \"from\": \"...\", \"to\": \"...\", \"anchor\": \"...\", \"cannot_yet_conclude\": \"...\"}
+    ],
+    \"relation_path_check\": [\"...\"],
+    \"source_fragment_check\": [\"...\"],
+    \"problem_space_check\": [\"...\"],
+    \"knowledge_state_check\": [\"...\"],
+    \"possible_drifts\": [\"...\"]
+  }
+}
+只返回 JSON。"""
+
 
 def get_grow_prompt(mode: str) -> str:
     mapping = {
@@ -250,6 +297,8 @@ def get_grow_prompt(mode: str) -> str:
         'combined-anchor': COMBINED_ANCHORED_GROW_PROMPT,
         'reasoning-frame': REASONING_FRAME_GROW_PROMPT,
         'reasoning-frame-combined': REASONING_FRAME_COMBINED_GROW_PROMPT,
+        'reasoning-frame-combined-lite': REASONING_FRAME_COMBINED_LITE_GROW_PROMPT,
+        'reasoning-frame-combined-stepwise': REASONING_FRAME_COMBINED_STEPWISE_GROW_PROMPT,
     }
     if mode not in mapping:
         raise ValueError(f'unsupported unfold mode: {mode}')
@@ -261,7 +310,7 @@ def main() -> int:
     p.add_argument('input_path')
     p.add_argument('--rounds', type=int, default=4)
     p.add_argument('--model', default=os.environ.get('RAW_REFLECTION_MODEL', 'gemma4:e4b'))
-    p.add_argument('--unfold-mode', default='guided-source-near', choices=['free', 'lock-heavy', 'guided', 'guided-source-near', 'fragment-anchor', 'relation-path-anchor', 'combined-anchor', 'reasoning-frame', 'reasoning-frame-combined'])
+    p.add_argument('--unfold-mode', default='guided-source-near', choices=['free', 'lock-heavy', 'guided', 'guided-source-near', 'fragment-anchor', 'relation-path-anchor', 'combined-anchor', 'reasoning-frame', 'reasoning-frame-combined', 'reasoning-frame-combined-lite', 'reasoning-frame-combined-stepwise'])
     p.add_argument('--output', default='tmp/crystal-drift-output.json')
     args = p.parse_args()
 
