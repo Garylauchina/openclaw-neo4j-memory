@@ -1,0 +1,162 @@
+{
+  "crystal_id": "schema-definition-crystal-v1",
+  "purpose": "Meta-protocol crystal for how a crystal set describes itself, why its fields exist, and how failures should be interpreted as structural signals rather than opaque model weakness.",
+  "content_core": {
+    "title": "Schema Definition Crystal v1",
+    "type": "meta_protocol_crystal",
+    "nodes": [
+      {
+        "id": "crystal_not_flat_bundle",
+        "label": "crystal set is not a flat bundle",
+        "kind": "schema_principle",
+        "description": "Recent experiments show that crystals are not just grouped content files; they form an ordered protocol architecture."
+      },
+      {
+        "id": "object_level_fields_are_forced",
+        "label": "object-level fields are forced by experiment",
+        "kind": "schema_principle",
+        "description": "Fields such as crystal type, protocol phase, ordering, and frame-establishment are not decorative metadata; they were forced out by experiments."
+      },
+      {
+        "id": "requires_prior_vs_establishes_frame_for",
+        "label": "requires_prior vs establishes_frame_for",
+        "kind": "schema_boundary",
+        "description": "Ordering dependency and frame-establishing authority are different relations and must not be collapsed into one field."
+      },
+      {
+        "id": "failure_as_diagnostic_signal",
+        "label": "failure as diagnostic signal",
+        "kind": "schema_principle",
+        "description": "Regrowth or runtime failure should be interpreted as evidence about missing crystals, missing dependencies, or weak crystallization, not only as generic model weakness."
+      },
+      {
+        "id": "crystal_roles_are_differentiated",
+        "label": "crystal roles are differentiated",
+        "kind": "schema_principle",
+        "description": "Current experiments support at least reasoning-path, protocol, and content role distinctions."
+      },
+      {
+        "id": "schema_must_be_internal",
+        "label": "schema must be internal to the crystal system",
+        "kind": "meta_requirement",
+        "description": "If the crystal set is truly self-describing, its schema logic cannot remain outside the set as mere prose."
+      }
+    ],
+    "edges": [
+      {
+        "from": "crystal_not_flat_bundle",
+        "to": "object_level_fields_are_forced",
+        "type": "implies",
+        "description": "Once crystals are recognized as ordered protocol objects, explicit fields become necessary."
+      },
+      {
+        "from": "object_level_fields_are_forced",
+        "to": "requires_prior_vs_establishes_frame_for",
+        "type": "sharpens",
+        "description": "Experiments show that dependency and framing are not the same relation."
+      },
+      {
+        "from": "failure_as_diagnostic_signal",
+        "to": "object_level_fields_are_forced",
+        "type": "supports",
+        "description": "Diagnostic failure interpretation depends on explicit crystal-set fields and relations."
+      },
+      {
+        "from": "crystal_roles_are_differentiated",
+        "to": "schema_must_be_internal",
+        "type": "supports",
+        "description": "If roles and relations are stable enough to name, the schema should itself become part of the crystal system."
+      }
+    ],
+    "relation_paths": [
+      "crystal set is not a flat bundle -> object-level fields are forced by experiment -> schema must be internal",
+      "failure as diagnostic signal -> object-level fields are forced -> requires_prior vs establishes_frame_for"
+    ],
+    "tensions": [
+      {
+        "id": "t1",
+        "label": "minimal schema vs over-formalization",
+        "description": "The schema should capture real structure without prematurely freezing the entire crystal architecture."
+      },
+      {
+        "id": "t2",
+        "label": "descriptive metadata vs causal metadata",
+        "description": "Some fields merely describe, while others encode causal protocol structure and failure logic."
+      },
+      {
+        "id": "t3",
+        "label": "internal self-description vs external explanation",
+        "description": "The schema should help the crystal set describe itself, not only explain itself to humans."
+      }
+    ],
+    "unresolved_conflicts": [
+      {
+        "id": "u1",
+        "label": "protocol subtype granularity",
+        "description": "How far protocol types should be subdivided remains unresolved."
+      },
+      {
+        "id": "u2",
+        "label": "schema evolution policy",
+        "description": "How the schema itself should change over time remains unresolved."
+      },
+      {
+        "id": "u3",
+        "label": "activation vs reading order distinction",
+        "description": "Whether crystal activation order must be explicitly separated from reading order remains unresolved."
+      }
+    ],
+    "source_anchors": [
+      "crystal set is not a flat bundle",
+      "requires_prior and establishes_frame_for are different relations",
+      "failure should be interpreted as structural evidence",
+      "schema must move from prose outside the set into the set itself"
+    ],
+    "problem_space": "How a crystal set can become self-describing by internalizing the minimal schema logic that recent experiments have already forced into view.",
+    "core_questions": [
+      "Why must the crystal-set schema exist as an internal object rather than only as external documentation?",
+      "Which crystal-set fields are truly forced by experiment and which are only provisional?",
+      "How should the system distinguish dependency, framing, phase, and failure interpretation relations?"
+    ],
+    "scope_limits": [
+      "This crystal defines the minimum self-description schema for the crystal system, not the final schema for all future crystals.",
+      "This crystal should remain narrow and avoid freezing experimental openness too early."
+    ]
+  },
+  "self_adaptation": {
+    "required_calibration_domains": [
+      "schema_boundary_discipline",
+      "dependency_vs_framing_distinction",
+      "failure_diagnostic_interpretation",
+      "minimal_vs_overformalized_schema",
+      "self_description_readiness"
+    ],
+    "runtime_rebuild_required": true,
+    "calibration_priority_order": [
+      "schema_boundary_discipline",
+      "dependency_vs_framing_distinction",
+      "failure_diagnostic_interpretation",
+      "self_description_readiness",
+      "minimal_vs_overformalized_schema"
+    ],
+    "calibration_instructions": {
+      "goal": "Calibrate how this model should interpret crystal-set relations as a self-describing schema rather than as loose documentation.",
+      "requirements": [
+        "Do not collapse ordering and framing into one relation.",
+        "Do not treat failure as generic weakness when structural interpretation is available.",
+        "Do not overexpand the schema beyond what experiments currently support."
+      ],
+      "must_output": [
+        "calibration_findings",
+        "schema_behavior_portrait",
+        "chosen_schema_policy"
+      ]
+    },
+    "boundary_rule": "This crystal defines the self-description logic of the crystal set and should be read before interpreting other crystals as a coherent set.",
+    "forbidden_shortcuts": [
+      "Do not treat the schema as optional commentary.",
+      "Do not collapse all relations into dependency order only.",
+      "Do not expand the schema into unsupported future complexity."
+    ]
+  }
+}

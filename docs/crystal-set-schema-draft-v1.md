@@ -121,6 +121,7 @@ Example values:
   "set_id": "project-crystal-set-v1",
   "purpose": "soft-isolated project regrowth and runtime protocol reconstruction",
   "reading_order": [
+    "schema-definition-crystal-v1",
     "problem-definition-crystal-v1",
     "architecture-evolution-crystal-v1",
     "methodology-crystal-v1",
@@ -131,6 +132,7 @@ Example values:
   ],
   "phase_groups": {
     "pre-ingestion": [
+      "schema-definition-crystal-v1",
       "problem-definition-crystal-v1",
       "architecture-evolution-crystal-v1",
       "methodology-crystal-v1"
@@ -156,9 +158,9 @@ Example values:
 
 ---
 
-## Current Seven-Crystal Working Instance
+## Current Eight-Crystal Working Instance
 
-Below is the current working seven-crystal set,
+Below is the current working eight-crystal set,
 expressed in the new schema language.
 
 ```json
@@ -166,6 +168,7 @@ expressed in the new schema language.
   "set_id": "project-crystal-set-v1",
   "purpose": "project-level architecture regrowth plus deployment-facing runtime protocol reconstruction",
   "reading_order": [
+    "schema-definition-crystal-v1",
     "problem-definition-crystal-v1",
     "architecture-evolution-crystal-v1",
     "methodology-crystal-v1",
@@ -176,6 +179,7 @@ expressed in the new schema language.
   ],
   "phase_groups": {
     "pre-ingestion": [
+      "schema-definition-crystal-v1",
       "problem-definition-crystal-v1",
       "architecture-evolution-crystal-v1",
       "methodology-crystal-v1"
@@ -197,63 +201,81 @@ expressed in the new schema language.
   ],
   "crystals": [
     {
+      "crystal_id": "schema-definition-crystal-v1",
+      "crystal_type": "protocol",
+      "protocol_phase": "pre-ingestion",
+      "requires_prior": [],
+      "establishes_frame_for": [
+        "problem-definition-crystal-v1",
+        "architecture-evolution-crystal-v1",
+        "methodology-crystal-v1",
+        "retrieval-routing-crystal-v1",
+        "safety-boundary-crystal-v1",
+        "recovery-resilience-crystal-v1",
+        "system-memory-crystal-v1"
+      ],
+      "runtime_role": "schema-framing",
+      "depends_on": [],
+      "expansion_reason": "failure-driven expansion from schema externality"
+    },
+    {
       "crystal_id": "problem-definition-crystal-v1",
       "crystal_type": "reasoning_path",
       "protocol_phase": "pre-ingestion",
-      "requires_prior": [],
+      "requires_prior": ["schema-definition-crystal-v1"],
       "establishes_frame_for": ["architecture-evolution-crystal-v1", "system-memory-crystal-v1"],
       "runtime_role": "problem-framing",
-      "depends_on": [],
+      "depends_on": ["schema-definition-crystal-v1"],
       "expansion_reason": "mainline seed"
     },
     {
       "crystal_id": "architecture-evolution-crystal-v1",
       "crystal_type": "reasoning_path",
       "protocol_phase": "pre-ingestion",
-      "requires_prior": ["problem-definition-crystal-v1"],
+      "requires_prior": ["schema-definition-crystal-v1", "problem-definition-crystal-v1"],
       "establishes_frame_for": ["methodology-crystal-v1", "system-memory-crystal-v1"],
       "runtime_role": "evolution-framing",
-      "depends_on": ["problem-definition-crystal-v1"],
+      "depends_on": ["schema-definition-crystal-v1", "problem-definition-crystal-v1"],
       "expansion_reason": "mainline seed"
     },
     {
       "crystal_id": "methodology-crystal-v1",
       "crystal_type": "protocol",
       "protocol_phase": "pre-ingestion",
-      "requires_prior": ["problem-definition-crystal-v1", "architecture-evolution-crystal-v1"],
+      "requires_prior": ["schema-definition-crystal-v1", "problem-definition-crystal-v1", "architecture-evolution-crystal-v1"],
       "establishes_frame_for": ["retrieval-routing-crystal-v1", "system-memory-crystal-v1"],
       "runtime_role": "ingestion-calibration",
-      "depends_on": ["problem-definition-crystal-v1", "architecture-evolution-crystal-v1"],
+      "depends_on": ["schema-definition-crystal-v1", "problem-definition-crystal-v1", "architecture-evolution-crystal-v1"],
       "expansion_reason": "transfer fidelity support"
     },
     {
       "crystal_id": "retrieval-routing-crystal-v1",
       "crystal_type": "protocol",
       "protocol_phase": "runtime",
-      "requires_prior": ["methodology-crystal-v1"],
+      "requires_prior": ["schema-definition-crystal-v1", "methodology-crystal-v1"],
       "establishes_frame_for": ["system-memory-crystal-v1"],
       "runtime_role": "layer-routing",
-      "depends_on": ["methodology-crystal-v1"],
+      "depends_on": ["schema-definition-crystal-v1", "methodology-crystal-v1"],
       "expansion_reason": "runtime protocol completion"
     },
     {
       "crystal_id": "safety-boundary-crystal-v1",
       "crystal_type": "protocol",
       "protocol_phase": "runtime",
-      "requires_prior": ["methodology-crystal-v1", "retrieval-routing-crystal-v1"],
+      "requires_prior": ["schema-definition-crystal-v1", "methodology-crystal-v1", "retrieval-routing-crystal-v1"],
       "establishes_frame_for": ["system-memory-crystal-v1"],
       "runtime_role": "safety-boundary",
-      "depends_on": ["methodology-crystal-v1", "retrieval-routing-crystal-v1"],
+      "depends_on": ["schema-definition-crystal-v1", "methodology-crystal-v1", "retrieval-routing-crystal-v1"],
       "expansion_reason": "failure-driven expansion"
     },
     {
       "crystal_id": "recovery-resilience-crystal-v1",
       "crystal_type": "protocol",
       "protocol_phase": "runtime",
-      "requires_prior": ["methodology-crystal-v1", "retrieval-routing-crystal-v1"],
+      "requires_prior": ["schema-definition-crystal-v1", "methodology-crystal-v1", "retrieval-routing-crystal-v1"],
       "establishes_frame_for": ["system-memory-crystal-v1"],
       "runtime_role": "resilience-recovery",
-      "depends_on": ["methodology-crystal-v1", "retrieval-routing-crystal-v1"],
+      "depends_on": ["schema-definition-crystal-v1", "methodology-crystal-v1", "retrieval-routing-crystal-v1"],
       "expansion_reason": "failure-driven expansion"
     },
     {
@@ -261,6 +283,7 @@ expressed in the new schema language.
       "crystal_type": "content",
       "protocol_phase": "regrowth",
       "requires_prior": [
+        "schema-definition-crystal-v1",
         "problem-definition-crystal-v1",
         "architecture-evolution-crystal-v1",
         "methodology-crystal-v1",
@@ -271,6 +294,7 @@ expressed in the new schema language.
       "establishes_frame_for": [],
       "runtime_role": "system-content",
       "depends_on": [
+        "schema-definition-crystal-v1",
         "problem-definition-crystal-v1",
         "architecture-evolution-crystal-v1",
         "methodology-crystal-v1",
