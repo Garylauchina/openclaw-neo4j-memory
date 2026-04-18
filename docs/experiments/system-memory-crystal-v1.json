@@ -1,0 +1,229 @@
+{
+  "crystal_id": "system-memory-crystal-v1",
+  "purpose": "Prototype system-level memory crystal for testing whether an agent can regrow the full memory system architecture without copying source code.",
+  "content_core": {
+    "title": "OpenClaw Neo4j Memory System - System-Level Crystal v1",
+    "type": "system_knowledge_graph_core",
+    "nodes": [
+      {
+        "id": "memory_substrate",
+        "label": "memory substrate",
+        "kind": "system_component",
+        "description": "The graph-backed retention layer for source material, provenance, local evidence, and recallable traces."
+      },
+      {
+        "id": "ingest_retrieval_loop",
+        "label": "ingest / retrieval loop",
+        "kind": "system_component",
+        "description": "The real-time loop for writing source material into memory and retrieving relevant subgraphs back into runtime use."
+      },
+      {
+        "id": "meditation_engine",
+        "label": "meditation engine",
+        "kind": "system_component",
+        "description": "The asynchronous reflection engine that converts retained material into processed cognitive structure."
+      },
+      {
+        "id": "metacognition_layer",
+        "label": "metacognition layer",
+        "kind": "system_component",
+        "description": "The higher-order reflective layer that evaluates, filters, and reinterprets cognitive outputs."
+      },
+      {
+        "id": "credible_memory_governance",
+        "label": "credible memory governance",
+        "kind": "system_component",
+        "description": "Mechanisms for stable vs hypothesis separation, conflict handling, and cautious runtime injection."
+      },
+      {
+        "id": "world_feedback_runtime",
+        "label": "world feedback runtime",
+        "kind": "system_component",
+        "description": "The feedback layer that updates processed cognitive state from claim conflict and observed outcomes."
+      },
+      {
+        "id": "raw_reflection_route",
+        "label": "raw reflection route",
+        "kind": "research_component",
+        "description": "A route that uses raw slices plus minimal graph hints to preserve locality and relation progression before stronger structuring."
+      },
+      {
+        "id": "knowledge_crystal_layer",
+        "label": "knowledge crystal layer",
+        "kind": "system_component",
+        "description": "The layer that compresses structured experience into machine-native growth seeds for controlled unfold."
+      },
+      {
+        "id": "agent_transfer_layer",
+        "label": "Agent-to-Agent transfer layer",
+        "kind": "system_component",
+        "description": "The layer that allows content cores to move across agents while adaptation layers are rebuilt on the target side."
+      },
+      {
+        "id": "calibration_before_ingestion",
+        "label": "calibration before ingestion",
+        "kind": "runtime_requirement",
+        "description": "A runtime obligation requiring the receiving agent to self-calibrate before fully ingesting a crystal."
+      }
+    ],
+    "edges": [
+      {
+        "from": "memory_substrate",
+        "to": "ingest_retrieval_loop",
+        "type": "supports",
+        "description": "The memory substrate supports real-time ingest and retrieval."
+      },
+      {
+        "from": "memory_substrate",
+        "to": "meditation_engine",
+        "type": "provides_material_to",
+        "description": "Stored material feeds the meditation engine."
+      },
+      {
+        "from": "meditation_engine",
+        "to": "metacognition_layer",
+        "type": "feeds",
+        "description": "Meditation outcomes are evaluated and filtered by metacognition."
+      },
+      {
+        "from": "metacognition_layer",
+        "to": "credible_memory_governance",
+        "type": "supports",
+        "description": "Metacognitive signals support credible memory governance."
+      },
+      {
+        "from": "credible_memory_governance",
+        "to": "world_feedback_runtime",
+        "type": "is_corrected_by",
+        "description": "Credible memory policy is updated by world feedback and claim conflict signals."
+      },
+      {
+        "from": "raw_reflection_route",
+        "to": "knowledge_crystal_layer",
+        "type": "feeds_upstream_to",
+        "description": "The raw reflection route may provide better source-near material for crystal formation."
+      },
+      {
+        "from": "credible_memory_governance",
+        "to": "knowledge_crystal_layer",
+        "type": "constrains",
+        "description": "Knowledge-state discipline constrains crystal formation and unfold."
+      },
+      {
+        "from": "knowledge_crystal_layer",
+        "to": "agent_transfer_layer",
+        "type": "enables",
+        "description": "Knowledge crystals are the transferable structure for cross-agent reconstruction."
+      },
+      {
+        "from": "calibration_before_ingestion",
+        "to": "agent_transfer_layer",
+        "type": "conditions",
+        "description": "Transfer requires target-side calibration before full ingestion."
+      }
+    ],
+    "relation_paths": [
+      "memory substrate -> ingest / retrieval loop -> meditation engine -> metacognition layer -> credible memory governance",
+      "memory substrate -> meditation engine -> raw reflection route -> knowledge crystal layer",
+      "credible memory governance -> knowledge crystal layer -> Agent-to-Agent transfer layer -> calibration before ingestion"
+    ],
+    "tensions": [
+      {
+        "id": "t1",
+        "label": "retention vs abstraction",
+        "description": "The system must retain raw material and provenance while still enabling higher-order experience formation."
+      },
+      {
+        "id": "t2",
+        "label": "control vs emergence",
+        "description": "The system needs enough governance to prevent contamination and drift, but not so much structure that discovery is prematurely flattened."
+      },
+      {
+        "id": "t3",
+        "label": "static knowledge vs updateable cognition",
+        "description": "The system must preserve useful structure without freezing knowledge into uncorrectable doctrine."
+      },
+      {
+        "id": "t4",
+        "label": "shared core vs model-specific adaptation",
+        "description": "The system should enable transfer across agents without assuming identical unfold behavior."
+      }
+    ],
+    "unresolved_conflicts": [
+      {
+        "id": "u1",
+        "label": "best discovery route",
+        "description": "How much discovery should happen through structured shell versus raw-slices-first reflection remains an active question."
+      },
+      {
+        "id": "u2",
+        "label": "crystal boundary",
+        "description": "How to cleanly separate content core, adaptation layer, calibration requirements, and future verification constraints remains an active design problem."
+      },
+      {
+        "id": "u3",
+        "label": "regeneration fidelity",
+        "description": "How to verify that a system regrown from crystal remains in the same theory neighborhood as the original remains unresolved."
+      }
+    ],
+    "source_anchors": [
+      "real-time writing preserves material",
+      "asynchronous reflection produces knowledge",
+      "stable vs hypothesis differentiation matters",
+      "raw slices first may preserve locality and relation progression better",
+      "knowledge crystals should be machine-native growth seeds",
+      "transfer content core, rebuild adaptation layer"
+    ],
+    "problem_space": "How to structure a memory system that begins from retained graph-backed material, turns it into processed experience, compresses it into transferable knowledge crystals, and eventually supports cross-agent reconstruction.",
+    "core_questions": [
+      "What are the minimal system components required to go from retained memory to processed experience?",
+      "What governance mechanisms are required to keep experience credible and updateable?",
+      "What shape must knowledge crystal formation take to preserve relation paths and unresolved tensions?",
+      "Can a receiving agent reconstruct the memory system architecture from crystal without direct source-code copying?"
+    ],
+    "scope_limits": [
+      "This crystal describes system architecture and design intent, not a final implementation in one programming language.",
+      "This crystal is for regeneration experiments, not direct deployment.",
+      "This crystal should preserve unresolved tensions rather than pretending the architecture is fully complete."
+    ]
+  },
+  "self_adaptation": {
+    "required_calibration_domains": [
+      "system_component_reconstruction_bias",
+      "abstraction_closure_sensitivity",
+      "tension_retention",
+      "source_near_reconstruction_discipline",
+      "implementation_regeneration_style"
+    ],
+    "runtime_rebuild_required": true,
+    "calibration_priority_order": [
+      "system_component_reconstruction_bias",
+      "source_near_reconstruction_discipline",
+      "tension_retention",
+      "abstraction_closure_sensitivity",
+      "implementation_regeneration_style"
+    ],
+    "calibration_instructions": {
+      "goal": "Before attempting system regrowth, discover the model's current reconstruction behavior for this memory system crystal.",
+      "requirements": [
+        "Do not directly regenerate the system immediately.",
+        "First calibrate on the required domains.",
+        "Produce a local behavior portrait for system reconstruction.",
+        "Derive a reconstruction policy from calibration.",
+        "Then attempt system regrowth at the level of architecture, modules, and implementation skeleton."
+      ],
+      "must_output": [
+        "calibration_findings",
+        "behavior_portrait",
+        "reconstruction_policy",
+        "system_regrowth_output"
+      ]
+    },
+    "boundary_rule": "The crystal may require pre-regrowth calibration, but should not directly hard-code a final implementation plan.",
+    "forbidden_shortcuts": [
+      "Do not skip calibration and jump directly to code regeneration.",
+      "Do not collapse all tensions into a single neat architecture doctrine.",
+      "Do not treat one plausible implementation style as the only valid realization of the system."
+    ]
+  }
+}

@@ -30,10 +30,10 @@ It is primarily about:
 ## Inputs
 
 ### Crystal
-- `tmp/system-memory-crystal-v1.json`
+- `docs/experiments/system-memory-crystal-v1.json`
 
 ### Protocol
-- `tmp/system-regeneration-protocol-v1.md`
+- `docs/experiments/system-regeneration-protocol-v1.md`
 
 These define:
 - graph-structured system content core
