@@ -54,6 +54,19 @@ Phase 6 has been scoped and documented, but is currently paused in evidence-gath
 
 The purpose of this branch is to create a runnable, phase-disciplined regrowth line that can be merged and evaluated stage by stage, instead of continuing uncontrolled growth on the older heavy architecture line.
 
+### Positioning relative to the crystal line
+
+This branch should be treated as the **engineering baseline** for a minimal memory kernel built directly through staged implementation.
+
+The crystal line should be treated separately as the **growth-derived line** whose role is to test whether a crystal-guided system can regrow into functionally comparable memory, product, and routing capabilities.
+
+In other words:
+
+- **PR #91 / regrowth line** = direct engineering construction of the lightweight baseline
+- **crystal line** = test of whether crystal-guided regrowth can reach comparable functional structure
+
+These two lines are therefore complementary rather than interchangeable: one provides the runnable engineering reference, and the other provides the regrowth/comparison target.
+
 Key design commitments:
 - phase-driven development
 - runnable implementation at each merge
