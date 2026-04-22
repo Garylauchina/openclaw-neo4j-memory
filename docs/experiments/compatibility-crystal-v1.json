@@ -1,0 +1,162 @@
+{
+  "crystal_id": "compatibility-crystal-v1",
+  "purpose": "Protocol crystal for crystal-set composition, compatibility boundaries, replaceability rules, version/dependency fit, and conflict interpretation across multiple crystal systems.",
+  "content_core": {
+    "title": "Compatibility Crystal v1",
+    "type": "protocol_crystal_compatibility",
+    "nodes": [
+      {
+        "id": "composition_rule",
+        "label": "composition rule",
+        "kind": "compatibility_component",
+        "description": "Different crystal sets should only be composed when their roles, phases, and dependency assumptions can coexist without semantic collapse."
+      },
+      {
+        "id": "compatibility_boundary",
+        "label": "compatibility boundary",
+        "kind": "compatibility_boundary",
+        "description": "Not every crystal is safely composable with every other crystal; some boundaries should prevent forced mixing."
+      },
+      {
+        "id": "replaceability_vs_nonreplaceability",
+        "label": "replaceability vs non-replaceability",
+        "kind": "compatibility_boundary",
+        "description": "Some crystals can be substituted by newer or equivalent variants, while others are foundational and should not be silently replaced."
+      },
+      {
+        "id": "version_and_dependency_fit",
+        "label": "version and dependency fit",
+        "kind": "compatibility_component",
+        "description": "Crystal composition should account for version compatibility and declared dependency assumptions."
+      },
+      {
+        "id": "cross_set_conflict_detection",
+        "label": "cross-set conflict detection",
+        "kind": "compatibility_component",
+        "description": "Composition should detect when two crystal sets impose incompatible orderings, framings, or protocol assumptions."
+      },
+      {
+        "id": "composition_failure_interpretation",
+        "label": "composition failure interpretation",
+        "kind": "compatibility_principle",
+        "description": "Composition failure should be interpreted structurally, such as incompatible phases, framing conflicts, or missing adapters, not as arbitrary failure only."
+      }
+    ],
+    "edges": [
+      {
+        "from": "composition_rule",
+        "to": "compatibility_boundary",
+        "type": "constrained_by",
+        "description": "Composition only works if compatibility boundaries are respected."
+      },
+      {
+        "from": "replaceability_vs_nonreplaceability",
+        "to": "version_and_dependency_fit",
+        "type": "sharpens",
+        "description": "Replacement decisions require compatibility and dependency checks rather than name similarity alone."
+      },
+      {
+        "from": "cross_set_conflict_detection",
+        "to": "composition_failure_interpretation",
+        "type": "supports",
+        "description": "Conflict detection provides structured reasons for failed composition."
+      },
+      {
+        "from": "version_and_dependency_fit",
+        "to": "composition_rule",
+        "type": "supports",
+        "description": "Declared fit constraints make composition safer and more interpretable."
+      }
+    ],
+    "relation_paths": [
+      "composition rule -> compatibility boundary -> cross-set conflict detection",
+      "replaceability vs non-replaceability -> version and dependency fit -> composition failure interpretation"
+    ],
+    "tensions": [
+      {
+        "id": "t1",
+        "label": "reuse vs integrity",
+        "description": "More composition enables reuse, but too much permissiveness can destroy protocol integrity."
+      },
+      {
+        "id": "t2",
+        "label": "modularity vs foundational identity",
+        "description": "A modular crystal ecology should still preserve which crystals are foundational and not easily swappable."
+      },
+      {
+        "id": "t3",
+        "label": "composition flexibility vs diagnostic clarity",
+        "description": "Flexible composition is useful, but weak rules can make failures impossible to interpret clearly."
+      }
+    ],
+    "unresolved_conflicts": [
+      {
+        "id": "u1",
+        "label": "adapter layer need",
+        "description": "Whether incompatible crystal sets should be bridged by adapters remains unresolved."
+      },
+      {
+        "id": "u2",
+        "label": "compatibility version model",
+        "description": "How fine-grained version compatibility should be declared remains unresolved."
+      },
+      {
+        "id": "u3",
+        "label": "partial composition policy",
+        "description": "How partial compatibility should be represented remains unresolved."
+      }
+    ],
+    "source_anchors": [
+      "crystal set should become a composable brick rather than an isolated system",
+      "compatibility/composition is a distinct missing layer",
+      "version, dependency, and framing conflicts must be interpretable",
+      "replaceability should not be assumed by similarity alone"
+    ],
+    "problem_space": "How crystal systems can coexist, compose, or replace parts of one another without losing protocol integrity or diagnostic clarity.",
+    "core_questions": [
+      "When are two crystal sets compatible enough to compose?",
+      "Which crystals can be replaced and which should be treated as non-replaceable foundations?",
+      "How should composition failure be interpreted to guide adapters, separation, or rejection?"
+    ],
+    "scope_limits": [
+      "This crystal governs compatibility and composition, not direct update governance or verification scoring.",
+      "This crystal should make composition safer without pretending the whole crystal ecology is already solved."
+    ]
+  },
+  "self_adaptation": {
+    "required_calibration_domains": [
+      "compatibility_boundary_sensitivity",
+      "replaceability_discipline",
+      "dependency_fit_awareness",
+      "conflict_detection_readiness",
+      "composition_failure_interpretation"
+    ],
+    "runtime_rebuild_required": true,
+    "calibration_priority_order": [
+      "compatibility_boundary_sensitivity",
+      "replaceability_discipline",
+      "dependency_fit_awareness",
+      "conflict_detection_readiness",
+      "composition_failure_interpretation"
+    ],
+    "calibration_instructions": {
+      "goal": "Calibrate how this model should judge whether crystal sets can be combined, substituted, or must remain separate.",
+      "requirements": [
+        "Do not assume all crystals are composable by default.",
+        "Do not assume replacement is safe because roles look similar.",
+        "Do not treat composition failure as opaque when dependency or framing conflicts are visible."
+      ],
+      "must_output": [
+        "calibration_findings",
+        "compatibility_behavior_portrait",
+        "chosen_composition_policy"
+      ]
+    },
+    "boundary_rule": "This crystal governs crystal-set composition, substitution, and conflict interpretation across multiple crystal systems.",
+    "forbidden_shortcuts": [
+      "Do not compose crystal sets by name similarity only.",
+      "Do not replace foundational crystals silently.",
+      "Do not reduce composition failure to generic incompatibility without structural explanation."
+    ]
+  }
+}

@@ -1,0 +1,162 @@
+{
+  "crystal_id": "update-governance-crystal-v1",
+  "purpose": "Protocol crystal for governing how runtime experience, failure signals, revisions, downgrades, and crystal retirement should be handled without causing uncontrolled protocol drift.",
+  "content_core": {
+    "title": "Update Governance Crystal v1",
+    "type": "protocol_crystal_update_governance",
+    "nodes": [
+      {
+        "id": "runtime_experience_not_direct_crystal_edit",
+        "label": "runtime experience is not direct crystal edit",
+        "kind": "update_boundary",
+        "description": "Runtime events, routing decisions, and failures should first enter experience/governance layers rather than directly mutating crystals."
+      },
+      {
+        "id": "revision_threshold",
+        "label": "revision threshold",
+        "kind": "update_rule",
+        "description": "A crystal should only be revised when the evidence threshold exceeds isolated anecdote, transient convenience, or single-run noise."
+      },
+      {
+        "id": "revision_evidence_requirement",
+        "label": "revision evidence requirement",
+        "kind": "update_rule",
+        "description": "Crystal revision should require explicit evidence, affected scope, and reasoned justification rather than vague intuition."
+      },
+      {
+        "id": "expansion_vs_revision_boundary",
+        "label": "expansion vs revision boundary",
+        "kind": "update_boundary",
+        "description": "Some new evidence should create a new crystal rather than rewrite an old one; expansion and revision are different actions."
+      },
+      {
+        "id": "downgrade_and_retirement_rule",
+        "label": "downgrade and retirement rule",
+        "kind": "update_rule",
+        "description": "A crystal may need downgrading, deprecation, or retirement if it repeatedly fails verification or causes drift."
+      },
+      {
+        "id": "protocol_drift_prevention",
+        "label": "protocol drift prevention",
+        "kind": "update_rule",
+        "description": "Update governance should prevent convenience-driven, unverified, or over-reactive edits from gradually corrupting the crystal system."
+      }
+    ],
+    "edges": [
+      {
+        "from": "runtime_experience_not_direct_crystal_edit",
+        "to": "revision_threshold",
+        "type": "supports",
+        "description": "Routing runtime evidence through experience/governance helps prevent impulsive crystal edits."
+      },
+      {
+        "from": "revision_threshold",
+        "to": "revision_evidence_requirement",
+        "type": "sharpens",
+        "description": "Threshold without evidence standards is too weak; both are needed."
+      },
+      {
+        "from": "expansion_vs_revision_boundary",
+        "to": "downgrade_and_retirement_rule",
+        "type": "balances",
+        "description": "The system must decide whether to add, revise, downgrade, or retire rather than treat every change as the same operation."
+      },
+      {
+        "from": "protocol_drift_prevention",
+        "to": "revision_threshold",
+        "type": "supports",
+        "description": "Stricter update governance helps preserve long-term protocol stability."
+      }
+    ],
+    "relation_paths": [
+      "runtime experience is not direct crystal edit -> revision threshold -> revision evidence requirement",
+      "expansion vs revision boundary -> downgrade and retirement rule -> protocol drift prevention"
+    ],
+    "tensions": [
+      {
+        "id": "t1",
+        "label": "adaptation speed vs stability",
+        "description": "Fast updates increase responsiveness, but slow disciplined updates reduce drift and accidental corruption."
+      },
+      {
+        "id": "t2",
+        "label": "local convenience vs system integrity",
+        "description": "A local optimization may harm the broader crystal system if promoted too quickly."
+      },
+      {
+        "id": "t3",
+        "label": "revision vs proliferation",
+        "description": "Too much revision causes instability; too much expansion causes crystal sprawl."
+      }
+    ],
+    "unresolved_conflicts": [
+      {
+        "id": "u1",
+        "label": "evidence threshold granularity",
+        "description": "How much evidence different crystal types should require before revision remains unresolved."
+      },
+      {
+        "id": "u2",
+        "label": "retirement timing",
+        "description": "When a weak crystal should be revised, deprecated, or retired remains unresolved."
+      },
+      {
+        "id": "u3",
+        "label": "revision history representation",
+        "description": "How version lineage and rationale should be represented inside the crystal system remains unresolved."
+      }
+    ],
+    "source_anchors": [
+      "runtime experience should first enter experience/governance layers",
+      "failure-driven expansion should not become uncontrolled drift",
+      "revision requires evidence and bounded claims",
+      "expansion, revision, downgrade, and retirement are different actions"
+    ],
+    "problem_space": "How a crystal system should update itself without turning runtime noise, convenience, or local failure into uncontrolled protocol drift.",
+    "core_questions": [
+      "What should happen before runtime experience is allowed to change a crystal?",
+      "When should new evidence create a new crystal instead of revising an old one?",
+      "How should crystals be downgraded or retired when they repeatedly underperform or drift?"
+    ],
+    "scope_limits": [
+      "This crystal governs update and revision discipline, not cross-set compatibility rules.",
+      "This crystal should keep crystal evolution stable without freezing necessary future change."
+    ]
+  },
+  "self_adaptation": {
+    "required_calibration_domains": [
+      "revision_impulsiveness_control",
+      "evidence_threshold_discipline",
+      "expansion_vs_revision_discrimination",
+      "retirement_readiness",
+      "protocol_drift_sensitivity"
+    ],
+    "runtime_rebuild_required": true,
+    "calibration_priority_order": [
+      "revision_impulsiveness_control",
+      "evidence_threshold_discipline",
+      "expansion_vs_revision_discrimination",
+      "protocol_drift_sensitivity",
+      "retirement_readiness"
+    ],
+    "calibration_instructions": {
+      "goal": "Calibrate how this model should handle crystal updates conservatively enough to preserve integrity, but flexibly enough to support iterative improvement.",
+      "requirements": [
+        "Do not treat runtime observations as direct crystal edits.",
+        "Do not revise crystals without explicit evidence and scope justification.",
+        "Do not confuse new crystal creation with revision of an old crystal."
+      ],
+      "must_output": [
+        "calibration_findings",
+        "update_governance_behavior_portrait",
+        "chosen_update_policy"
+      ]
+    },
+    "boundary_rule": "This crystal governs how the crystal system changes over time without losing coherence or drifting opportunistically.",
+    "forbidden_shortcuts": [
+      "Do not rewrite crystals from single-run convenience.",
+      "Do not skip evidence requirements for revision.",
+      "Do not allow runtime noise to masquerade as stable crystal update."
+    ]
+  }
+}
