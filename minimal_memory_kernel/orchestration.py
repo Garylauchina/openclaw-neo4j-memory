@@ -52,14 +52,21 @@ def build_memory_context(
 ) -> MemoryContext:
     results = list(results)
     kept = suppress_irrelevant_memories(results, min_score=min_score, max_items=max_items)
-    kept_ids = [item.memory.id for item in kept]
-    suppressed_ids = [item.memory.id for item in results if item.memory.id not in kept_ids]
+    kept_ids = [item.memory.id for item in kept if item.memory is not None]
+    suppressed_ids = [
+        item.memory.id
+        for item in results
+        if item.memory is not None and item.memory.id not in kept_ids
+    ]
 
     lines = ["Relevant memory:"]
     for item in kept:
-        lines.append(f"- ({item.memory.source}) {item.memory.content}")
+        if item.memory is not None:
+            lines.append(f"- ({item.memory.source}) {item.memory.content}")
+        elif item.note is not None:
+            lines.append(f"- (product:{item.note.product_role}) {item.note.product_summary or item.note.content}")
 
-    text = "\n".join(lines) if kept else ""
+    text = "\n".join(lines) if len(lines) > 1 else ""
     if len(text) > max_chars:
         text = text[: max_chars - 3].rstrip() + "..."
 

@@ -25,8 +25,9 @@ ABOUT_PATTERN = re.compile(r"\babout\b", re.IGNORECASE)
 def extract_entities(content: str) -> List[Entity]:
     names = []
     seen = set()
+    stopwords = {"user", "this", "that", "the"}
     for match in CAPITALIZED_PATTERN.findall(content):
-        if match.lower() in {"User", "This", "That", "The"}:
+        if match.lower() in stopwords:
             continue
         if match not in seen:
             seen.add(match)

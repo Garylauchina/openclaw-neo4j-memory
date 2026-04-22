@@ -3,7 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Iterable, Optional
 
-from .consolidation import ConsolidatedNote
+from .consolidation import ConsolidatedNote, build_consolidated_notes
 from .memory_store import MinimalMemoryStore, RawMemory
 
 
@@ -47,6 +47,13 @@ def refresh_notes_for_repeated_evidence(notes: Iterable[ConsolidatedNote], memor
 def refresh_notes_from_memories(notes: Iterable[ConsolidatedNote], memories: Iterable[RawMemory]) -> list[ConsolidatedNote]:
     updated_notes = list(notes)
     grouped_memories = list(memories)
+
+    existing_keys = {note.key.lower() for note in updated_notes}
+    candidate_new_notes = build_consolidated_notes(grouped_memories)
+    for candidate in candidate_new_notes:
+        if candidate.key.lower() not in existing_keys:
+            updated_notes.append(candidate)
+            existing_keys.add(candidate.key.lower())
 
     for note in updated_notes:
         related = [memory for memory in grouped_memories if note.key.lower() in memory.content.lower()]
