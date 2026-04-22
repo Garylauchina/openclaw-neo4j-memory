@@ -122,42 +122,9 @@ It should encode:
 It is not the knowledge itself.
 It is the policy for using the knowledge.
 
-Important:
-this layer does not have to be fully static.
-Part of it may be rebuilt at runtime after calibration.
-
----
-
-## Pre-Ingestion Calibration
-
-Before full ingestion / unfold, an agent may need to run a short self-discovery step.
-
-This is not the same as directly hard-coding an unfold rule.
-Instead, the crystal can specify:
-
-## which reasoning domains the receiving agent should test itself on
-## before selecting or rebuilding its adaptation layer
-
-This is best understood as:
-
-## pre-ingestion calibration domains
-
-The goal is not to force a final rule from the crystal itself.
-The goal is to require a calibration obligation before unfold.
-
-Short form:
-- crystal can say what should be tested first
-- agent still discovers how it should adapt
-
 ---
 
 ## Self-Adaptation Candidate Fields
-
-### Calibration policy
-- `required_calibration_domains`
-- `pre_ingestion_test_domains`
-- `calibration_priority_order`
-- `runtime_rebuild_required`
 
 ### Traversal policy
 - `preferred_ingestion_order`
@@ -240,12 +207,11 @@ This means transfer is not necessarily:
 
 Instead it becomes:
 - send graph-structured knowledge core
-- optionally send calibration requirements
 - let the target agent derive or load its own adaptation layer
 
 Short form:
 
-## transfer content core, run calibration if needed, recompile adaptation layer
+## transfer content core, recompile adaptation layer
 
 ---
 
@@ -299,8 +265,6 @@ The bench is **not** the primary tool for discovering the objective structure of
     "scope_limits": []
   },
   "self_adaptation": {
-    "required_calibration_domains": [],
-    "runtime_rebuild_required": false,
     "preferred_bridge_order": [],
     "required_stepwise_expansion": false,
     "anti_closure_rules": [],
