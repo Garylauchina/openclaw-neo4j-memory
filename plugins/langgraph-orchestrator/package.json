@@ -1,0 +1,26 @@
+{
+  "name": "@garylauchina/openclaw-langgraph-orchestrator",
+  "version": "0.1.0",
+  "description": "LangGraph orchestration plugin scaffold for OpenClaw",
+  "type": "module",
+  "main": "index.js",
+  "scripts": {
+    "build": "tsc",
+    "typecheck": "tsc --noEmit"
+  },
+  "openclaw": {
+    "extensions": ["./index.ts"],
+    "compat": {
+      "pluginApi": ">=2026.3.0",
+      "minGatewayVersion": "2026.3.0"
+    }
+  },
+  "dependencies": {
+    "@sinclair/typebox": "^0.34.0"
+  },
+  "devDependencies": {
+    "typescript": "^5.5.0"
+  },
+  "keywords": ["openclaw", "plugin", "langgraph", "orchestration"],
+  "license": "MIT"
+}
