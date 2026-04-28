@@ -13,6 +13,7 @@ import {
   formatPlanningHints,
   withGracefulFailure,
 } from "./runtime-helpers.js";
+import { LangGraphRuntimeClient } from "./runtime-client.js";
 
 const langGraphConfigSchema = Type.Object({
   enabled: Type.Boolean({ default: true, description: "Enable LangGraph orchestration hooks" }),
@@ -37,57 +38,6 @@ type LangGraphConfig = {
   requestTimeoutMs: number;
   reflectionTimeoutMs: number;
 };
-
-type LoggerLike = {
-  info: (...args: unknown[]) => void;
-  warn?: (...args: unknown[]) => void;
-  error: (...args: unknown[]) => void;
-};
-
-class LangGraphRuntimeClient {
-  private readonly baseUrl: string;
-
-  constructor(host: string, port: number) {
-    this.baseUrl = `http://${host}:${port}`;
-  }
-
-  async request<T>(
-    path: string,
-    method: "GET" | "POST" = "GET",
-    body?: unknown,
-    timeoutMs = 8000,
-  ): Promise<T> {
-    const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), timeoutMs);
-    try {
-      const response = await fetch(`${this.baseUrl}${path}`, {
-        method,
-        headers: { "Content-Type": "application/json" },
-        body: body === undefined ? undefined : JSON.stringify(body),
-        signal: controller.signal,
-      });
-
-      if (!response.ok) {
-        const text = await response.text().catch(() => "");
-        throw new Error(`HTTP ${response.status}: ${text}`);
-      }
-
-      return (await response.json()) as T;
-    } finally {
-      clearTimeout(timer);
-    }
-  }
-
-  fireAndForget<T>(path: string, body: unknown, timeoutMs: number, log: LoggerLike, label: string): void {
-    this.request<T>(path, "POST", body, timeoutMs)
-      .then((result) => {
-        log.info(`langgraph-orchestrator [${label}]: OK ${JSON.stringify(result)}`);
-      })
-      .catch((error) => {
-        log.warn?.(`langgraph-orchestrator [${label}]: ${String(error)}`);
-      });
-  }
-}
 
 async function readSessionFile(sessionFile?: string): Promise<string> {
   if (!sessionFile) return "";
@@ -162,7 +112,7 @@ export default definePluginEntry({
         const conversation = extractConversation(messages);
         if (!conversation) return;
 
-        client.fireAndForget<AgentEndResponse>(
+        client.fireAndForget(
           "/runtime/agent-end",
           {
             ...buildRuntimeEnvelope(event, config.graphId),
@@ -185,7 +135,7 @@ export default definePluginEntry({
         const conversation = archivedSession || extractConversation(messages);
         if (!conversation) return;
 
-        client.fireAndForget<BeforeCompactionResponse>(
+        client.fireAndForget(
           "/runtime/before-compaction",
           {
             ...buildRuntimeEnvelope(event, config.graphId),
