@@ -116,10 +116,11 @@ Covers:
 ```bash
 node --test \
   plugins/langgraph-orchestrator/runtime-helpers.test.mjs \
-  plugins/langgraph-orchestrator/runtime-client.test.mjs
+  plugins/langgraph-orchestrator/runtime-client.test.mjs \
+  plugins/langgraph-orchestrator/plugin-host-smoke.test.mjs
 ```
 
-Result at validation time: **9/9 passing**.
+Result at validation time: **11/11 passing**.
 
 ## Risks / limitations
 
@@ -164,7 +165,7 @@ We now have mock HTTP smoke coverage, but not a full plugin-host integration har
 Future work only after stability is proven:
 
 - richer planning hints
-n- optional structured action proposals
+- optional structured action proposals
 - shared package for runtime contracts
 - stronger integration tests with plugin host lifecycle
 
