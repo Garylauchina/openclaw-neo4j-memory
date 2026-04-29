@@ -1,0 +1,54 @@
+{
+  "id": "langgraph-orchestrator",
+  "name": "LangGraph Orchestrator",
+  "description": "Runtime orchestration plugin that lets LangGraph enrich OpenClaw sessions with retrieval, planning hints, reflection, and compaction checkpoints.",
+  "version": "0.1.0",
+  "kind": "runtime",
+  "uiHints": {
+    "apiHost": {
+      "label": "API Host",
+      "placeholder": "127.0.0.1",
+      "help": "Hostname of the LangGraph runtime API",
+      "advanced": true
+    },
+    "apiPort": {
+      "label": "API Port",
+      "placeholder": "20240",
+      "help": "Port of the LangGraph runtime API",
+      "advanced": true
+    },
+    "graphId": {
+      "label": "Graph ID",
+      "placeholder": "default",
+      "help": "LangGraph graph or tenant identifier",
+      "advanced": true
+    },
+    "autoRetrieve": {
+      "label": "Auto Retrieve",
+      "help": "Fetch retrieval context before agent start"
+    },
+    "autoReflect": {
+      "label": "Auto Reflect",
+      "help": "Persist turns and schedule asynchronous reflection"
+    },
+    "archiveOnCompaction": {
+      "label": "Archive on Compaction",
+      "help": "Checkpoint session state before compaction"
+    }
+  },
+  "configSchema": {
+    "type": "object",
+    "additionalProperties": false,
+    "properties": {
+      "enabled": {"type": "boolean", "default": true, "description": "Enable LangGraph orchestration hooks"},
+      "apiHost": {"type": "string", "default": "127.0.0.1", "description": "Host of the LangGraph runtime API"},
+      "apiPort": {"type": "number", "default": 20240, "description": "Port of the LangGraph runtime API"},
+      "graphId": {"type": "string", "default": "default", "description": "Graph or tenant identifier"},
+      "autoRetrieve": {"type": "boolean", "default": true, "description": "Fetch retrieval context before agent start"},
+      "autoReflect": {"type": "boolean", "default": true, "description": "Persist turns and schedule async reflection"},
+      "archiveOnCompaction": {"type": "boolean", "default": true, "description": "Checkpoint session state before compaction"},
+      "requestTimeoutMs": {"type": "number", "default": 8000, "description": "Timeout for synchronous runtime requests"},
+      "reflectionTimeoutMs": {"type": "number", "default": 15000, "description": "Timeout for asynchronous reflection requests"}
+    }
+  }
+}
