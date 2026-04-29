@@ -7,7 +7,8 @@
   "scripts": {
     "build": "tsc",
     "typecheck": "tsc --noEmit",
-    "start:api": "python3 memory_api_server.py"
+    "start:api": "python3 memory_api_server.py",
+    "verify:langgraph-openclaw": "bash scripts/verify_langgraph_openclaw_contracts.sh"
   },
   "openclaw": {
     "extensions": [
