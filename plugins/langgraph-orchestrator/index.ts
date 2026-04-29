@@ -49,8 +49,8 @@ async function readSessionFile(sessionFile?: string): Promise<string> {
   }
 }
 
-function buildConfig(rawConfig?: unknown): LangGraphConfig {
-  const cfg = (rawConfig ?? {}) as Partial<LangGraphConfig>;
+function buildConfig(rawConfig?: unknown, pluginConfig?: unknown): LangGraphConfig {
+  const cfg = ((rawConfig ?? pluginConfig ?? {}) as Partial<LangGraphConfig>);
   return {
     enabled: cfg.enabled ?? true,
     apiHost: cfg.apiHost ?? "127.0.0.1",
@@ -68,7 +68,7 @@ export default definePluginEntry({
   id: "langgraph-orchestrator",
   configSchema: langGraphConfigSchema,
   async register(api: OpenClawPluginApi, rawConfig?: unknown) {
-    const config = buildConfig(rawConfig);
+    const config = buildConfig(rawConfig, (api as OpenClawPluginApi & { pluginConfig?: unknown }).pluginConfig);
     const log = api.logger;
 
     if (!config.enabled) {
